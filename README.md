@@ -51,7 +51,8 @@
 내 Claude API 키를 넣으면, 가사 번역을 Google 번역 대신 **Claude**가 해요. 노래 전체를 읽고 말투와 흐름을 맞춰서 번역하기 때문에 자연스러워요.
 
 - **모델 선택**: Haiku 5.5(기본, 빠르고 저렴)와 Sonnet 5.5(더 자연스러움, 약 20배 비쌈) 중에서 고를 수 있어요.
-- **번역 말투**: 노래에 맞게 Claude가 선택 / 반말 / 존댓말. 한국어로 번역할 때만 적용돼요.
+- **번역 말투**: 노래에 맞게 Claude가 선택 / 친근하게(반말) / 정중하게(존댓말).
+  - 한국어뿐 아니라 친근한 말과 정중한 말이 나뉘는 번역 언어라면 어디에나 적용돼요. 예: 일본어 タメ口/です・ます, 프랑스어 tu/vous, 독일어 du/Sie.
 - **번역 방식**: 의역(뜻을 자연스럽게) / 직역(원문에 가깝게).
 - **번역한 엔진 표시**
   - Claude가 번역하면 번역 버튼에 작은 ✦ 표시가 붙고, 가사 아래 상태 줄에 `한국어 번역 · Claude`라고 나와요.
@@ -61,9 +62,27 @@
   - Haiku는 가끔 가사를 저작권 문제로 보고 번역을 거절해요. 그러면 같은 요청을 Sonnet으로 한 번 더 보내요.
   - 이때 상태 줄은 `Claude Sonnet (Haiku 거절)`로 표시돼요.
   - Sonnet도 거절하면 Google 번역으로 보여줘요.
+  - 설정의 **Haiku 거절 시 Sonnet 재시도**로 끌 수 있어요. 끄면 Haiku가 거절한 곡은 바로 Google 번역으로 넘어가요.
 - **줄 수 맞춤**: 줄마다 따로 칸을 받는 방식으로 요청하기 때문에, 번역이 원문과 한 줄씩 정확히 맞아요.
 - **번역 저장**: 번역한 곡은 기기에 저장해 두고, 다시 들을 때는 요청을 보내지 않아요.
 - 키가 없거나 Claude 번역을 끄면, 원래 앱처럼 Google 번역을 써요.
+
+### Claude 발음 표기 (기본 켜짐)
+
+가사 화면의 **발음(로마자) 버튼**을 누르면, 외국어 가사의 발음을 **번역 언어의 글자**로 보여줘요. 한국어라면 `歌え → 우타에`, `君の名は → 키미노 나와`처럼 한글로 나와서 따라 부르기 쉬워요.
+
+| 번역 언어 | 발음을 적는 글자 |
+|---|---|
+| 한국어 | 한글 |
+| 일본어 | 가타카나 |
+| 러시아어 | 키릴 문자 |
+| 히브리어·힌디어·태국어 | 각 언어의 글자 |
+| 영어 등 로마자를 쓰는 언어 | 표준 로마자 표기 (일본어는 헵번식 등) |
+
+- 발음 버튼을 누를 때만 Claude에 요청해요. 번역만 쓰면 비용은 그대로예요.
+- 한 번 받은 발음은 저장돼서, 같은 곡에서는 다시 요금이 들지 않아요.
+- 가사가 이미 그 글자로 돼 있으면(예: 한국어 노래를 한국어 사용자가 들을 때) Claude를 부르지 않고 원래의 Google 로마자 표기를 써요.
+- Claude가 표기한 발음이면 상태 줄에 `발음 · Claude`라고 나와요. 끄면 원래대로 Google 로마자 표기만 써요.
 
 ### 이 노래 해석
 
@@ -74,9 +93,13 @@
 한국어로 적힌 외국 곡은 가사를 못 찾는 경우가 많아요. 예를 들어 '발묘 / 나나호시 관현악단'은 원래 '抜錨 / ナナホシ管弦楽団'이에요.
 가사를 못 찾으면 YouTube Music과 Claude로 **원래 제목과 아티스트**를 알아낸 뒤, 그 이름으로 가사를 다시 찾아요. 한 번 알아낸 이름은 기억해 둬요.
 
-### Claude 사용량과 진단 기록
+### Claude 사용량, 월 한도, 진단 기록
 
 - **이번 달 Claude 사용량**: 모델별 입력·출력 토큰 수와 예상 요금(달러)을 보여줘요. 매달 새로 세고, 직접 초기화할 수도 있어요.
+- **월 사용 한도**
+  - 없음 / $0.50 / $1 / $2 / $5 / $10 / $20 중에서 골라요. 기본은 없음이에요.
+  - 이번 달 예상 요금이 한도에 닿으면 Claude에 더 보내지 않고, 다음 달까지 Google 번역을 써요. 상태 줄에는 `Google 번역 (Claude: 월 한도 도달)`이라고 나와요.
+  - 예상 요금은 앱이 토큰 수로 계산한 값이에요. 실제 청구액과 조금 다를 수 있어요.
 - **Claude 진단 기록**
   - 최근 50건의 요청이 어떻게 됐는지 보여줘요: 성공·실패, 실패 이유, 걸린 시간, 줄 수, 토큰 수.
   - **API 키와 가사는 기록하지 않아요.**
@@ -87,6 +110,15 @@
 - 곡을 다운로드하면 백그라운드에서 가사를 미리 번역해 둬요. Claude가 켜져 있으면 Claude로, 꺼져 있으면 Google로 번역해요.
 - 다운로드한 곡의 번역은 캐시가 아닌 **영구 보관함**에 저장돼요(최대 100MB). 캐시를 지워도 남아 있고, **오프라인에서도 번역이 바로 떠요.**
 - 앨범을 한꺼번에 받아도 요청이 몰리지 않게 한 곡씩 차례로 번역해요.
+
+### 플로팅 가사 (기본 꺼짐)
+
+- 곡이 재생되는 동안 **다른 앱을 쓰고 있으면**, 화면 위에 작은 막대로 지금 부르는 가사와 번역을 띄워요.
+- 막대를 **끌어서 옮기고**, 누르면 앱이 열려요. 옮긴 위치는 기억해요.
+- **플로팅 가사 고정**을 켜면 막대를 옮길 수 없고, 터치가 아래 앱으로 그대로 전달돼요. 이때는 안드로이드 규칙에 맞춰 막대가 조금 투명해져요.
+- BitChord KO 화면을 보고 있을 때나 일시정지 중에는 뜨지 않아요.
+- 번역은 플레이어에서 이미 번역해 둔 곡만 보여줘요. 플로팅 가사가 따로 번역을 요청하지는 않아요.
+- 잠금화면 가사와 같은 **'다른 앱 위에 표시' 권한**을 써요.
 
 ### 잠금화면 가사 (기본 꺼짐)
 
@@ -118,7 +150,7 @@
 ### 2. 앱에 넣기
 
 **설정 > BitChord KO 기능 > Claude AI > AI 가사 번역(Claude)**을 누르고 키를 붙여 넣은 뒤 켜요.
-키를 넣으면 모델·번역 말투·번역 방식·사용량·진단 기록 메뉴가 나타나요.
+키를 넣으면 모델·번역 말투·번역 방식·발음 표기·Sonnet 재시도·사용량·월 한도·진단 기록 메뉴가 나타나요.
 
 ### 3. 요금
 
@@ -131,11 +163,13 @@
 
 - 같은 곡은 저장된 번역을 쓰기 때문에 다시 요금이 들지 않아요.
 - 노래 해석과 원제 찾기는 요청할 때마다 따로 요금이 들어요. 원제 찾기는 아주 적어요.
+- 발음 표기는 발음 버튼을 누른 곡만 요금이 들고, 번역 한 번과 비슷한 정도예요.
+- Haiku가 거절한 곡을 Sonnet으로 다시 보내면 그 곡은 Sonnet 요금이 들어요. 원하지 않으면 재시도를 끄거나 **월 사용 한도**를 정해 두세요.
 - 정확한 요금은 [Anthropic 가격표](https://www.anthropic.com/pricing)와 콘솔의 사용 내역을 확인하세요.
 
 ### 4. 보내는 정보
 
-- **Anthropic에 보내는 것**: 번역할 가사, 노래 제목과 아티스트(노래 해석·원제 찾기에 사용)뿐이에요.
+- **Anthropic에 보내는 것**: 번역하거나 발음을 적을 가사, 노래 제목과 아티스트(노래 해석·원제 찾기에 사용)뿐이에요.
 - **키 보관**: 키는 **이 기기에만** 저장돼요. 설정 내보내기(백업) 파일에는 들어가지 않아요.
 - **다른 서버 없음**: 요청은 앱에서 Anthropic API로 바로 가요. 중간에 다른 서버를 거치지 않아요.
 
@@ -206,13 +240,15 @@ It installs **alongside** the official app (package `com.music.bitchord.ko`), sh
 It adds the following, all under **Settings > BitChord KO features**:
 
 - **Claude lyric translation** with your own Anthropic API key. Upstream offers Google Translate only.
-  - Choice of Haiku 5.5 or Sonnet 5.5, speech level (casual/polite Korean) and natural/literal style.
+  - Choice of Haiku 5.5 or Sonnet 5.5, casual/polite speech level (in any target language that has one) and natural/literal style.
   - The status line names the engine and the reason for any fallback.
   - Long-press the translate button to re-translate.
-  - If Haiku declines a song, it is asked again once with Sonnet; Google Translate is used if that fails too.
+  - If Haiku declines a song, it is asked again once with Sonnet (can be switched off); Google Translate is used if that fails too.
+- **Claude pronunciation**: the romanize button shows how foreign lyrics sound, written in your translation language's script (Hangul for Korean, katakana for Japanese, Cyrillic, standard romanization for Latin-script languages, and so on).
 - **Song meaning**: Claude explains the song.
 - **Original-title lookup** for songs written in Hangul, so lyrics can be found under their original names.
-- **Usage counter and diagnostics log**. The log never contains the key or the lyrics.
+- **Usage counter, monthly spending limit and diagnostics log**. Past the limit, Google Translate is used until next month. The log never contains the key or the lyrics.
+- **Floating lyrics**: a small draggable bar with the current line over other apps. Needs "Display over other apps".
 - **Kept translations for downloads**: translated at download time and kept for offline use.
 - **Lock-screen lyrics**. Needs "Display over other apps".
 - **Resume when headphones connect**.

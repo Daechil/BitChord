@@ -718,6 +718,9 @@ object Downloads {
                 it + mapOf(asked.videoId to metaAsked, fetched.videoId to metaFetched)
             },
         )
+        // After the record, so the kept store already sees the song as
+        // downloaded when the translation comes back to be filed.
+        DownloadTranslations.downloaded(asked, uri)
     }
 
     /**

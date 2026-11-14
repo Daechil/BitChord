@@ -267,6 +267,8 @@ fun SettingsScreen(
     val playerTheme by AppSettings.playerTheme.collectAsStateWithLifecycle()
     val syncedLyrics by AppSettings.syncedLyrics.collectAsStateWithLifecycle()
     val resumeOnHeadphones by AppSettings.resumeOnHeadphones.collectAsStateWithLifecycle()
+    val claudeLineNotes by AppSettings.claudeLineNotes.collectAsStateWithLifecycle()
+    val keepDownloadTranslations by AppSettings.keepDownloadTranslations.collectAsStateWithLifecycle()
     val lyricsSources by AppSettings.lyricsSources.collectAsStateWithLifecycle()
     val translationLanguage by AppSettings.translationLanguage.collectAsStateWithLifecycle()
     val claudeTranslation by AppSettings.claudeTranslation.collectAsStateWithLifecycle()
@@ -682,6 +684,21 @@ fun SettingsScreen(
                         onClick = onClaudeMode,
                     )
                 }
+                val claudeLineNotesTitle = stringResource(R.string.claude_line_notes)
+                row(claudeLineNotesTitle, "claude", "lyrics", "explain", "line", "풀이", "해석", "가사") {
+                    SettingsRow(
+                        icon = SfIcons.Info,
+                        title = claudeLineNotesTitle,
+                        subtitle = stringResource(R.string.claude_line_notes_subtitle),
+                        trailing = {
+                            IosSwitch(
+                                checked = claudeLineNotes,
+                                onCheckedChange = AppSettings::setClaudeLineNotes,
+                            )
+                        },
+                        onClick = { AppSettings.setClaudeLineNotes(!claudeLineNotes) },
+                    )
+                }
                 val claudeUsageTitle = stringResource(R.string.claude_usage)
                 row(claudeUsageTitle, "claude", "usage", "tokens", "cost", "사용량", "비용") {
                     SettingsRow(
@@ -738,6 +755,26 @@ fun SettingsScreen(
                         )
                     },
                     onClick = { AppSettings.setResumeOnHeadphones(!resumeOnHeadphones) },
+                )
+            }
+        }
+        if (shows(SettingsCategory.KO_FEATURES)) SearchableSettingsGroup(
+            search,
+            header = stringResource(R.string.ko_features_downloads),
+        ) {
+            val keepDownloadTranslationsTitle = stringResource(R.string.keep_download_translations)
+            row(keepDownloadTranslationsTitle, "download", "offline", "translate", "lyrics", "다운로드", "번역", "보관") {
+                SettingsRow(
+                    icon = SfIcons.Download,
+                    title = keepDownloadTranslationsTitle,
+                    subtitle = stringResource(R.string.keep_download_translations_subtitle),
+                    trailing = {
+                        IosSwitch(
+                            checked = keepDownloadTranslations,
+                            onCheckedChange = AppSettings::setKeepDownloadTranslations,
+                        )
+                    },
+                    onClick = { AppSettings.setKeepDownloadTranslations(!keepDownloadTranslations) },
                 )
             }
         }

@@ -511,6 +511,12 @@
     <string name="claude_purpose_translate">Translation</string>
     <string name="claude_purpose_meaning">Song meaning</string>
     <string name="claude_purpose_original_name">Original title</string>
+    <string name="claude_purpose_lines">Line notes</string>
+    <string name="claude_line_notes">Explain picked lines</string>
+    <string name="claude_line_notes_subtitle">Long-press a lyric line and tap Explain: Claude translates up to five lines and says what each one means</string>
+    <string name="ko_features_downloads">Downloads</string>
+    <string name="keep_download_translations">Keep translations of downloads</string>
+    <string name="keep_download_translations_subtitle">Translate a song as it downloads, with Claude when it is on, and keep it for offline listening instead of in the cache</string>
     <string name="search_languages">Search languages</string>
     <string name="no_languages_match">No languages match</string>
     <string name="connect_account_first">Connect an account first</string>

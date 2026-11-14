@@ -472,6 +472,12 @@
     <string name="claude_purpose_translate">번역</string>
     <string name="claude_purpose_meaning">노래 해석</string>
     <string name="claude_purpose_original_name">원제 찾기</string>
+    <string name="claude_purpose_lines">한 줄 풀이</string>
+    <string name="claude_line_notes">가사 한 줄 풀이</string>
+    <string name="claude_line_notes_subtitle">가사를 길게 눌러 고른 뒤 \'풀이\'를 누르면 Claude가 5줄까지 번역하고 뜻을 풀어 줘요</string>
+    <string name="ko_features_downloads">다운로드</string>
+    <string name="keep_download_translations">다운로드 곡 번역 보관</string>
+    <string name="keep_download_translations_subtitle">곡을 다운로드할 때 번역해 두고(Claude가 켜져 있으면 Claude로), 캐시가 아닌 곳에 보관해 오프라인에서도 바로 보여줘요</string>
     <string name="translation_language_description">번역 버튼을 눌렀을 때 가사를 번역할 언어입니다.</string>
     <string name="translation_language_app_default">앱 언어</string>
     <string name="translation_language_subtitle">앱 언어 따르기</string>

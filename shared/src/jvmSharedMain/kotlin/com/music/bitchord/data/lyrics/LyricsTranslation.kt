@@ -130,6 +130,18 @@ object LyricsTranslation {
     @Volatile
     var keepDir: File? = null
     private const val MEANING_DIRECTORY = "song_meaning_v1"
+
+    /**
+     * Translations of downloaded songs live here, under [keepDir], rather than
+     * in the cache that the system and [MAX_CACHE_BYTES] both clear: a
+     * downloaded song is played offline, where nothing could be asked again.
+     */
+    private const val KEPT_DIRECTORY = "lyrics_translation_kept_v1"
+    private const val MAX_KEPT_BYTES = 100L * 1024L * 1024L
+
+    /** Whether a track's translation goes to the kept store — downloaded, and the setting on. */
+    @Volatile
+    var keepTranslationFor: (String) -> Boolean = { false }
     private const val MAX_MEANING_BYTES = 4L * 1024L * 1024L
     private const val MAX_MEANING_LYRIC_CHARS = 6_000
     private val client by lazy {
@@ -234,6 +246,7 @@ object LyricsTranslation {
             memory.put(cacheKey, it)
         }
         if (cached != null && cached.version == CACHE_VERSION && cached.texts.size == slots.size) {
+            if (keepTranslationFor(trackId) && !isKept(cacheKey)) writeCache(cacheKey, cached, keep = true)
             return if (sameLanguage(cached.sourceLanguage, target)) {
                 Result.SameLanguage(cached.sourceLanguage)
             } else {
@@ -296,7 +309,7 @@ object LyricsTranslation {
             engine = ENGINE_GOOGLE,
         )
         memory.put(cacheKey, entry)
-        writeCache(cacheKey, entry)
+        writeCache(cacheKey, entry, keep = keepTranslationFor(trackId))
 
         return if (sameLanguage(source, target)) {
             Result.SameLanguage(source)
@@ -486,6 +499,7 @@ object LyricsTranslation {
         if (cached != null && cached.version == CACHE_VERSION && cached.texts.size == slots.size &&
             repeatedAcrossLines(cached.texts, slots.map { it.text }) == null
         ) {
+            if (keepTranslationFor(trackId) && !isKept(cacheKey)) writeCache(cacheKey, cached, keep = true)
             return ClaudeAttempt(cached.copy(engine = ENGINE_CLAUDE), fromCache = true, failure = null)
         }
         val model = claudeModel
@@ -506,7 +520,7 @@ object LyricsTranslation {
             sonnetStandIn = standIn,
         )
         memory.put(cacheKey, entry)
-        writeCache(cacheKey, entry)
+        writeCache(cacheKey, entry, keep = keepTranslationFor(trackId))
         return ClaudeAttempt(entry, fromCache = false, failure = null)
     }
 
@@ -1282,12 +1296,15 @@ object LyricsTranslation {
             .joinToString("") { "%02x".format(it) }
     }
 
+    private fun keptFile(key: String): File? = keepDir?.let { File(File(it, KEPT_DIRECTORY), "$key.json.gz") }
+
+    /** The kept store first — a downloaded song's answer — then the cache. */
     private suspend fun readCache(key: String): CachedTranslation? =
         withContext(Dispatchers.IO) {
             diskMutex.withLock {
-                val root = cacheDir ?: return@withLock null
-                val file = File(File(root, CACHE_DIRECTORY), "$key.json.gz")
-                if (!file.isFile) return@withLock null
+                val file = keptFile(key)?.takeIf { it.isFile }
+                    ?: cacheDir?.let { File(File(it, CACHE_DIRECTORY), "$key.json.gz") }?.takeIf { it.isFile }
+                    ?: return@withLock null
                 runCatching {
                     val value = GZIPInputStream(FileInputStream(file)).bufferedReader().use {
                         json.decodeFromString<CachedTranslation>(it.readText())
@@ -1298,11 +1315,20 @@ object LyricsTranslation {
             }
         }
 
-    private suspend fun writeCache(key: String, value: CachedTranslation) =
+    /** Whether [key] is already in the kept store. */
+    private suspend fun isKept(key: String): Boolean =
+        withContext(Dispatchers.IO) { keptFile(key)?.isFile == true }
+
+    /** To the kept store when [keep] (and there is one), otherwise to the cache. */
+    private suspend fun writeCache(key: String, value: CachedTranslation, keep: Boolean = false) =
         withContext(Dispatchers.IO) {
             diskMutex.withLock {
-                val root = cacheDir ?: return@withLock
-                val directory = File(root, CACHE_DIRECTORY)
+                val kept = keep && keepDir != null
+                val directory = if (kept) {
+                    File(keepDir ?: return@withLock, KEPT_DIRECTORY)
+                } else {
+                    File(cacheDir ?: return@withLock, CACHE_DIRECTORY)
+                }
                 if (!directory.exists() && !directory.mkdirs()) return@withLock
                 val destination = File(directory, "$key.json.gz")
                 val temporary = File(directory, "$key.tmp")
@@ -1314,19 +1340,19 @@ object LyricsTranslation {
                         temporary.copyTo(destination, overwrite = true)
                         temporary.delete()
                     }
-                    trimCache(directory)
+                    trimCache(directory, if (kept) MAX_KEPT_BYTES else MAX_CACHE_BYTES)
                 }.onFailure { temporary.delete() }
             }
         }
 
-    private fun trimCache(directory: File) {
+    private fun trimCache(directory: File, maxBytes: Long) {
         val files = directory.listFiles { file -> file.extension == "gz" }
             ?.sortedByDescending(File::lastModified)
             .orEmpty()
         var kept = 0L
         files.forEach { file ->
             kept += file.length()
-            if (kept > MAX_CACHE_BYTES) file.delete()
+            if (kept > maxBytes) file.delete()
         }
     }
 
@@ -1487,6 +1513,187 @@ object LyricsTranslation {
         )
         cleaned.takeIf { it.summary.isNotEmpty() && it.meaning.isNotEmpty() }
     }.getOrNull()
+
+    // ---- What a few picked lines mean -----------------------------------------
+
+    /** One picked line: as sung, in the reader's language, and what it means. */
+    @Serializable
+    data class LineNote(val line: String, val translation: String, val note: String)
+
+    sealed interface LineNotesResult {
+        data class Ready(
+            val notes: List<LineNote>,
+            /** Haiku declined and Sonnet wrote these. */
+            val sonnetStandIn: Boolean = false,
+        ) : LineNotesResult
+        /** No Claude key is set, or Claude refused the one that is. */
+        data object NoKey : LineNotesResult
+        /** Claude declined, failed, or answered with nothing usable. */
+        data object Unavailable : LineNotesResult
+    }
+
+    @Serializable
+    private data class StoredLineNotes(val notes: List<LineNote>, val sonnetStandIn: Boolean = false)
+
+    private const val LINE_NOTES_DIRECTORY = "lyric_line_notes_v1"
+    private const val MAX_LINE_NOTES_BYTES = 4L * 1024L * 1024L
+    private const val MAX_LINE_NOTES_CONTEXT_CHARS = 4_000
+
+    /** The most lines one request explains; the pick bar enforces the same. */
+    const val MAX_LINE_NOTES = 5
+
+    /**
+     * Claude's notes on a few lines the listener picked — a translation and
+     * what each line means — in [targetLanguageTag], with the whole song sent
+     * along so a line is read in its place. Kept for good per song, lines and
+     * language, so the same pick is never paid for twice.
+     */
+    suspend fun explainLines(
+        trackId: String,
+        title: String,
+        artist: String,
+        lines: List<LyricLine>,
+        picked: List<String>,
+        targetLanguageTag: String,
+    ): LineNotesResult {
+        val chosen = picked.map { it.trim() }.filter { it.isNotEmpty() }.take(MAX_LINE_NOTES)
+        if (chosen.isEmpty()) return LineNotesResult.Unavailable
+        val target = targetLanguageTag.trim().ifBlank { "en" }
+        val key = cacheKey("lines\u0000$trackId\u0000${chosen.joinToString("\u0001")}", target, emptyList())
+        readStored(LINE_NOTES_DIRECTORY, key)
+            ?.let { text -> runCatching { json.decodeFromString<StoredLineNotes>(text) }.getOrNull() }
+            ?.takeIf { it.notes.size == chosen.size }
+            ?.let { return LineNotesResult.Ready(it.notes, it.sonnetStandIn) }
+        if (!claudeKeyUsable) return LineNotesResult.NoKey
+
+        val songText = lines
+            .map { it.text.trim() }
+            .filter { it.isNotEmpty() }
+            .joinToString("\n")
+            .take(MAX_LINE_NOTES_CONTEXT_CHARS)
+        val input = buildJsonObject {
+            put("title", title)
+            put("artist", artist)
+            put("song_lyrics", songText)
+            putJsonArray("picked_lines") {
+                chosen.forEachIndexed { index, line ->
+                    add(buildJsonObject {
+                        put("i", index)
+                        put("text", line)
+                    })
+                }
+            }
+        }.toString()
+        suspend fun ask(model: String) = try {
+            askClaude(
+                purpose = ClaudeDiagnostics.PURPOSE_LINES,
+                model = model,
+                system = lineNotesInstruction(target, chosen.size),
+                input = input,
+                schema = lineNotesSchema(chosen.size),
+                effort = "low",
+                maxTokens = 8_000,
+                linesAsked = chosen.size,
+            ) { text -> parseLineNotes(text, chosen) }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            ClaudeResult<List<LineNote>>(null, ClaudeFailure.ERROR)
+        }
+        val model = claudeModel
+        var reply = ask(model)
+        val standIn = reply.failure == ClaudeFailure.REFUSAL && model == CLAUDE_HAIKU
+        if (standIn) reply = ask(CLAUDE_SONNET)
+        val notes = reply.value
+            ?: return if (claudeKeyUsable) LineNotesResult.Unavailable else LineNotesResult.NoKey
+        writeStored(
+            LINE_NOTES_DIRECTORY, key,
+            json.encodeToString(StoredLineNotes(notes, standIn)), MAX_LINE_NOTES_BYTES,
+        )
+        return LineNotesResult.Ready(notes, standIn)
+    }
+
+    /** `{"declined_reason": "", "lines": {"0": {"translation", "note"}, …}}`, every key required. */
+    private fun lineNotesSchema(count: Int): JsonObject = buildJsonObject {
+        put("type", "object")
+        putJsonObject("properties") {
+            putJsonObject("declined_reason") { put("type", "string") }
+            putJsonObject("lines") {
+                put("type", "object")
+                putJsonObject("properties") {
+                    for (index in 0 until count) {
+                        putJsonObject(index.toString()) {
+                            put("type", "object")
+                            putJsonObject("properties") {
+                                putJsonObject("translation") { put("type", "string") }
+                                putJsonObject("note") { put("type", "string") }
+                            }
+                            putJsonArray("required") {
+                                add("translation")
+                                add("note")
+                            }
+                            put("additionalProperties", false)
+                        }
+                    }
+                }
+                putJsonArray("required") {
+                    for (index in 0 until count) add(index.toString())
+                }
+                put("additionalProperties", false)
+            }
+        }
+        putJsonArray("required") {
+            add("declined_reason")
+            add("lines")
+        }
+        put("additionalProperties", false)
+    }
+
+    private fun lineNotesInstruction(target: String, count: Int): String {
+        val locale = Locale.forLanguageTag(target.replace('_', '-'))
+        val languageName = locale.getDisplayName(Locale.ENGLISH).ifBlank { target }
+        val korean = canonicalLanguage(target) == "ko"
+        return buildString {
+            appendLine("You explain song lyrics line by line for a music app, like a friendly language teacher's margin notes.")
+            appendLine("Write in $languageName ($target).")
+            if (korean) {
+                appendLine("Use natural, friendly modern Korean in 해요체 for the notes. Never use '당신'. Avoid translationese.")
+            }
+            appendLine()
+            appendLine("Context: the listener is playing this song right now and picked these lines on the lyric screen because they want to understand them better. \"song_lyrics\" is the whole song, for context only.")
+            appendLine()
+            appendLine("For each picked line \"i\" (\"0\" to \"${count - 1}\"), all of them required:")
+            appendLine("- \"translation\": a natural translation of that one line into $languageName. If the line is already in $languageName, repeat it as it is.")
+            appendLine("- \"note\": one to three short sentences on what the line means where it stands in the song: its nuance, idioms, slang, wordplay, grammar worth knowing, or cultural references. Say what a learner would not get from the translation alone.")
+            appendLine()
+            appendLine("Base the notes on the lyrics. Mention facts about the artist or the song only if you are certain they are true; never invent them.")
+            appendLine("Plain text only: no markdown, no bullet characters, no emojis.")
+            appendLine("Leave \"declined_reason\" as an empty string. Only if you will not explain these lines, write the reason there in one short sentence and leave every value empty. Never write a refusal in place of a translation or a note.")
+        }
+    }
+
+    private fun parseLineNotes(text: String, chosen: List<String>): Parsed<List<LineNote>> {
+        val answer = runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull()
+            ?: return Parsed(null, ClaudeFailure.BAD_ANSWER, detail = "not a JSON object (${text.length} chars)")
+        (answer["declined_reason"] as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { return Parsed(null, ClaudeFailure.REFUSAL, detail = "declined: ${it.take(160)}") }
+        val field = answer["lines"] as? JsonObject
+            ?: return Parsed(null, ClaudeFailure.BAD_ANSWER, detail = "\"lines\" missing")
+        val notes = chosen.mapIndexed { index, line ->
+            val item = field[index.toString()] as? JsonObject
+            LineNote(
+                line = line,
+                translation = (item?.get("translation") as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull?.trim().orEmpty(),
+                note = (item?.get("note") as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull?.trim().orEmpty(),
+            )
+        }
+        val empty = notes.count { it.note.isEmpty() && it.translation.isEmpty() }
+        if (empty > 0) {
+            return Parsed(null, ClaudeFailure.BAD_ANSWER, linesGot = chosen.size - empty, detail = "$empty lines left empty")
+        }
+        return Parsed(notes, linesGot = notes.size)
+    }
 
     // ---- A song's name in its own language -----------------------------------
 

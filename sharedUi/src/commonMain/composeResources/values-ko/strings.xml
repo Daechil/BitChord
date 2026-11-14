@@ -96,6 +96,12 @@
     <string name="lyrics_translated_to">%1$s 번역 완료</string>
     <string name="lyrics_translated_claude">%1$s 번역 · Claude</string>
     <string name="lyrics_translated_claude_sonnet">%1$s 번역 · Claude Sonnet (Haiku 거절)</string>
+    <string name="lyrics_explain">풀이</string>
+    <string name="line_notes_title">가사 풀이</string>
+    <string name="line_notes_loading">Claude가 가사를 읽고 있어요…</string>
+    <string name="line_notes_unavailable">지금은 풀이를 가져오지 못했어요.</string>
+    <string name="line_notes_footer">Claude가 작성했어요. 틀릴 수 있어요.</string>
+    <string name="line_notes_footer_sonnet">Claude Sonnet이 작성했어요 (Haiku 거절). 틀릴 수 있어요.</string>
     <string name="lyrics_translated_google_fallback">%1$s 번역 · Google 번역 (Claude: %2$s)</string>
     <string name="claude_fail_cooldown">요청 한도로 잠시 쉬는 중</string>
     <string name="claude_fail_key_rejected">키 거부</string>

@@ -671,6 +671,12 @@ object AppSettings {
     /** Play on again when headphones connect, for a pause in the last half hour. See HeadphoneResume. */
     val resumeOnHeadphones = MutableStateFlow(true)
 
+    /** A "explain" button on the lyric pick bar: Claude's notes on 1–5 picked lines. */
+    val claudeLineNotes = MutableStateFlow(false)
+
+    /** Translate a song as it downloads, and keep downloaded songs' translations out of the cache. */
+    val keepDownloadTranslations = MutableStateFlow(true)
+
     /** The databases [syncedLyrics] may ask. Empty is the same as off. */
     val lyricsSources = MutableStateFlow(LyricsSource.offered.toSet())
 
@@ -1142,6 +1148,8 @@ object AppSettings {
         }.getOrDefault(LastPlayerScreen.MAIN)
         syncedLyrics.value = prefs.getBoolean(KEY_SYNCED_LYRICS, true)
         resumeOnHeadphones.value = prefs.getBoolean(KEY_RESUME_ON_HEADPHONES, true)
+        claudeLineNotes.value = prefs.getBoolean(KEY_CLAUDE_LINE_NOTES, false)
+        keepDownloadTranslations.value = prefs.getBoolean(KEY_KEEP_DOWNLOAD_TRANSLATIONS, true)
         lyricsSources.value = readLyricsSources()
         lyricsSourceOrder.value = readLyricsSourceOrder()
         prioritizeSyllableSync.value = prefs.getBoolean(KEY_PRIORITIZE_SYLLABLE_SYNC, false)
@@ -1718,6 +1726,16 @@ object AppSettings {
     fun setResumeOnHeadphones(value: Boolean) {
         resumeOnHeadphones.value = value
         prefs.edit().putBoolean(KEY_RESUME_ON_HEADPHONES, value).apply()
+    }
+
+    fun setClaudeLineNotes(value: Boolean) {
+        claudeLineNotes.value = value
+        prefs.edit().putBoolean(KEY_CLAUDE_LINE_NOTES, value).apply()
+    }
+
+    fun setKeepDownloadTranslations(value: Boolean) {
+        keepDownloadTranslations.value = value
+        prefs.edit().putBoolean(KEY_KEEP_DOWNLOAD_TRANSLATIONS, value).apply()
     }
 
     fun setSyncedLyrics(value: Boolean) {
@@ -2486,6 +2504,8 @@ object AppSettings {
     private const val KEY_LAST_PLAYER_SCREEN = "last_player_screen"
     private const val KEY_SYNCED_LYRICS = "synced_lyrics"
     private const val KEY_RESUME_ON_HEADPHONES = "ko_resume_on_headphones"
+    private const val KEY_CLAUDE_LINE_NOTES = "ko_claude_line_notes"
+    private const val KEY_KEEP_DOWNLOAD_TRANSLATIONS = "ko_keep_download_translations"
     private const val KEY_LYRICS_SOURCES = "lyrics_sources"
     private const val KEY_LYRICS_SOURCES_SEEN = "lyrics_sources_seen"
     private const val KEY_LYRICS_SOURCE_ORDER = "lyrics_source_order"

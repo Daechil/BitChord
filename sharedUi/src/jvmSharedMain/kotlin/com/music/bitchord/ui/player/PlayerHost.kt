@@ -127,6 +127,20 @@ interface PlayerHost {
         targetLanguageTag: String,
     ): LyricsTranslation.MeaningResult = LyricsTranslation.MeaningResult.Unavailable
 
+    /**
+     * Whether the lyric pick bar offers "explain": the setting is on, a Claude
+     * key is set, and Claude has not refused it.
+     */
+    val lineNotesAvailable: StateFlow<Boolean> get() = NoSongMeaning
+
+    /** Claude's notes on a few [picked] lines of [song], in [targetLanguageTag]. */
+    suspend fun explainLines(
+        song: Song,
+        lines: List<LyricLine>,
+        picked: List<String>,
+        targetLanguageTag: String,
+    ): LyricsTranslation.LineNotesResult = LyricsTranslation.LineNotesResult.Unavailable
+
     /** A short, non-blocking notice — a Toast on the phone. */
     fun showMessage(message: String)
 

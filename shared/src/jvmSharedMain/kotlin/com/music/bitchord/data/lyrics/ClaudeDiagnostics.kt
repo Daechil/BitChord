@@ -55,12 +55,13 @@ object ClaudeDiagnostics {
     const val PURPOSE_TRANSLATE = "translate"
     const val PURPOSE_MEANING = "meaning"
     const val PURPOSE_ORIGINAL_NAME = "original_name"
+    const val PURPOSE_LINES = "lines"
 
     @Serializable
     data class Entry(
         /** When the request finished, epoch millis. */
         val at: Long,
-        /** [PURPOSE_TRANSLATE], [PURPOSE_MEANING] or [PURPOSE_ORIGINAL_NAME]. */
+        /** [PURPOSE_TRANSLATE], [PURPOSE_MEANING], [PURPOSE_ORIGINAL_NAME] or [PURPOSE_LINES]. */
         val purpose: String,
         val model: String,
         /** A [ClaudeFailure] name, or null when the answer was used. */

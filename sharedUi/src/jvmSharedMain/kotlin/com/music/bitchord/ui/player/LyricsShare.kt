@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material3.Icon
@@ -133,6 +134,10 @@ internal class LyricsPicker(
     val share: () -> Unit,
     /** Header share button: enter picking with nothing preselected. */
     val beginPicking: () -> Unit,
+    /** Hands the chosen lines' text to Claude's line notes. */
+    val explain: () -> Unit = {},
+    /** Between one and [LyricsTranslation.MAX_LINE_NOTES] lines are chosen. */
+    val canExplain: Boolean = false,
 )
 
 /**
@@ -154,6 +159,8 @@ internal fun rememberLyricsPicker(
     haptics: Haptics,
     /** Where the finished card goes; never called on a platform that has none. */
     onCard: (LyricsShareRequest) -> Unit,
+    /** Where the chosen lines go for Claude's notes, in order. */
+    onExplain: (List<String>) -> Unit = {},
 ): LyricsPicker {
     // Said once, when a line is refused, and gone by the time the finger moves
     // on — the way every other refusal in this player is worded.
@@ -269,7 +276,19 @@ internal fun rememberLyricsPicker(
         cancel()
     }
 
+    val explain: () -> Unit = {
+        val source = lines.orEmpty()
+        val chosen = picks.sorted()
+            .mapNotNull { source.getOrNull(it)?.text?.trim() }
+            .filter { it.isNotEmpty() }
+            .take(com.music.bitchord.data.lyrics.LyricsTranslation.MAX_LINE_NOTES)
+        if (chosen.isNotEmpty()) onExplain(chosen)
+        cancel()
+    }
+
     return LyricsPicker(
+        explain = explain,
+        canExplain = picks.size in 1..com.music.bitchord.data.lyrics.LyricsTranslation.MAX_LINE_NOTES,
         picking = picking,
         picks = picks,
         overBudget = overBudget,
@@ -303,6 +322,9 @@ internal fun LyricsPickBar(
     onCancel: () -> Unit,
     onShare: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Claude's line notes, between Cancel and Share; null leaves the bar as it was. */
+    onExplain: (() -> Unit)? = null,
+    explainEnabled: Boolean = false,
 ) {
     val haptics = rememberHaptics()
     Row(
@@ -325,6 +347,19 @@ internal fun LyricsPickBar(
                 onCancel()
             },
         )
+        if (onExplain != null) {
+            PickAction(
+                label = stringResource(Res.string.lyrics_explain),
+                icon = Icons.Rounded.AutoAwesome,
+                accent = false,
+                enabled = explainEnabled,
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    haptics.play(Haptic.Select)
+                    onExplain()
+                },
+            )
+        }
         PickAction(
             label = stringResource(Res.string.share),
             icon = Icons.Rounded.IosShare,

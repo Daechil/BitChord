@@ -8,6 +8,7 @@ import com.music.bitchord.data.canvas.CanvasArtwork
 import com.music.bitchord.data.listentogether.PartyMember
 import com.music.bitchord.data.lyrics.LyricLine
 import com.music.bitchord.data.lyrics.LyricsSource
+import com.music.bitchord.data.lyrics.LyricsTranslation
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.settings.AudioQuality
 import com.music.bitchord.data.settings.LastPlayerScreen
@@ -111,6 +112,19 @@ interface PlayerHost {
         targetLanguageTag: String,
     ): LyricsRomanizationResult
 
+    /**
+     * Whether "what this song means" can be offered: a Claude key is set and
+     * Claude has not refused it. False hides the button.
+     */
+    val songMeaningAvailable: StateFlow<Boolean> get() = NoSongMeaning
+
+    /** Claude's explanation of [song], in [targetLanguageTag]. */
+    suspend fun songMeaning(
+        song: Song,
+        lines: List<LyricLine>,
+        targetLanguageTag: String,
+    ): LyricsTranslation.MeaningResult = LyricsTranslation.MeaningResult.Unavailable
+
     /** A short, non-blocking notice — a Toast on the phone. */
     fun showMessage(message: String)
 
@@ -160,6 +174,7 @@ interface PlayerHost {
 }
 
 private val NoCast = MutableStateFlow(CastUi())
+private val NoSongMeaning = MutableStateFlow(false)
 
 private val DefaultVideoAspect = MutableStateFlow(16f / 9f)
 

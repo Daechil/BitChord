@@ -260,6 +260,7 @@ fun SettingsScreen(
     val fullBleedDetailArtwork by AppSettings.fullBleedDetailArtwork.collectAsStateWithLifecycle()
     val playerTheme by AppSettings.playerTheme.collectAsStateWithLifecycle()
     val syncedLyrics by AppSettings.syncedLyrics.collectAsStateWithLifecycle()
+    val resumeOnHeadphones by AppSettings.resumeOnHeadphones.collectAsStateWithLifecycle()
     val lyricsSources by AppSettings.lyricsSources.collectAsStateWithLifecycle()
     val translationLanguage by AppSettings.translationLanguage.collectAsStateWithLifecycle()
     val claudeTranslation by AppSettings.claudeTranslation.collectAsStateWithLifecycle()
@@ -660,6 +661,21 @@ fun SettingsScreen(
             header = stringResource(R.string.playback),
             footer = stringResource(R.string.bit_perfect_bypassed_footer).takeIf { bitPerfectReady },
         ) {
+            val resumeOnHeadphonesTitle = stringResource(R.string.resume_on_headphones)
+            row(resumeOnHeadphonesTitle, "headphones", "earbuds", "bluetooth", "resume", "이어폰") {
+                SettingsRow(
+                    icon = SfIcons.Bluetooth,
+                    title = resumeOnHeadphonesTitle,
+                    subtitle = stringResource(R.string.resume_on_headphones_subtitle),
+                    trailing = {
+                        IosSwitch(
+                            checked = resumeOnHeadphones,
+                            onCheckedChange = AppSettings::setResumeOnHeadphones,
+                        )
+                    },
+                    onClick = { AppSettings.setResumeOnHeadphones(!resumeOnHeadphones) },
+                )
+            }
             val outputPrecisionTitle = stringResource(R.string.output_precision)
             row(outputPrecisionTitle, "pcm", "bit depth", "sample rate", "dac") {
                 SettingsRow(

@@ -3057,6 +3057,8 @@ internal class LyricsTranslationUi(
     val status: String,
     val toggleTranslation: () -> Unit,
     val toggleRomanization: () -> Unit,
+    /** The language tag translations are asked into — and the song's explanation is written in. */
+    val targetLanguage: String = "",
 )
 
 /**
@@ -3286,5 +3288,6 @@ internal fun rememberLyricsTranslation(
         status = status,
         toggleTranslation = toggleTranslation,
         toggleRomanization = toggleRomanization,
+        targetLanguage = translationLanguage,
     )
 }

@@ -103,6 +103,59 @@ object LyricsRepository {
         onSourceResult: ((LyricsSource, Result?) -> Unit)? = null,
         /** Lets callers turn a cancelled race loser back into "not fetched". */
         onSourceCancelled: ((LyricsSource) -> Unit)? = null,
+    ): Result? {
+        val first = lyricsOnce(
+            videoId, title, artist, durationMs, album, sources, order, prioritizeSyllableSync, isrc,
+            onSourceStarted, onSourceResult, onSourceCancelled,
+        )
+        if (first != null) return first
+        // Nothing, and the name is written in Hangul: very often a Korean
+        // spelling of a Japanese, Chinese or English song, which the catalogues
+        // file under its own name. Ask for that name and search once more —
+        // YouTube Music first, Claude only if that doesn't do it. The sources
+        // keyed on the video rather than on a name were already asked: they do
+        // not change with the name the search is made under.
+        if (!OriginalNames.worthTrying(title, artist)) return null
+        val byName = sources - KEYED_ON_VIDEO
+        if (byName.isEmpty()) return null
+        val tried = mutableSetOf(title to artist)
+        suspend fun retry(name: OriginalNames.Name): Result? {
+            if (!tried.add(name.title to name.artist)) return null
+            return lyricsOnce(
+                videoId, name.title, name.artist, durationMs, album, byName, order, prioritizeSyllableSync, isrc,
+                onSourceStarted, onSourceResult, onSourceCancelled,
+            )
+        }
+        runCatching { OriginalNames.fromYouTubeMusic(title, artist, durationMs) }.getOrNull()?.let { name ->
+            retry(name)?.let { return it }
+        }
+        runCatching { OriginalNames.fromClaude(title, artist) }.getOrNull()?.let { name ->
+            retry(name)?.let { return it }
+        }
+        return null
+    }
+
+    /** Sources that look a track up by its video id, whatever it is called. */
+    private val KEYED_ON_VIDEO = setOf(
+        LyricsSource.YOUTUBE_TRANSCRIPT,
+        LyricsSource.YOUTUBE_MUSIC,
+        LyricsSource.SIMP_MUSIC,
+    )
+
+    /** One round of asking every source under one name. */
+    private suspend fun lyricsOnce(
+        videoId: String,
+        title: String,
+        artist: String,
+        durationMs: Long,
+        album: String?,
+        sources: Set<LyricsSource>,
+        order: List<LyricsSource>,
+        prioritizeSyllableSync: Boolean,
+        isrc: String?,
+        onSourceStarted: ((LyricsSource) -> Unit)?,
+        onSourceResult: ((LyricsSource, Result?) -> Unit)?,
+        onSourceCancelled: ((LyricsSource) -> Unit)?,
     ): Result? = coroutineScope {
         val sequence = (order + LyricsSource.offered)
             .distinct()

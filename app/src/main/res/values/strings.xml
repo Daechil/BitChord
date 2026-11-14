@@ -257,6 +257,8 @@
     <string name="switch_to_list_view">Switch to list view</string>
     <string name="audio_quality">Audio quality</string>
     <string name="playback">Playback</string>
+    <string name="resume_on_headphones">Resume when headphones connect</string>
+    <string name="resume_on_headphones_subtitle">Resumes a song paused in the last 30 minutes when Bluetooth or wired headphones connect.</string>
     <string name="appearance">Appearance</string>
     <string name="storage">Storage</string>
     <string name="your_data">Your data</string>

@@ -625,6 +625,9 @@ object AppSettings {
      */
     val syncedLyrics = MutableStateFlow(true)
 
+    /** Play on again when headphones connect, for a pause in the last half hour. See HeadphoneResume. */
+    val resumeOnHeadphones = MutableStateFlow(true)
+
     /** The databases [syncedLyrics] may ask. Empty is the same as off. */
     val lyricsSources = MutableStateFlow(LyricsSource.offered.toSet())
 
@@ -1084,6 +1087,7 @@ object AppSettings {
             )
         }.getOrDefault(LastPlayerScreen.MAIN)
         syncedLyrics.value = prefs.getBoolean(KEY_SYNCED_LYRICS, true)
+        resumeOnHeadphones.value = prefs.getBoolean(KEY_RESUME_ON_HEADPHONES, true)
         lyricsSources.value = readLyricsSources()
         lyricsSourceOrder.value = readLyricsSourceOrder()
         prioritizeSyllableSync.value = prefs.getBoolean(KEY_PRIORITIZE_SYLLABLE_SYNC, false)
@@ -1587,6 +1591,11 @@ object AppSettings {
         claudeApiKey.value = normalized
         prefs.edit().putString(KEY_CLAUDE_API_KEY, normalized).apply()
         com.music.bitchord.data.lyrics.LyricsTranslation.claudeApiKey = normalized
+    }
+
+    fun setResumeOnHeadphones(value: Boolean) {
+        resumeOnHeadphones.value = value
+        prefs.edit().putBoolean(KEY_RESUME_ON_HEADPHONES, value).apply()
     }
 
     fun setSyncedLyrics(value: Boolean) {
@@ -2350,6 +2359,7 @@ object AppSettings {
     private const val KEY_LEGACY_MESH_GRADIENT = "legacy_mesh_gradient"
     private const val KEY_LAST_PLAYER_SCREEN = "last_player_screen"
     private const val KEY_SYNCED_LYRICS = "synced_lyrics"
+    private const val KEY_RESUME_ON_HEADPHONES = "ko_resume_on_headphones"
     private const val KEY_LYRICS_SOURCES = "lyrics_sources"
     private const val KEY_LYRICS_SOURCES_SEEN = "lyrics_sources_seen"
     private const val KEY_LYRICS_SOURCE_ORDER = "lyrics_source_order"

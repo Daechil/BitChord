@@ -95,6 +95,13 @@
     <string name="lyrics_share_pick_limit">Card is full</string>
     <string name="lyrics_translated_to">Translated to %1$s</string>
     <string name="lyrics_translated_claude">Translated to %1$s · Claude</string>
+    <string name="song_meaning">What this song means</string>
+    <string name="song_meaning_loading">Reading the song…</string>
+    <string name="song_meaning_unavailable">Couldn’t explain this song right now</string>
+    <string name="song_meaning_no_key">Add a Claude API key in Settings to use this</string>
+    <string name="song_meaning_highlights">Lines to note</string>
+    <string name="song_meaning_retry">Try again</string>
+    <string name="song_meaning_footer">Written by Claude from the lyrics. It can be wrong.</string>
     <string name="lyrics_translation_unavailable">Translation is unavailable right now</string>
     <string name="medium_quality">Medium Quality</string>
     <string name="mono">Mono</string>

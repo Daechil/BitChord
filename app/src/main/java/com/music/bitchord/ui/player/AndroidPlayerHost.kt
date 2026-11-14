@@ -210,6 +210,25 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
             LyricsTranslation.RomanizationResult.Unavailable -> LyricsRomanizationResult.Unavailable
         }
 
+    override val songMeaningAvailable: StateFlow<Boolean> by lazy {
+        combine(AppSettings.claudeApiKey, LyricsTranslation.claudeKeyRejected) { key, rejected ->
+            key.isNotBlank() && !rejected
+        }.stateIn(scope, SharingStarted.Eagerly, AppSettings.claudeApiKey.value.isNotBlank())
+    }
+
+    override suspend fun songMeaning(
+        song: Song,
+        lines: List<LyricLine>,
+        targetLanguageTag: String,
+    ): LyricsTranslation.MeaningResult =
+        LyricsTranslation.explain(
+            trackId = song.videoId,
+            title = song.title,
+            artist = song.artist,
+            lines = lines,
+            targetLanguageTag = targetLanguageTag,
+        )
+
     override fun showMessage(message: String) {
         main.post { Toast.makeText(app, message, Toast.LENGTH_SHORT).show() }
     }

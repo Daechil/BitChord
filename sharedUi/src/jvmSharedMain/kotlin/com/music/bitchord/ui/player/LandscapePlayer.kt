@@ -511,6 +511,9 @@ internal fun LandscapeLyricsPane(
     pickBar: @Composable () -> Unit = {},
     romanizationToggle: @Composable () -> Unit,
     translationToggle: @Composable () -> Unit,
+    /** A third disc beside the translate one — "what this song means" — when it is on offer. */
+    showMeaningToggle: Boolean = false,
+    meaningToggle: @Composable () -> Unit = {},
     modifier: Modifier = Modifier,
     panel: @Composable (Modifier) -> Unit,
 ) {
@@ -552,6 +555,9 @@ internal fun LandscapeLyricsPane(
             // Fixed slots either side whether or not the toggles are drawn, so
             // the status line stays centred as lyrics arrive.
             Box(Modifier.size(34.dp)) { if (hasLyrics) romanizationToggle() }
+            // Matched on the left by the width the meaning disc takes on the
+            // right, so the status line stays centred either way.
+            if (showMeaningToggle) Spacer(Modifier.width(42.dp))
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -562,6 +568,10 @@ internal fun LandscapeLyricsPane(
                     status = status,
                     onStatusClick = onStatusClick,
                 )
+            }
+            if (showMeaningToggle) {
+                Box(Modifier.size(34.dp)) { if (hasLyrics) meaningToggle() }
+                Spacer(Modifier.width(8.dp))
             }
             Box(Modifier.size(34.dp)) { if (hasLyrics) translationToggle() }
         }

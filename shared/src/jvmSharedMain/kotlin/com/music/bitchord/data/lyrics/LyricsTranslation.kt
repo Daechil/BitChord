@@ -116,6 +116,16 @@ object LyricsTranslation {
      */
     @Volatile
     var cacheDir: File? = null
+
+    /**
+     * Where answers worth keeping for good live — the phone's files directory.
+     * Holds the song explanations. Null falls back to [cacheDir].
+     */
+    @Volatile
+    var keepDir: File? = null
+    private const val MEANING_DIRECTORY = "song_meaning_v1"
+    private const val MAX_MEANING_BYTES = 4L * 1024L * 1024L
+    private const val MAX_MEANING_LYRIC_CHARS = 6_000
     private val client by lazy {
         Http.client.newBuilder()
             .callTimeout(12, TimeUnit.SECONDS)
@@ -949,4 +959,276 @@ object LyricsTranslation {
             if (kept > MAX_CACHE_BYTES) file.delete()
         }
     }
+
+    // ---- What a song means ---------------------------------------------------
+
+    @Serializable
+    data class SongMeaning(
+        /** One line on what the song is about. */
+        val summary: String,
+        /** A few short paragraphs, separated by blank lines. */
+        val meaning: String,
+        val highlights: List<MeaningHighlight> = emptyList(),
+    )
+
+    /** One line of the song quoted, and what it says. */
+    @Serializable
+    data class MeaningHighlight(val line: String, val note: String)
+
+    sealed interface MeaningResult {
+        data class Ready(val meaning: SongMeaning) : MeaningResult
+        /** No Claude key is set, or Claude refused the one that is. */
+        data object NoKey : MeaningResult
+        data object Unavailable : MeaningResult
+    }
+
+    private val meanings = object {
+        private val entries = object : LinkedHashMap<String, SongMeaning>(8, 0.75f, true) {
+            override fun removeEldestEntry(eldest: Map.Entry<String, SongMeaning>) = size > 8
+        }
+
+        @Synchronized fun get(key: String): SongMeaning? = entries[key]
+
+        @Synchronized fun put(key: String, value: SongMeaning) {
+            entries[key] = value
+        }
+    }
+
+    /**
+     * Claude's explanation of the song — what it is about, its images and
+     * slang, a few lines worth a note — written in [targetLanguageTag].
+     * Asked once per song and language, then kept for good.
+     */
+    suspend fun explain(
+        trackId: String,
+        title: String,
+        artist: String,
+        lines: List<LyricLine>,
+        targetLanguageTag: String,
+    ): MeaningResult {
+        val target = targetLanguageTag.trim().ifBlank { "en" }
+        val key = cacheKey("meaning\u0000$trackId", target, emptyList())
+        meanings.get(key)?.let { return MeaningResult.Ready(it) }
+        readStored(MEANING_DIRECTORY, key)
+            ?.let { text -> runCatching { json.decodeFromString<SongMeaning>(text) }.getOrNull() }
+            ?.let {
+                meanings.put(key, it)
+                return MeaningResult.Ready(it)
+            }
+        if (!claudeKeyUsable) return MeaningResult.NoKey
+
+        val lyricText = lines
+            .map { it.text.trim() }
+            .filter { it.isNotEmpty() }
+            .joinToString("\n")
+            .take(MAX_MEANING_LYRIC_CHARS)
+        if (lyricText.isBlank()) return MeaningResult.Unavailable
+
+        val input = buildJsonObject {
+            put("title", title)
+            put("artist", artist)
+            put("lyrics", lyricText)
+        }
+        val answer = try {
+            askClaude(
+                system = meaningInstruction(target),
+                input = input.toString(),
+                schema = MEANING_SCHEMA,
+                effort = "medium",
+            )?.let { parseMeaning(it) }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
+        }
+        if (answer == null) {
+            return if (claudeKeyUsable) MeaningResult.Unavailable else MeaningResult.NoKey
+        }
+        meanings.put(key, answer)
+        writeStored(MEANING_DIRECTORY, key, json.encodeToString(answer), MAX_MEANING_BYTES)
+        return MeaningResult.Ready(answer)
+    }
+
+    private val MEANING_SCHEMA: JsonObject by lazy {
+        buildJsonObject {
+            put("type", "object")
+            putJsonObject("properties") {
+                putJsonObject("summary") { put("type", "string") }
+                putJsonObject("meaning") { put("type", "string") }
+                putJsonObject("highlights") {
+                    put("type", "array")
+                    putJsonObject("items") {
+                        put("type", "object")
+                        putJsonObject("properties") {
+                            putJsonObject("line") { put("type", "string") }
+                            putJsonObject("note") { put("type", "string") }
+                        }
+                        putJsonArray("required") {
+                            add("line")
+                            add("note")
+                        }
+                        put("additionalProperties", false)
+                    }
+                }
+            }
+            putJsonArray("required") {
+                add("summary")
+                add("meaning")
+                add("highlights")
+            }
+            put("additionalProperties", false)
+        }
+    }
+
+    private fun meaningInstruction(target: String): String {
+        val locale = Locale.forLanguageTag(target.replace('_', '-'))
+        val languageName = locale.getDisplayName(Locale.ENGLISH).ifBlank { target }
+        val korean = canonicalLanguage(target) == "ko"
+        return buildString {
+            appendLine("You write short, insightful song explanations for a music app, like the notes on a lyric site.")
+            appendLine("Write everything in $languageName ($target).")
+            if (korean) {
+                appendLine("Use natural, friendly modern Korean in 해요체. Never use '당신'. Avoid translationese.")
+            }
+            appendLine()
+            appendLine("Return JSON with:")
+            appendLine("- \"summary\": one sentence saying what the song is about${if (korean) " (under 60 Korean characters)" else ""}.")
+            appendLine("- \"meaning\": two or three short paragraphs separated by one blank line. First the story and the feeling of the song, then its key images, metaphors and slang and what they mean.")
+            appendLine("- \"highlights\": up to four items. Each has \"line\", copied exactly from the lyrics given, and \"note\", one or two sentences on what that line means.")
+            appendLine()
+            appendLine("Base everything on the lyrics given. Mention background about the artist or the song only if you are certain it is true. Never invent facts, chart records, interviews or quotes.")
+            appendLine("Plain text only: no markdown, no bullet characters, no emojis.")
+        }
+    }
+
+    private fun parseMeaning(text: String): SongMeaning? = runCatching {
+        val parsed = json.decodeFromString<SongMeaning>(text)
+        val cleaned = parsed.copy(
+            summary = parsed.summary.trim(),
+            meaning = parsed.meaning.trim(),
+            highlights = parsed.highlights
+                .map { MeaningHighlight(it.line.trim(), it.note.trim()) }
+                .filter { it.line.isNotEmpty() && it.note.isNotEmpty() }
+                .take(4),
+        )
+        cleaned.takeIf { it.summary.isNotEmpty() && it.meaning.isNotEmpty() }
+    }.getOrNull()
+
+    // ---- A song's name in its own language -----------------------------------
+
+    /** What Claude made of a Hangul title: the original's name, or that there is none. */
+    sealed interface NativeNameResult {
+        data class Found(val title: String, val artist: String) : NativeNameResult
+        /** Claude answered: the song is Korean, or it does not know it. Worth remembering. */
+        data object NotForeign : NativeNameResult
+        /** No key, no credit, no network: nothing learned, worth asking again later. */
+        data object Unavailable : NativeNameResult
+    }
+
+    @Serializable
+    private data class NativeNameAnswer(
+        val found: Boolean = false,
+        val title: String = "",
+        val artist: String = "",
+    )
+
+    /**
+     * The title and artist of a song as its original release prints them,
+     * given the way a Korean listener or uploader wrote them in Hangul — "발묘 /
+     * 나나호시 관현악단" for "抜錨 / ナナホシ管弦楽団". Lyrics catalogues file a
+     * Japanese, Chinese or English song under its own name; a Hangul spelling
+     * finds nothing in them.
+     */
+    suspend fun nativeName(title: String, artist: String): NativeNameResult {
+        if (!claudeKeyUsable) return NativeNameResult.Unavailable
+        val input = buildJsonObject {
+            put("title", title)
+            put("artist", artist)
+        }
+        val answer = try {
+            askClaude(
+                system = NATIVE_NAME_INSTRUCTION,
+                input = input.toString(),
+                schema = NATIVE_NAME_SCHEMA,
+                effort = "low",
+                maxTokens = 8_000,
+            )?.let { text -> runCatching { json.decodeFromString<NativeNameAnswer>(text) }.getOrNull() }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
+        } ?: return NativeNameResult.Unavailable
+        val foundTitle = answer.title.trim()
+        val foundArtist = answer.artist.trim()
+        if (!answer.found || foundTitle.isEmpty()) return NativeNameResult.NotForeign
+        // Asked for the original and handed the question back: nothing new.
+        if (foundTitle == title.trim() && (foundArtist.isEmpty() || foundArtist == artist.trim())) {
+            return NativeNameResult.NotForeign
+        }
+        return NativeNameResult.Found(foundTitle, foundArtist.ifEmpty { artist })
+    }
+
+    private val NATIVE_NAME_SCHEMA: JsonObject by lazy {
+        buildJsonObject {
+            put("type", "object")
+            putJsonObject("properties") {
+                putJsonObject("found") { put("type", "boolean") }
+                putJsonObject("title") { put("type", "string") }
+                putJsonObject("artist") { put("type", "string") }
+            }
+            putJsonArray("required") {
+                add("found")
+                add("title")
+                add("artist")
+            }
+            put("additionalProperties", false)
+        }
+    }
+
+    private val NATIVE_NAME_INSTRUCTION = """
+        You identify songs for a lyrics search. The input is a song title and artist as a Korean listener wrote them, usually in Hangul.
+        Often the song is not Korean: it is a Japanese, Chinese or English song (J-pop, Vocaloid, anime, C-pop, Western pop) whose names were transliterated or translated into Hangul, for example a Korean cover of it.
+        If you are confident which original song this is, return found=true with "title" and "artist" exactly as the original release writes them, in the original script (kanji/kana, Chinese characters, Latin letters). Example: {"title":"발묘","artist":"나나호시 관현악단"} -> {"found":true,"title":"抜錨","artist":"ナナホシ管弦楽団"}.
+        If the song is originally Korean, or you are not confident, return found=false with empty strings. Never guess.
+    """.trimIndent()
+
+    // ---- Small answers kept as plain files ----------------------------------------
+
+    private suspend fun readStored(directoryName: String, key: String): String? =
+        withContext(Dispatchers.IO) {
+            diskMutex.withLock {
+                val root = keepDir ?: cacheDir ?: return@withLock null
+                val file = File(File(root, directoryName), "$key.json")
+                if (!file.isFile) return@withLock null
+                runCatching {
+                    file.readText().also { file.setLastModified(System.currentTimeMillis()) }
+                }.getOrNull()
+            }
+        }
+
+    private suspend fun writeStored(directoryName: String, key: String, text: String, maxBytes: Long) =
+        withContext(Dispatchers.IO) {
+            diskMutex.withLock {
+                val root = keepDir ?: cacheDir ?: return@withLock
+                val directory = File(root, directoryName)
+                if (!directory.exists() && !directory.mkdirs()) return@withLock
+                val destination = File(directory, "$key.json")
+                val temporary = File(directory, "$key.tmp")
+                runCatching {
+                    temporary.writeText(text)
+                    if (!temporary.renameTo(destination)) {
+                        temporary.copyTo(destination, overwrite = true)
+                        temporary.delete()
+                    }
+                    val files = directory.listFiles { file -> file.extension == "json" }
+                        ?.sortedByDescending(File::lastModified)
+                        .orEmpty()
+                    var kept = 0L
+                    files.forEach { file ->
+                        kept += file.length()
+                        if (kept > maxBytes) file.delete()
+                    }
+                }.onFailure { temporary.delete() }
+            }
+        }
 }

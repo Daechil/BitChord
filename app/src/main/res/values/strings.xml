@@ -521,7 +521,8 @@
     <string name="claude_monthly_cap_subtitle">%1$s · $%2$s used this month</string>
     <string name="claude_monthly_cap_description">Once this month\'s estimated cost reaches the limit, Google Translate is used instead of Claude until next month. The estimate is counted by the app from tokens, so it can differ slightly from your actual bill.</string>
     <string name="floating_lyrics">Floating lyrics</string>
-    <string name="floating_lyrics_subtitle">Shows the current lyric over other apps while a song plays. Drag to move, tap to open the app</string>
+    <string name="floating_lyrics_subtitle">Shows the current lyric over other apps while a song plays. Drag to move, tap to open the app, hold to hide it until you next open the app</string>
+    <string name="floating_lyrics_dismissed">Floating lyrics hidden. They come back after you next open BitChord KO</string>
     <string name="floating_lyrics_locked">Lock floating lyrics</string>
     <string name="floating_lyrics_locked_subtitle">Touches pass through to the app underneath and the bar can\'t be moved</string>
     <string name="ko_features_downloads">Downloads</string>

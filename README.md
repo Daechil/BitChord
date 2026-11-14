@@ -116,6 +116,7 @@
 
 - 곡이 재생되는 동안 **다른 앱을 쓰고 있으면**, 화면 위에 작은 막대로 지금 부르는 가사와 번역을 띄워요.
 - 막대를 **끌어서 옮기고**, 누르면 앱이 열려요. 옮긴 위치는 기억해요.
+- 막대를 **꾹 누르면** 사라져요. 다음에 BitChord KO를 열었다가 다른 앱으로 나가면 다시 나타나요. 아예 안 보이게 하려면 설정에서 끄면 돼요.
 - **플로팅 가사 고정**을 켜면 막대를 옮길 수 없고, 터치가 아래 앱으로 그대로 전달돼요. 이때는 안드로이드 규칙에 맞춰 막대가 조금 투명해져요.
 - BitChord KO 화면을 보고 있을 때나 일시정지 중에는 뜨지 않아요.
 - 번역은 플레이어에서 이미 번역해 둔 곡만 보여줘요. 플로팅 가사가 따로 번역을 요청하지는 않아요.
@@ -249,7 +250,7 @@ It adds the following, all under **Settings > BitChord KO features**:
 - **Song meaning**: Claude explains the song.
 - **Original-title lookup** for songs written in Hangul, so lyrics can be found under their original names.
 - **Usage counter, monthly spending limit and diagnostics log**. Past the limit, Google Translate is used until next month. The log never contains the key or the lyrics.
-- **Floating lyrics**: a small draggable bar with the current line over other apps. Needs "Display over other apps".
+- **Floating lyrics**: a small draggable bar with the current line over other apps; tap to open the app, hold to hide it until the app is next opened. Needs "Display over other apps".
 - **Kept translations for downloads**: translated at download time and kept for offline use.
 - **Lock-screen lyrics**. Needs "Display over other apps".
 - **Resume when headphones connect**.

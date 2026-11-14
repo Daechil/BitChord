@@ -9,13 +9,18 @@ import android.graphics.drawable.GradientDrawable
 import android.provider.Settings
 import android.text.TextUtils
 import android.util.TypedValue
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
+import com.music.bitchord.R
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
@@ -45,7 +50,8 @@ import kotlinx.coroutines.withContext
  * already shows the words). Driven by the playback service's lyric tick, so it
  * moves with the same line the notification shows.
  *
- * Drag it anywhere; tap it to open the app. Locked, it lets every touch
+ * Drag it anywhere; tap it to open the app; hold it to put it away until the
+ * app has been opened again (the setting stays on). Locked, it lets every touch
  * through to the app underneath and cannot be moved — and is drawn at the
  * opacity Android requires for a window touches pass through.
  *
@@ -64,9 +70,17 @@ object FloatingLyrics {
     private var scope: CoroutineScope? = null
     private var appContext: Context? = null
     private var appInFront = false
+
+    /**
+     * Put away by a long press: stays away until the app has been in front
+     * again, so leaving the app after that brings it back. Turning it off for
+     * good is the setting's job.
+     */
+    private var dismissed = false
     private val foreground = object : DefaultLifecycleObserver {
         override fun onStart(owner: LifecycleOwner) {
             appInFront = true
+            dismissed = false
             removeView()
         }
 
@@ -122,7 +136,7 @@ object FloatingLyrics {
      * playback stops. Shows, updates or removes the bar.
      */
     fun tick(context: Context, playing: Boolean, positionMs: Long) {
-        val wanted = AppSettings.floatingLyrics.value && playing && !appInFront &&
+        val wanted = AppSettings.floatingLyrics.value && playing && !appInFront && !dismissed &&
             lines.any { it.text.isNotBlank() } && Settings.canDrawOverlays(context)
         if (!wanted) {
             removeView(context)
@@ -224,11 +238,21 @@ object FloatingLyrics {
         }
 
         val slop = ViewConfiguration.get(context).scaledTouchSlop
+        val holdMs = ViewConfiguration.getLongPressTimeout().toLong()
+        val handler = Handler(Looper.getMainLooper())
         var downX = 0f
         var downY = 0f
         var startX = 0
         var startY = 0
         var dragging = false
+        var held = false
+        // Held still for the long-press time: put the bar away. A drag or a
+        // lift before then cancels it, so moving and tapping work as before.
+        val putAway = Runnable {
+            held = true
+            bar.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+            dismiss(context)
+        }
         bar.setOnTouchListener { view, event ->
             val current = params ?: return@setOnTouchListener false
             when (event.actionMasked) {
@@ -238,24 +262,31 @@ object FloatingLyrics {
                     startX = current.x
                     startY = current.y
                     dragging = false
+                    held = false
+                    handler.postDelayed(putAway, holdMs)
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val dx = event.rawX - downX
                     val dy = event.rawY - downY
-                    if (!dragging && (abs(dx) > slop || abs(dy) > slop)) dragging = true
-                    if (dragging) {
+                    if (!dragging && (abs(dx) > slop || abs(dy) > slop)) {
+                        dragging = true
+                        handler.removeCallbacks(putAway)
+                    }
+                    if (dragging && !held) {
                         current.x = startX + dx.toInt()
                         current.y = (startY + dy.toInt()).coerceAtLeast(0)
                         runCatching { window.updateViewLayout(view, current) }
                     }
                 }
                 MotionEvent.ACTION_UP -> {
-                    if (dragging) {
-                        prefs.edit().putInt(KEY_X, current.x).putInt(KEY_Y, current.y).apply()
-                    } else {
-                        openApp(context)
+                    handler.removeCallbacks(putAway)
+                    when {
+                        held -> Unit
+                        dragging -> prefs.edit().putInt(KEY_X, current.x).putInt(KEY_Y, current.y).apply()
+                        else -> openApp(context)
                     }
                 }
+                MotionEvent.ACTION_CANCEL -> handler.removeCallbacks(putAway)
             }
             true
         }
@@ -290,6 +321,15 @@ object FloatingLyrics {
         layout.alpha = if (locked) PASS_THROUGH_ALPHA else 1f
         runCatching { window.updateViewLayout(view, layout) }
         appliedLock = locked
+    }
+
+    /** The long press: away until the app has been opened again, and say so. */
+    private fun dismiss(context: Context) {
+        dismissed = true
+        removeView(context)
+        runCatching {
+            Toast.makeText(context, R.string.floating_lyrics_dismissed, Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun openApp(context: Context) {

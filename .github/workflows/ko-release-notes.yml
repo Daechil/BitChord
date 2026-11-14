@@ -1,0 +1,31 @@
+name: Korean release notes
+
+# Rewrites the notes of the releases that already exist from KO_CHANGELOG.md.
+# The build workflow writes a new release's notes itself; this one is for
+# wording fixed afterwards, and it never builds the app.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'KO_CHANGELOG.md'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: korean-release-notes
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Update release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/ko_release_notes.py sync

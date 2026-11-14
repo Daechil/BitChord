@@ -87,8 +87,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # What changed in this build, from its entry in KO_CHANGELOG.md.
+          python3 .github/scripts/ko_release_notes.py build \
+            --tag "v${{ steps.version.outputs.version }}" \
+            --commit "${{ github.sha }}" \
+            --apk "${{ steps.version.outputs.apk }}" \
+            --out "$RUNNER_TEMP/release-notes.md"
           gh release create "v${{ steps.version.outputs.version }}" "out/${{ steps.version.outputs.apk }}" \
             --repo "${{ github.repository }}" \
             --target "${{ github.sha }}" \
             --title "BitChord KO ${{ steps.version.outputs.version }}" \
-            --notes "버전 ${{ steps.version.outputs.version }} (빌드 ${{ github.run_number }}, 커밋 ${GITHUB_SHA::7}). 휴대폰에서 ${{ steps.version.outputs.apk }} 를 눌러 받은 뒤 설치하십시오."
+            --notes-file "$RUNNER_TEMP/release-notes.md"

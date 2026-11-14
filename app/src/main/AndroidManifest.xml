@@ -126,6 +126,20 @@
           uiMode is deliberately *not* in the list: a day/night change should
           still recreate the Activity so the theme is rebuilt from resources.
         -->
+        <!-- The lyrics shown over the lock screen; see LockScreenLyrics. Its own
+             task so closing it returns to whatever was underneath, never to
+             the app. -->
+        <activity
+            android:name=".lockscreen.LockScreenLyricsActivity"
+            android:exported="false"
+            android:showWhenLocked="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance"
+            android:taskAffinity="com.music.bitchord.lockscreen"
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:theme="@style/Theme.BitChord" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

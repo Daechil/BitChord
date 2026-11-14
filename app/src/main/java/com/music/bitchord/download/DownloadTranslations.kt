@@ -76,7 +76,7 @@ object DownloadTranslations {
     }
 
     /** The language the player translates into: Settings' choice, or the app's language. */
-    private fun targetLanguage(context: Context): String {
+    fun targetLanguage(context: Context): String {
         AppSettings.translationLanguage.value.trim().takeIf { it.isNotEmpty() }?.let { return it }
         val tag = AppCompatDelegate.getApplicationLocales().get(0)?.toLanguageTag()?.takeIf { it.isNotBlank() }
             ?: context.resources.configuration.locales.get(0).toLanguageTag()

@@ -475,6 +475,14 @@
     <string name="ko_features_downloads">다운로드</string>
     <string name="keep_download_translations">다운로드 곡 번역 보관</string>
     <string name="keep_download_translations_subtitle">곡을 다운로드할 때 번역해 두고(Claude가 켜져 있으면 Claude로), 캐시가 아닌 곳에 보관해 오프라인에서도 바로 보여줘요</string>
+    <string name="lock_screen_lyrics">잠금화면 가사</string>
+    <string name="lock_screen_lyrics_subtitle">곡을 재생하거나 일시정지한 동안 잠금화면에 큰 실시간 가사를 보여줘요</string>
+    <string name="lock_screen_lyrics_needs_permission">‘다른 앱 위에 표시’ 권한이 필요해요. 눌러서 허용해 주세요</string>
+    <string name="lock_screen_lyrics_unlock">위로 밀어서 잠금 해제</string>
+    <string name="lock_screen_lyrics_previous">이전</string>
+    <string name="lock_screen_lyrics_next">다음</string>
+    <string name="lock_screen_lyrics_play">재생</string>
+    <string name="lock_screen_lyrics_pause">일시정지</string>
     <string name="translation_language_description">번역 버튼을 눌렀을 때 가사를 번역할 언어입니다.</string>
     <string name="translation_language_app_default">앱 언어</string>
     <string name="translation_language_subtitle">앱 언어 따르기</string>

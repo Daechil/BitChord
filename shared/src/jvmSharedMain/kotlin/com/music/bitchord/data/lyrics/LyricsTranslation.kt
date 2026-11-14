@@ -187,6 +187,12 @@ object LyricsTranslation {
         targetLanguageTag: String,
         /** Ask Claude again even though an answer is cached — for a translation that read badly. */
         fresh: Boolean = false,
+        /**
+         * Only what is already cached or kept; never a request. For screens
+         * that show a translation the player has made but must not pay for one
+         * themselves, such as the lock screen.
+         */
+        cacheOnly: Boolean = false,
     ): Result {
         // Sent as given rather than reduced to a base language: zh-CN and
         // zh-TW are the same language in two scripts, and canonicalising either
@@ -207,7 +213,7 @@ object LyricsTranslation {
         var claudeFailure: ClaudeFailure? = null
         if (claudeTried) {
             val attempt = try {
-                claudeEntry(trackId, slots, target, fresh)
+                claudeEntry(trackId, slots, target, fresh, cacheOnly)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
@@ -259,6 +265,7 @@ object LyricsTranslation {
                 )
             }
         }
+        if (cacheOnly) return Result.Unavailable
 
         val batches = batches(slots)
         val answers = coroutineScope {
@@ -488,6 +495,7 @@ object LyricsTranslation {
         slots: List<TextSlot>,
         target: String,
         fresh: Boolean,
+        cacheOnly: Boolean = false,
     ): ClaudeAttempt {
         // The style is part of the key: a song read in 반말 and the same song
         // read in 존댓말 are two answers, and switching between them must not
@@ -502,6 +510,7 @@ object LyricsTranslation {
             if (keepTranslationFor(trackId) && !isKept(cacheKey)) writeCache(cacheKey, cached, keep = true)
             return ClaudeAttempt(cached.copy(engine = ENGINE_CLAUDE), fromCache = true, failure = null)
         }
+        if (cacheOnly) return ClaudeAttempt(null, fromCache = false, failure = null)
         val model = claudeModel
         var reply = requestClaudeTranslation(slots, target, model)
         // Haiku turns some songs down as copyrighted text that Sonnet

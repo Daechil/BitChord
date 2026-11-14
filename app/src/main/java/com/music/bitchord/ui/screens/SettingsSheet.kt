@@ -97,6 +97,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -142,6 +143,7 @@ import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import coil3.SingletonImageLoader
 import coil3.compose.AsyncImage
 import com.music.bitchord.ui.components.PillSegmentedControl
@@ -268,6 +270,22 @@ fun SettingsScreen(
     val syncedLyrics by AppSettings.syncedLyrics.collectAsStateWithLifecycle()
     val resumeOnHeadphones by AppSettings.resumeOnHeadphones.collectAsStateWithLifecycle()
     val keepDownloadTranslations by AppSettings.keepDownloadTranslations.collectAsStateWithLifecycle()
+    val lockScreenLyrics by AppSettings.lockScreenLyrics.collectAsStateWithLifecycle()
+    // Read again each time the sheet comes back to the front, which is how a
+    // grant made in the system's own screen shows up here.
+    val settingsLifecycle by LocalLifecycleOwner.current.lifecycle.currentStateFlow
+        .collectAsState()
+    val canDrawOverlays = remember(settingsLifecycle) {
+        com.music.bitchord.lockscreen.LockScreenLyrics.canShow(context)
+    }
+    val openOverlayPermission: () -> Unit = {
+        runCatching {
+            context.startActivity(
+                Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}"))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }
+    }
     val lyricsSources by AppSettings.lyricsSources.collectAsStateWithLifecycle()
     val translationLanguage by AppSettings.translationLanguage.collectAsStateWithLifecycle()
     val claudeTranslation by AppSettings.claudeTranslation.collectAsStateWithLifecycle()
@@ -627,6 +645,7 @@ fun SettingsScreen(
             search,
             header = stringResource(R.string.ko_features_claude),
             footer = stringResource(R.string.ko_features_claude_footer),
+            headerInPage = true,
         ) {
             val claudeTranslationTitle = stringResource(R.string.claude_translation)
             row(claudeTranslationTitle, "lyrics", "translate", "claude", "anthropic", "ai") {
@@ -725,6 +744,7 @@ fun SettingsScreen(
         if (shows(SettingsCategory.KO_FEATURES)) SearchableSettingsGroup(
             search,
             header = stringResource(R.string.ko_features_playback),
+            headerInPage = true,
         ) {
             val resumeOnHeadphonesTitle = stringResource(R.string.resume_on_headphones)
             row(resumeOnHeadphonesTitle, "headphones", "earbuds", "bluetooth", "resume", "이어폰") {
@@ -741,10 +761,43 @@ fun SettingsScreen(
                     onClick = { AppSettings.setResumeOnHeadphones(!resumeOnHeadphones) },
                 )
             }
+            val lockScreenLyricsTitle = stringResource(R.string.lock_screen_lyrics)
+            row(lockScreenLyricsTitle, "lyrics", "lock screen", "lockscreen", "잠금", "가사") {
+                SettingsRow(
+                    icon = SfIcons.Lock,
+                    title = lockScreenLyricsTitle,
+                    subtitle = stringResource(
+                        if (lockScreenLyrics && !canDrawOverlays) {
+                            R.string.lock_screen_lyrics_needs_permission
+                        } else {
+                            R.string.lock_screen_lyrics_subtitle
+                        },
+                    ),
+                    trailing = {
+                        IosSwitch(
+                            checked = lockScreenLyrics && canDrawOverlays,
+                            onCheckedChange = { on ->
+                                AppSettings.setLockScreenLyrics(on)
+                                if (on && !canDrawOverlays) openOverlayPermission()
+                            },
+                        )
+                    },
+                    onClick = {
+                        if (lockScreenLyrics && !canDrawOverlays) {
+                            openOverlayPermission()
+                        } else {
+                            val on = !lockScreenLyrics
+                            AppSettings.setLockScreenLyrics(on)
+                            if (on && !canDrawOverlays) openOverlayPermission()
+                        }
+                    },
+                )
+            }
         }
         if (shows(SettingsCategory.KO_FEATURES)) SearchableSettingsGroup(
             search,
             header = stringResource(R.string.ko_features_downloads),
+            headerInPage = true,
         ) {
             val keepDownloadTranslationsTitle = stringResource(R.string.keep_download_translations)
             row(keepDownloadTranslationsTitle, "download", "offline", "translate", "lyrics", "다운로드", "번역", "보관") {
@@ -2593,6 +2646,12 @@ private inline fun SearchableSettingsGroup(
     header: String? = null,
     footer: String? = null,
     topSpacing: Dp = 26.dp,
+    /**
+     * Keeps [header] on the category's own page. For a page of several groups,
+     * where each header names its part rather than repeating the page title,
+     * and dropping them left the cards stacked against each other.
+     */
+    headerInPage: Boolean = false,
     content: @Composable SettingsGroupScope.() -> Unit,
 ) {
     val scope = SettingsGroupScope(search, header)
@@ -2601,7 +2660,7 @@ private inline fun SearchableSettingsGroup(
     // A category's page is titled by its large heading; the header over its
     // first card would only say the same word again. The card takes the
     // header's place, straight under the heading, as on Account's page.
-    val inPageHeader = header != null && search.inPage
+    val inPageHeader = header != null && search.inPage && !headerInPage
     SettingsGroup(
         header = header.takeUnless { inPageHeader },
         footer = footer,

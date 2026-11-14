@@ -1339,6 +1339,7 @@ class PlaybackService : MediaLibraryService() {
         measuredBitrateCache.clear()
         QualityUpgrade.forgetLastSession()
         headphoneResume.attach()
+        com.music.bitchord.lockscreen.LockScreenLyrics.attach(this) { player?.currentMediaItem != null }
 
         setMediaNotificationProvider(
             DefaultMediaNotificationProvider.Builder(this)
@@ -7865,6 +7866,7 @@ class PlaybackService : MediaLibraryService() {
         closeAudioEffectSession()
         bluetoothTracker.stop()
         headphoneResume.detach()
+        com.music.bitchord.lockscreen.LockScreenLyrics.detach(this)
         audioManager?.unregisterAudioDeviceCallback(outputDeviceCallback)
         partySync?.stop()
         partySync = null
@@ -7881,6 +7883,7 @@ class PlaybackService : MediaLibraryService() {
         serviceLyricsJob?.cancel()
         serviceLyricsJob = null
         serviceLyrics = null
+        com.music.bitchord.lockscreen.NowPlayingLyrics.publish(null, null)
         cancelPrefetch()
         trackAnalyzer.release()
         loudnessRetryJob?.cancel()
@@ -7957,12 +7960,14 @@ class PlaybackService : MediaLibraryService() {
     private fun loadLyricsForCurrentTrack() {
         val currentSong = player?.currentMediaItem?.toSong() ?: run {
             serviceLyrics = null
+            com.music.bitchord.lockscreen.NowPlayingLyrics.publish(null, null)
             stopLyricsTicker()
             return
         }
 
         if (!AppSettings.syncedLyrics.value) {
             serviceLyrics = null
+            com.music.bitchord.lockscreen.NowPlayingLyrics.publish(null, null)
             stopLyricsTicker()
             return
         }
@@ -7991,6 +7996,7 @@ class PlaybackService : MediaLibraryService() {
             }
             withContext(Dispatchers.Main) {
                 serviceLyrics = lines
+                com.music.bitchord.lockscreen.NowPlayingLyrics.publish(currentSong.videoId, lines)
                 if (player?.isPlaying == true) {
                     updateLyricSubtitle()
                 }

@@ -514,6 +514,14 @@
     <string name="ko_features_downloads">Downloads</string>
     <string name="keep_download_translations">Keep translations of downloads</string>
     <string name="keep_download_translations_subtitle">Translate a song as it downloads, with Claude when it is on, and keep it for offline listening instead of in the cache</string>
+    <string name="lock_screen_lyrics">Lock screen lyrics</string>
+    <string name="lock_screen_lyrics_subtitle">Shows big live lyrics on the lock screen while a song is playing or paused</string>
+    <string name="lock_screen_lyrics_needs_permission">Needs “Display over other apps”. Tap to allow</string>
+    <string name="lock_screen_lyrics_unlock">Swipe up to unlock</string>
+    <string name="lock_screen_lyrics_previous">Previous</string>
+    <string name="lock_screen_lyrics_next">Next</string>
+    <string name="lock_screen_lyrics_play">Play</string>
+    <string name="lock_screen_lyrics_pause">Pause</string>
     <string name="search_languages">Search languages</string>
     <string name="no_languages_match">No languages match</string>
     <string name="connect_account_first">Connect an account first</string>

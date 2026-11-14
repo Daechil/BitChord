@@ -674,6 +674,9 @@ object AppSettings {
     /** Translate a song as it downloads, and keep downloaded songs' translations out of the cache. */
     val keepDownloadTranslations = MutableStateFlow(true)
 
+    /** Show the full-screen lyrics over the lock screen. See LockScreenLyrics. */
+    val lockScreenLyrics = MutableStateFlow(false)
+
     /** The databases [syncedLyrics] may ask. Empty is the same as off. */
     val lyricsSources = MutableStateFlow(LyricsSource.offered.toSet())
 
@@ -1146,6 +1149,7 @@ object AppSettings {
         syncedLyrics.value = prefs.getBoolean(KEY_SYNCED_LYRICS, true)
         resumeOnHeadphones.value = prefs.getBoolean(KEY_RESUME_ON_HEADPHONES, true)
         keepDownloadTranslations.value = prefs.getBoolean(KEY_KEEP_DOWNLOAD_TRANSLATIONS, true)
+        lockScreenLyrics.value = prefs.getBoolean(KEY_LOCK_SCREEN_LYRICS, false)
         lyricsSources.value = readLyricsSources()
         lyricsSourceOrder.value = readLyricsSourceOrder()
         prioritizeSyllableSync.value = prefs.getBoolean(KEY_PRIORITIZE_SYLLABLE_SYNC, false)
@@ -1727,6 +1731,11 @@ object AppSettings {
     fun setKeepDownloadTranslations(value: Boolean) {
         keepDownloadTranslations.value = value
         prefs.edit().putBoolean(KEY_KEEP_DOWNLOAD_TRANSLATIONS, value).apply()
+    }
+
+    fun setLockScreenLyrics(value: Boolean) {
+        lockScreenLyrics.value = value
+        prefs.edit().putBoolean(KEY_LOCK_SCREEN_LYRICS, value).apply()
     }
 
     fun setSyncedLyrics(value: Boolean) {
@@ -2496,6 +2505,7 @@ object AppSettings {
     private const val KEY_SYNCED_LYRICS = "synced_lyrics"
     private const val KEY_RESUME_ON_HEADPHONES = "ko_resume_on_headphones"
     private const val KEY_KEEP_DOWNLOAD_TRANSLATIONS = "ko_keep_download_translations"
+    private const val KEY_LOCK_SCREEN_LYRICS = "ko_lock_screen_lyrics"
     private const val KEY_LYRICS_SOURCES = "lyrics_sources"
     private const val KEY_LYRICS_SOURCES_SEEN = "lyrics_sources_seen"
     private const val KEY_LYRICS_SOURCE_ORDER = "lyrics_source_order"

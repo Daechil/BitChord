@@ -200,6 +200,11 @@ fun SettingsScreen(
     onTranslationLanguage: () -> Unit,
     /** Opens the Claude API key alert (AI lyric translation), hosted by the activity above the tab bar. */
     onClaudeKey: () -> Unit = {},
+    /** The Claude model, speech-level and literalness pickers, and the usage sheet — hosted the same way. */
+    onClaudeModel: () -> Unit = {},
+    onClaudeSpeech: () -> Unit = {},
+    onClaudeMode: () -> Unit = {},
+    onClaudeUsage: () -> Unit = {},
     onSources: () -> Unit,
     onListenTogether: () -> Unit,
     onWearOs: () -> Unit,
@@ -265,6 +270,10 @@ fun SettingsScreen(
     val translationLanguage by AppSettings.translationLanguage.collectAsStateWithLifecycle()
     val claudeTranslation by AppSettings.claudeTranslation.collectAsStateWithLifecycle()
     val claudeApiKey by AppSettings.claudeApiKey.collectAsStateWithLifecycle()
+    val claudeModel by AppSettings.claudeModel.collectAsStateWithLifecycle()
+    val claudeSpeech by AppSettings.claudeSpeech.collectAsStateWithLifecycle()
+    val claudeMode by AppSettings.claudeMode.collectAsStateWithLifecycle()
+    val claudeUsage by AppSettings.claudeUsage.collectAsStateWithLifecycle()
     val claudeKeyRejected by com.music.bitchord.data.lyrics.LyricsTranslation.claudeKeyRejected
         .collectAsStateWithLifecycle()
     val theme by AppSettings.themeMode.collectAsStateWithLifecycle()
@@ -1365,6 +1374,57 @@ fun SettingsScreen(
                         },
                         onClick = onClaudeKey,
                     )
+                }
+                if (claudeApiKey.isNotBlank()) {
+                    val claudeModelTitle = stringResource(R.string.claude_model)
+                    row(claudeModelTitle, "claude", "model", "haiku", "sonnet", "ai") {
+                        SettingsRow(
+                            icon = SfIcons.AutoAwesome,
+                            title = claudeModelTitle,
+                            subtitle = stringResource(claudeModelLabelRes(claudeModel)),
+                            trailing = { Chevron() },
+                            onClick = onClaudeModel,
+                        )
+                    }
+                    val claudeSpeechTitle = stringResource(R.string.claude_speech)
+                    row(claudeSpeechTitle, "claude", "translate", "style", "반말", "존댓말", "말투") {
+                        SettingsRow(
+                            icon = SfIcons.Translate,
+                            title = claudeSpeechTitle,
+                            subtitle = stringResource(claudeSpeechLabelRes(claudeSpeech)),
+                            trailing = { Chevron() },
+                            onClick = onClaudeSpeech,
+                        )
+                    }
+                    val claudeModeTitle = stringResource(R.string.claude_mode)
+                    row(claudeModeTitle, "claude", "translate", "style", "literal", "직역", "의역") {
+                        SettingsRow(
+                            icon = SfIcons.Translate,
+                            title = claudeModeTitle,
+                            subtitle = stringResource(claudeModeLabelRes(claudeMode)),
+                            trailing = { Chevron() },
+                            onClick = onClaudeMode,
+                        )
+                    }
+                    val claudeUsageTitle = stringResource(R.string.claude_usage)
+                    row(claudeUsageTitle, "claude", "usage", "tokens", "cost", "사용량", "비용") {
+                        SettingsRow(
+                            icon = SfIcons.AutoAwesome,
+                            title = claudeUsageTitle,
+                            subtitle = if (claudeUsage.isEmpty) {
+                                stringResource(R.string.claude_usage_none)
+                            } else {
+                                stringResource(
+                                    R.string.claude_usage_subtitle,
+                                    compactTokens(claudeUsage.inputTokens),
+                                    compactTokens(claudeUsage.outputTokens),
+                                    String.format(Locale.US, "%.2f", claudeUsage.estimatedUsd()),
+                                )
+                            },
+                            trailing = { Chevron() },
+                            onClick = onClaudeUsage,
+                        )
+                    }
                 }
             }
         }
@@ -3102,4 +3162,34 @@ internal fun <T> ChoiceGroup(
             }
         }
     }
+}
+
+
+/** The row label for a Claude model id. */
+internal fun claudeModelLabelRes(model: String): Int = when (model) {
+    com.music.bitchord.data.lyrics.LyricsTranslation.CLAUDE_SONNET -> R.string.claude_model_sonnet
+    else -> R.string.claude_model_haiku
+}
+
+internal fun claudeModelDetailRes(model: String): Int = when (model) {
+    com.music.bitchord.data.lyrics.LyricsTranslation.CLAUDE_SONNET -> R.string.claude_model_sonnet_detail
+    else -> R.string.claude_model_haiku_detail
+}
+
+internal fun claudeSpeechLabelRes(speech: String): Int = when (speech) {
+    com.music.bitchord.data.lyrics.LyricsTranslation.SPEECH_CASUAL -> R.string.claude_speech_casual
+    com.music.bitchord.data.lyrics.LyricsTranslation.SPEECH_POLITE -> R.string.claude_speech_polite
+    else -> R.string.claude_speech_auto
+}
+
+internal fun claudeModeLabelRes(mode: String): Int = when (mode) {
+    com.music.bitchord.data.lyrics.LyricsTranslation.MODE_LITERAL -> R.string.claude_mode_literal
+    else -> R.string.claude_mode_natural
+}
+
+/** 1234 -> "1.2K", 2_500_000 -> "2.5M". */
+internal fun compactTokens(count: Long): String = when {
+    count >= 1_000_000L -> String.format(Locale.US, "%.1fM", count / 1_000_000.0)
+    count >= 1_000L -> String.format(Locale.US, "%.1fK", count / 1_000.0)
+    else -> count.toString()
 }

@@ -95,6 +95,8 @@
     <string name="lyrics_share_pick_limit">카드가 꽉 찼습니다</string>
     <string name="lyrics_translated_to">%1$s 번역 완료</string>
     <string name="lyrics_translated_claude">%1$s 번역 · Claude</string>
+    <string name="lyrics_translated_google_fallback">%1$s 번역 · Google 번역 (Claude 실패)</string>
+    <string name="lyrics_retranslating">Claude에게 다시 번역을 요청합니다…</string>
     <string name="song_meaning">이 노래 해석</string>
     <string name="song_meaning_loading">가사를 읽는 중…</string>
     <string name="song_meaning_unavailable">지금은 해석을 불러올 수 없습니다.</string>

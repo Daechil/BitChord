@@ -52,6 +52,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Translate
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -502,6 +503,8 @@ internal sealed interface LyricsTranslationUiState {
         val lines: List<LyricLine>,
         /** Written by Claude rather than Google Translate. */
         val byClaude: Boolean = false,
+        /** Claude was asked and failed; Google Translate stepped in. */
+        val claudeFellBack: Boolean = false,
     ) : LyricsTranslationUiState
     data object SameLanguage : LyricsTranslationUiState
 }
@@ -1466,6 +1469,10 @@ internal fun TranslationToggleButton(
     showingTranslation: Boolean,
     enabled: Boolean,
     onClick: () -> Unit,
+    /** A small spark on the disc: Claude wrote the translation on show. */
+    badge: Boolean = false,
+    /** A long press asks for the translation again, skipping what is cached. */
+    onLongClick: (() -> Unit)? = null,
 ) {
     val active = showingTranslation || state is LyricsTranslationUiState.Loading
     val chrome = LocalPlayerChrome.current
@@ -1484,11 +1491,12 @@ internal fun TranslationToggleButton(
             .clip(CircleShape)
             .additiveChrome(chrome)
             .background(Color.White.copy(alpha = discAlpha))
-            .clickable(
+            .combinedClickable(
                 enabled = enabled,
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = onClick,
+                onLongClick = onLongClick,
             ),
         contentAlignment = Alignment.Center,
     ) {
@@ -1508,6 +1516,17 @@ internal fun TranslationToggleButton(
                 tint = tint,
                 modifier = Modifier.size(19.dp),
             )
+            if (badge && state is LyricsTranslationUiState.Ready) {
+                Icon(
+                    imageVector = Icons.Rounded.AutoAwesome,
+                    contentDescription = null,
+                    tint = tint,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = (-4).dp, y = 4.dp)
+                        .size(9.dp),
+                )
+            }
         }
     }
 }
@@ -3059,6 +3078,10 @@ internal class LyricsTranslationUi(
     val toggleRomanization: () -> Unit,
     /** The language tag translations are asked into — and the song's explanation is written in. */
     val targetLanguage: String = "",
+    /** The translation on show was written by Claude. */
+    val byClaude: Boolean = false,
+    /** Asks for the translation again, skipping what is cached. */
+    val retranslate: () -> Unit = {},
 )
 
 /**
@@ -3142,6 +3165,43 @@ internal fun rememberLyricsTranslation(
         LyricsDisplayMode.Original -> null
     }
     val translationScope = rememberCoroutineScope()
+    val retranslatingMessage = stringResource(Res.string.lyrics_retranslating)
+    fun requestTranslation(fresh: Boolean) {
+        val source = lyrics.orEmpty()
+        if (source.isEmpty()) return
+        haptics.play(Haptic.Tap)
+        translationState = LyricsTranslationUiState.Loading
+        romanizationJob?.cancel()
+        if (romanizationState is LyricsTranslationUiState.Loading) {
+            romanizationState = LyricsTranslationUiState.Idle
+        }
+        translationJob?.cancel()
+        translationJob = translationScope.launch {
+            when (
+                val result = PlayerPlatform.host.translateLyrics(
+                    trackId = trackId,
+                    lines = source,
+                    targetLanguageTag = translationLanguage,
+                    fresh = fresh,
+                )
+            ) {
+                is LyricsTranslationResult.Translated -> {
+                    translationState = LyricsTranslationUiState.Ready(result.lines, result.byClaude, result.claudeFellBack)
+                    lyricsDisplayMode = LyricsDisplayMode.Translated
+                    translationTransition++
+                    haptics.play(Haptic.ToggleOn)
+                }
+                is LyricsTranslationResult.SameLanguage -> {
+                    translationState = LyricsTranslationUiState.SameLanguage
+                    PlayerPlatform.host.showMessage(alreadyInLanguageMessage)
+                }
+                LyricsTranslationResult.Unavailable -> {
+                    translationState = LyricsTranslationUiState.Idle
+                    PlayerPlatform.host.showMessage(translationUnavailableMessage)
+                }
+            }
+        }
+    }
     val toggleTranslation: () -> Unit = toggleTranslation@{
         when (val state = translationState) {
             is LyricsTranslationUiState.Ready -> {
@@ -3158,41 +3218,15 @@ internal fun rememberLyricsTranslation(
                 haptics.play(Haptic.Tap)
                 PlayerPlatform.host.showMessage(alreadyInLanguageMessage)
             }
-            LyricsTranslationUiState.Idle -> {
-                val source = lyrics.orEmpty()
-                if (source.isEmpty()) return@toggleTranslation
-                haptics.play(Haptic.Tap)
-                translationState = LyricsTranslationUiState.Loading
-                romanizationJob?.cancel()
-                if (romanizationState is LyricsTranslationUiState.Loading) {
-                    romanizationState = LyricsTranslationUiState.Idle
-                }
-                translationJob?.cancel()
-                translationJob = translationScope.launch {
-                    when (
-                        val result = PlayerPlatform.host.translateLyrics(
-                            trackId = trackId,
-                            lines = source,
-                            targetLanguageTag = translationLanguage,
-                        )
-                    ) {
-                        is LyricsTranslationResult.Translated -> {
-                            translationState = LyricsTranslationUiState.Ready(result.lines, result.byClaude)
-                            lyricsDisplayMode = LyricsDisplayMode.Translated
-                            translationTransition++
-                            haptics.play(Haptic.ToggleOn)
-                        }
-                        is LyricsTranslationResult.SameLanguage -> {
-                            translationState = LyricsTranslationUiState.SameLanguage
-                            PlayerPlatform.host.showMessage(alreadyInLanguageMessage)
-                        }
-                        LyricsTranslationResult.Unavailable -> {
-                            translationState = LyricsTranslationUiState.Idle
-                            PlayerPlatform.host.showMessage(translationUnavailableMessage)
-                        }
-                    }
-                }
-            }
+            LyricsTranslationUiState.Idle -> requestTranslation(fresh = false)
+        }
+    }
+    // A long press on the disc: the same request with the cache skipped, for
+    // a translation that read badly or was written before a style change.
+    val retranslate: () -> Unit = {
+        if (translationState !is LyricsTranslationUiState.Loading && !lyrics.isNullOrEmpty()) {
+            PlayerPlatform.host.showMessage(retranslatingMessage)
+            requestTranslation(fresh = true)
         }
     }
     val toggleRomanization: () -> Unit = toggleRomanization@{
@@ -3262,6 +3296,10 @@ internal fun rememberLyricsTranslation(
         // line has always meant, and naming it too would be noise.
         showingTranslation && (translationState as? LyricsTranslationUiState.Ready)?.byClaude == true ->
             stringResource(Res.string.lyrics_translated_claude, translationLanguageName)
+        // Claude was on and did not answer: say so, so a flat translation is
+        // understood as Google's stand-in rather than Claude's work.
+        showingTranslation && (translationState as? LyricsTranslationUiState.Ready)?.claudeFellBack == true ->
+            stringResource(Res.string.lyrics_translated_google_fallback, translationLanguageName)
         showingTranslation ->
             stringResource(Res.string.lyrics_translated_to, translationLanguageName)
         showingRomanization ->
@@ -3289,5 +3327,7 @@ internal fun rememberLyricsTranslation(
         toggleTranslation = toggleTranslation,
         toggleRomanization = toggleRomanization,
         targetLanguage = translationLanguage,
+        byClaude = (translationState as? LyricsTranslationUiState.Ready)?.byClaude == true,
+        retranslate = retranslate,
     )
 }

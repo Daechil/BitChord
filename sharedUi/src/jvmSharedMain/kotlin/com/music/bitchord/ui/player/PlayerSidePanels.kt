@@ -94,6 +94,8 @@ fun LyricsSidePanel(
                     TranslationToggleButton(
                         state = lyricsTranslation.translationState,
                         showingTranslation = lyricsTranslation.showingTranslation,
+                        badge = lyricsTranslation.byClaude,
+                        onLongClick = lyricsTranslation.retranslate,
                         enabled = !lyrics.isNullOrEmpty(),
                         onClick = lyricsTranslation.toggleTranslation,
                     )

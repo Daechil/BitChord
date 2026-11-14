@@ -537,6 +537,49 @@ object AppSettings {
     /** The user's own Claude API key from the Anthropic Console. Stays on this device. */
     val claudeApiKey = MutableStateFlow("")
 
+    /** Which Claude model answers — see [LyricsTranslation.claudeModel]. */
+    val claudeModel = MutableStateFlow(com.music.bitchord.data.lyrics.LyricsTranslation.CLAUDE_HAIKU)
+
+    /** Korean speech level for Claude's translations — see [LyricsTranslation.translationSpeech]. */
+    val claudeSpeech = MutableStateFlow(com.music.bitchord.data.lyrics.LyricsTranslation.SPEECH_AUTO)
+
+    /** Idiomatic or literal — see [LyricsTranslation.translationMode]. */
+    val claudeMode = MutableStateFlow(com.music.bitchord.data.lyrics.LyricsTranslation.MODE_NATURAL)
+
+    /**
+     * What Claude has been asked this month, in tokens per model, so Settings
+     * can show roughly what it costs. Reset by hand; rolls over by itself when
+     * the month changes (last month's figure is kept for comparison).
+     */
+    val claudeUsage = MutableStateFlow(ClaudeUsage())
+
+    data class ClaudeUsage(
+        /** "2026-11": the month the tallies belong to. */
+        val month: String = currentMonth(),
+        val inputByModel: Map<String, Long> = emptyMap(),
+        val outputByModel: Map<String, Long> = emptyMap(),
+        /** Last month's estimated cost, for the row to show beside this month's. */
+        val previousMonthUsd: Double? = null,
+    ) {
+        val inputTokens: Long get() = inputByModel.values.sum()
+        val outputTokens: Long get() = outputByModel.values.sum()
+        val isEmpty: Boolean get() = inputTokens == 0L && outputTokens == 0L
+
+        /** The list price of this month's tokens, in dollars. */
+        fun estimatedUsd(): Double = inputByModel.keys.union(outputByModel.keys).sumOf { model ->
+            val (inPrice, outPrice) = claudePricePerMillion(model)
+            (inputByModel[model] ?: 0L) * inPrice / 1_000_000.0 + (outputByModel[model] ?: 0L) * outPrice / 1_000_000.0
+        }
+    }
+
+    /** Dollars per million input and output tokens, by model; the newest Haiku's rates for anything unknown. */
+    fun claudePricePerMillion(model: String): Pair<Double, Double> = when (model) {
+        com.music.bitchord.data.lyrics.LyricsTranslation.CLAUDE_SONNET -> 2.0 to 10.0
+        else -> 0.10 to 0.50
+    }
+
+    private fun currentMonth(): String = java.time.YearMonth.now().toString()
+
     /**
      * Plays a looping video behind the cover art on the player when one is
      * published for the track — Spotify's Canvas, Apple's motion artwork.
@@ -1063,6 +1106,17 @@ object AppSettings {
         claudeTranslation.value = prefs.getBoolean(KEY_CLAUDE_TRANSLATION, false)
         com.music.bitchord.data.lyrics.LyricsTranslation.claudeApiKey = claudeApiKey.value
         com.music.bitchord.data.lyrics.LyricsTranslation.claudeEnabled = claudeTranslation.value
+        claudeModel.value = prefs.getString(KEY_CLAUDE_MODEL, null)
+            ?: com.music.bitchord.data.lyrics.LyricsTranslation.CLAUDE_HAIKU
+        claudeSpeech.value = prefs.getString(KEY_CLAUDE_SPEECH, null)
+            ?: com.music.bitchord.data.lyrics.LyricsTranslation.SPEECH_AUTO
+        claudeMode.value = prefs.getString(KEY_CLAUDE_MODE, null)
+            ?: com.music.bitchord.data.lyrics.LyricsTranslation.MODE_NATURAL
+        com.music.bitchord.data.lyrics.LyricsTranslation.claudeModel = claudeModel.value
+        com.music.bitchord.data.lyrics.LyricsTranslation.translationSpeech = claudeSpeech.value
+        com.music.bitchord.data.lyrics.LyricsTranslation.translationMode = claudeMode.value
+        claudeUsage.value = readClaudeUsage()
+        com.music.bitchord.data.lyrics.LyricsTranslation.usageSink = ::recordClaudeUsage
         if (highPerformanceMode.value) {
             reduceAnimation.value = false
             reduceDynamicBlur.value = false
@@ -1591,6 +1645,74 @@ object AppSettings {
         claudeApiKey.value = normalized
         prefs.edit().putString(KEY_CLAUDE_API_KEY, normalized).apply()
         com.music.bitchord.data.lyrics.LyricsTranslation.claudeApiKey = normalized
+    }
+
+    fun setClaudeModel(value: String) {
+        claudeModel.value = value
+        prefs.edit().putString(KEY_CLAUDE_MODEL, value).apply()
+        com.music.bitchord.data.lyrics.LyricsTranslation.claudeModel = value
+    }
+
+    fun setClaudeSpeech(value: String) {
+        claudeSpeech.value = value
+        prefs.edit().putString(KEY_CLAUDE_SPEECH, value).apply()
+        com.music.bitchord.data.lyrics.LyricsTranslation.translationSpeech = value
+    }
+
+    fun setClaudeMode(value: String) {
+        claudeMode.value = value
+        prefs.edit().putString(KEY_CLAUDE_MODE, value).apply()
+        com.music.bitchord.data.lyrics.LyricsTranslation.translationMode = value
+    }
+
+    /** Called from the network thread with every Claude answer's token counts. */
+    @Synchronized
+    private fun recordClaudeUsage(model: String, inputTokens: Long, outputTokens: Long) {
+        var usage = claudeUsage.value
+        val month = currentMonth()
+        if (usage.month != month) {
+            // A new month: this month's figure becomes last month's, tallies start over.
+            usage = ClaudeUsage(month = month, previousMonthUsd = usage.estimatedUsd().takeIf { !usage.isEmpty })
+        }
+        usage = usage.copy(
+            inputByModel = usage.inputByModel + (model to (usage.inputByModel[model] ?: 0L) + inputTokens),
+            outputByModel = usage.outputByModel + (model to (usage.outputByModel[model] ?: 0L) + outputTokens),
+        )
+        claudeUsage.value = usage
+        prefs.edit().putString(KEY_CLAUDE_USAGE, writeClaudeUsage(usage)).apply()
+    }
+
+    @Synchronized
+    fun resetClaudeUsage() {
+        val usage = ClaudeUsage(previousMonthUsd = claudeUsage.value.previousMonthUsd)
+        claudeUsage.value = usage
+        prefs.edit().putString(KEY_CLAUDE_USAGE, writeClaudeUsage(usage)).apply()
+    }
+
+    /** "2026-11|0.0123|claude-haiku-5-5=1200,340;claude-sonnet-5-5=0,0" */
+    private fun writeClaudeUsage(usage: ClaudeUsage): String = buildString {
+        append(usage.month).append('|').append(usage.previousMonthUsd?.toString().orEmpty()).append('|')
+        append(
+            usage.inputByModel.keys.union(usage.outputByModel.keys).joinToString(";") { model ->
+                "$model=${usage.inputByModel[model] ?: 0L},${usage.outputByModel[model] ?: 0L}"
+            },
+        )
+    }
+
+    private fun readClaudeUsage(): ClaudeUsage {
+        val raw = prefs.getString(KEY_CLAUDE_USAGE, null) ?: return ClaudeUsage()
+        return runCatching {
+            val (month, previous, models) = raw.split('|', limit = 3)
+            val inputs = mutableMapOf<String, Long>()
+            val outputs = mutableMapOf<String, Long>()
+            models.split(';').filter { it.isNotBlank() }.forEach { part ->
+                val (model, counts) = part.split('=', limit = 2)
+                val (input, output) = counts.split(',', limit = 2)
+                inputs[model] = input.toLong()
+                outputs[model] = output.toLong()
+            }
+            ClaudeUsage(month, inputs, outputs, previous.toDoubleOrNull())
+        }.getOrDefault(ClaudeUsage())
     }
 
     fun setResumeOnHeadphones(value: Boolean) {
@@ -2347,6 +2469,10 @@ object AppSettings {
     private const val KEY_TRANSLATION_LANGUAGE = "translation_language"
     private const val KEY_CLAUDE_API_KEY = "claude_api_key"
     private const val KEY_CLAUDE_TRANSLATION = "claude_translation"
+    private const val KEY_CLAUDE_MODEL = "claude_model"
+    private const val KEY_CLAUDE_SPEECH = "claude_speech"
+    private const val KEY_CLAUDE_MODE = "claude_mode"
+    private const val KEY_CLAUDE_USAGE = "claude_usage"
     private const val KEY_ANIMATED_CANVAS = "animated_canvas"
     private const val KEY_CANVAS_OVER_CELLULAR = "canvas_over_cellular"
     private const val KEY_SPOTIFY_CANVAS_AUTO_HIDE = "spotify_canvas_auto_hide"

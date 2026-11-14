@@ -104,6 +104,8 @@ interface PlayerHost {
         trackId: String,
         lines: List<LyricLine>,
         targetLanguageTag: String,
+        /** Skip the cached answer and ask again — a long press on the translate disc. */
+        fresh: Boolean = false,
     ): LyricsTranslationResult
 
     suspend fun romanizeLyrics(
@@ -375,6 +377,8 @@ sealed interface LyricsTranslationResult {
         val lines: List<LyricLine>,
         /** Claude wrote it, rather than Google Translate; the status line says so. */
         val byClaude: Boolean = false,
+        /** Claude was asked and failed, so this is Google's; the status line says that too. */
+        val claudeFellBack: Boolean = false,
     ) : LyricsTranslationResult
     data class SameLanguage(val language: String) : LyricsTranslationResult
     data object Unavailable : LyricsTranslationResult

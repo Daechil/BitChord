@@ -62,6 +62,8 @@ object LyricsTranslation {
             val sourceLanguage: String,
             val fromCache: Boolean,
             val engine: Engine = Engine.GOOGLE,
+            /** Claude was asked first and gave nothing usable, so this is Google's answer instead. */
+            val claudeFellBack: Boolean = false,
         ) : Result
 
         data class SameLanguage(val language: String) : Result
@@ -165,6 +167,8 @@ object LyricsTranslation {
         trackId: String,
         lines: List<LyricLine>,
         targetLanguageTag: String,
+        /** Ask Claude again even though an answer is cached — for a translation that read badly. */
+        fresh: Boolean = false,
     ): Result {
         // Sent as given rather than reduced to a base language: zh-CN and
         // zh-TW are the same language in two scripts, and canonicalising either
@@ -180,9 +184,10 @@ object LyricsTranslation {
         // Claude where it is set up and answers in full; whatever goes wrong
         // there, the lyric sheet must not, so anything short of a complete
         // answer falls through to Google Translate below.
-        if (claudeReady) {
+        val claudeTried = claudeReady
+        if (claudeTried) {
             val viaClaude = try {
-                claudeEntry(trackId, slots, target)
+                claudeEntry(trackId, slots, target, fresh)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
@@ -215,6 +220,7 @@ object LyricsTranslation {
                     lines = rebuild(lines, slots, cached.texts),
                     sourceLanguage = cached.sourceLanguage,
                     fromCache = true,
+                    claudeFellBack = claudeTried,
                 )
             }
         }
@@ -277,6 +283,7 @@ object LyricsTranslation {
                 lines = rebuild(lines, slots, translated),
                 sourceLanguage = source,
                 fromCache = false,
+                claudeFellBack = claudeTried,
             )
         }
     }
@@ -367,14 +374,38 @@ object LyricsTranslation {
     /** True once Claude refused the current key (or its account has no credit), so Settings can say why. */
     val claudeKeyRejected = MutableStateFlow(false)
 
+    /** Which Claude answers: [CLAUDE_HAIKU] by default, [CLAUDE_SONNET] for a better read at a higher price. */
+    @Volatile
+    var claudeModel: String = CLAUDE_HAIKU
+
+    /** Korean speech level the translation is written in: [SPEECH_AUTO], [SPEECH_CASUAL] or [SPEECH_POLITE]. */
+    @Volatile
+    var translationSpeech: String = SPEECH_AUTO
+
+    /** How close to the words: [MODE_NATURAL] (idiomatic) or [MODE_LITERAL] (close to the original). */
+    @Volatile
+    var translationMode: String = MODE_NATURAL
+
+    /** Told what every Claude answer cost in tokens, so the app can keep a tally. */
+    @Volatile
+    var usageSink: ((model: String, inputTokens: Long, outputTokens: Long) -> Unit)? = null
+
+    const val CLAUDE_HAIKU = "claude-haiku-5-5"
+    const val CLAUDE_SONNET = "claude-sonnet-5-5"
+    const val SPEECH_AUTO = "auto"
+    const val SPEECH_CASUAL = "casual"
+    const val SPEECH_POLITE = "polite"
+    const val MODE_NATURAL = "natural"
+    const val MODE_LITERAL = "literal"
+
     private const val CLAUDE_ENDPOINT = "https://api.anthropic.com/v1/messages"
     private const val CLAUDE_API_VERSION = "2026-10-21"
-    // Haiku: a song's worth of lines is a small, well-specified job, and at
-    // Haiku's price a whole library translates for what a few songs would cost
-    // on Opus. Haiku has no server-side refusal fallback — a request its
-    // safety classifiers decline simply comes back as a refusal, which
-    // [claudeText] turns into null and the caller into Google Translate.
-    private const val CLAUDE_MODEL = "claude-haiku-5-5"
+    // Haiku by default: a song's worth of lines is a small, well-specified job,
+    // and at Haiku's price a whole library translates for what a few songs
+    // would cost on a larger model. Neither Haiku nor Sonnet is sent a
+    // server-side refusal fallback — a request the safety classifiers decline
+    // simply comes back as a refusal, which [claudeText] turns into null and
+    // the caller into Google Translate.
     private const val CLAUDE_COOLDOWN_MS = 60L * 1000L
     private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
 
@@ -424,9 +455,13 @@ object LyricsTranslation {
         trackId: String,
         slots: List<TextSlot>,
         target: String,
+        fresh: Boolean,
     ): Pair<CachedTranslation, Boolean>? {
-        val cacheKey = cacheKey("claude\u0000$trackId", target, slots)
-        val cached = memory.get(cacheKey) ?: readCache(cacheKey)?.also { memory.put(cacheKey, it) }
+        // The style is part of the key: a song read in 반말 and the same song
+        // read in 존댓말 are two answers, and switching between them must not
+        // show the other one.
+        val cacheKey = cacheKey("claude\u0000$translationSpeech\u0000$translationMode\u0000$trackId", target, slots)
+        val cached = if (fresh) null else memory.get(cacheKey) ?: readCache(cacheKey)?.also { memory.put(cacheKey, it) }
         if (cached != null && cached.version == CACHE_VERSION && cached.texts.size == slots.size) {
             return cached.copy(engine = ENGINE_CLAUDE) to true
         }
@@ -457,10 +492,18 @@ object LyricsTranslation {
             appendLine("1. Return exactly $count translations in \"translations\", one per input line, in the same order. Never merge, split, skip, reorder or add lines.")
             appendLine("2. Read the whole song first. Keep one consistent narrator voice, speech level and tone across all lines.")
             if (korean) {
-                appendLine("   For Korean, pick either casual speech (반말) or polite speech (존댓말) to suit the song and use it for every line. Never mix them. Most songs read naturally in 반말.")
+                when (translationSpeech) {
+                    SPEECH_CASUAL -> appendLine("   For Korean, write every line in casual speech (반말). Never switch to 존댓말.")
+                    SPEECH_POLITE -> appendLine("   For Korean, write every line in polite speech (존댓말, 해요체). Never switch to 반말.")
+                    else -> appendLine("   For Korean, pick either casual speech (반말) or polite speech (존댓말) to suit the song and use it for every line. Never mix them. Most songs read naturally in 반말.")
+                }
                 appendLine("   Write natural modern Korean as on an official Korean lyric sheet, not translationese. Avoid stiff words such as '당신' unless the song truly calls for it.")
             }
-            appendLine("3. Translate meaning and feeling, not word for word. Keep metaphors, idioms and wordplay meaningful in the target language. Keep each line roughly as short as the original.")
+            if (translationMode == MODE_LITERAL) {
+                appendLine("3. Stay close to the original words and sentence structure: a faithful, literal translation that a learner can line up with the source. Render idioms by their plain meaning rather than replacing them with a target-language idiom. Keep each line roughly as short as the original.")
+            } else {
+                appendLine("3. Translate meaning and feeling, not word for word. Keep metaphors, idioms and wordplay meaningful in the target language. Keep each line roughly as short as the original.")
+            }
             appendLine("4. Keep names of people, places, brands and titles as they are. Lines that are only vocal sounds (oh, yeah, la la, na na) may be kept as they are.")
             appendLine("5. Items with role \"section\" are labels such as Verse, Chorus or Bridge. Translate them as short labels.")
             appendLine("6. Items with role \"backing\" are background vocals. Translate them like the other lines.")
@@ -532,8 +575,9 @@ object LyricsTranslation {
         val key = cleanClaudeKey()
         if (key.isEmpty() || key == rejectedClaudeKey) return null
         if (System.currentTimeMillis() < claudeCooldownUntil) return null
+        val model = claudeModel
         val body = buildJsonObject {
-            put("model", CLAUDE_MODEL)
+            put("model", model)
             put("max_tokens", maxTokens)
             put("system", system)
             putJsonArray("messages") {
@@ -565,7 +609,10 @@ object LyricsTranslation {
             return null
         }
         when {
-            code in 200..299 -> return claudeText(text)
+            code in 200..299 -> {
+                recordUsage(model, text)
+                return claudeText(text)
+            }
             // A bad key, or an account with nothing left to spend, fails the
             // same every time: stop asking with it and let Settings say why.
             code == 401 || code == 403 ||
@@ -579,6 +626,17 @@ object LyricsTranslation {
                 claudeCooldownUntil = System.currentTimeMillis() + CLAUDE_COOLDOWN_MS
         }
         return null
+    }
+
+    /** What the answer cost, handed to [usageSink]; a response without a usage block counts nothing. */
+    private fun recordUsage(model: String, response: String) {
+        val sink = usageSink ?: return
+        runCatching {
+            val usage = json.parseToJsonElement(response).jsonObject["usage"]?.jsonObject ?: return
+            val input = usage["input_tokens"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: 0L
+            val output = usage["output_tokens"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: 0L
+            if (input > 0 || output > 0) sink(model, input, output)
+        }
     }
 
     /**

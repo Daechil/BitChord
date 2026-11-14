@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Distinguishes this build's launcher icon from the official BitChord installed alongside it. -->
+    <string name="app_name">BitChord KO</string>
+</resources>

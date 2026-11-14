@@ -429,6 +429,12 @@
     <string name="buttons">버튼</string>
     <string name="clear_name">이름 지우기</string>
     <string name="translation_language">번역 언어</string>
+    <string name="claude_translation">AI 가사 번역(Claude)</string>
+    <string name="claude_translation_subtitle_ready">Claude가 노래 전체의 맥락을 보고 자연스럽게 번역합니다. 실패하면 Google 번역을 사용합니다.</string>
+    <string name="claude_translation_subtitle_missing">탭하여 Claude API 키 입력</string>
+    <string name="claude_translation_subtitle_rejected">Claude가 이 키를 거부했거나 크레딧이 부족하여 Google 번역을 사용 중입니다. 탭하여 키를 확인하십시오.</string>
+    <string name="claude_api_key">Claude API 키</string>
+    <string name="claude_api_key_description">platform.claude.com 의 API Keys 에서 키를 만든 후 여기에 붙여 넣으십시오. 사용량만큼 그 계정에 요금이 청구됩니다. 키는 이 기기에만 저장되며 Anthropic으로만 전송됩니다.</string>
     <string name="translation_language_description">번역 버튼을 눌렀을 때 가사를 번역할 언어입니다.</string>
     <string name="translation_language_app_default">앱 언어</string>
     <string name="translation_language_subtitle">앱 언어 따르기</string>

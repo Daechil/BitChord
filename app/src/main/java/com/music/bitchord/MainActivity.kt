@@ -289,6 +289,7 @@ import com.music.bitchord.ui.components.topBarContentPadding
 import com.music.bitchord.ui.components.topBarHeight
 import com.music.bitchord.ui.components.AppLanguageDialog
 import com.music.bitchord.ui.components.TranslationLanguageDialog
+import com.music.bitchord.ui.components.ApiKeyAlert
 import com.music.bitchord.ui.components.LyricsSourcesDialog
 import com.music.bitchord.ui.components.ServerEditorHost
 import com.music.bitchord.ui.components.UpdateAvailableDialog
@@ -663,6 +664,7 @@ private fun BitChordApp(
     var showLyricsSources by remember { mutableStateOf(false) }
     var showAppLanguage by remember { mutableStateOf(false) }
     var showTranslationLanguage by remember { mutableStateOf(false) }
+    var showClaudeKey by remember { mutableStateOf(false) }
     var showAccountSelector by remember { mutableStateOf(false) }
     var showListenBrainzLogin by remember { mutableStateOf(false) }
     var showLastfmLogin by remember { mutableStateOf(false) }
@@ -3131,6 +3133,7 @@ private fun BitChordApp(
                                 },
                                 onLyricsSources = { showLyricsSources = true },
                                 onTranslationLanguage = { showTranslationLanguage = true },
+                                onClaudeKey = { showClaudeKey = true },
                                 onSources = { navigator.push(AppRoute.Sources) },
                                 onListenTogether = { navigator.push(AppRoute.ListenTogether) },
                                 onWearOs = { navigator.push(AppRoute.WearOs) },
@@ -5557,6 +5560,34 @@ private fun BitChordApp(
             TranslationLanguageDialog(
                 hazeState = hazeState,
                 onDismiss = { showTranslationLanguage = false },
+            )
+        }
+
+        if (showClaudeKey) {
+            BackHandler { showClaudeKey = false }
+            val savedKey by AppSettings.claudeApiKey.collectAsStateWithLifecycle()
+            var keyInput by remember { mutableStateOf(savedKey) }
+            ApiKeyAlert(
+                hazeState = hazeState,
+                titleRes = R.string.claude_api_key,
+                descriptionRes = R.string.claude_api_key_description,
+                value = keyInput,
+                onValueChange = { keyInput = it },
+                hasSavedKey = savedKey.isNotBlank(),
+                onSave = {
+                    val key = keyInput.trim()
+                    if (key.isNotEmpty()) {
+                        AppSettings.setClaudeApiKey(key)
+                        AppSettings.setClaudeTranslation(true)
+                        showClaudeKey = false
+                    }
+                },
+                onRemove = {
+                    AppSettings.setClaudeApiKey("")
+                    AppSettings.setClaudeTranslation(false)
+                    showClaudeKey = false
+                },
+                onDismiss = { showClaudeKey = false },
             )
         }
 

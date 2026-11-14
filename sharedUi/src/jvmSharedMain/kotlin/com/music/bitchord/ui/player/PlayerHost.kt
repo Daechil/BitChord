@@ -356,7 +356,11 @@ data class PartyUi(
 )
 
 sealed interface LyricsTranslationResult {
-    data class Translated(val lines: List<LyricLine>) : LyricsTranslationResult
+    data class Translated(
+        val lines: List<LyricLine>,
+        /** Claude wrote it, rather than Google Translate; the status line says so. */
+        val byClaude: Boolean = false,
+    ) : LyricsTranslationResult
     data class SameLanguage(val language: String) : LyricsTranslationResult
     data object Unavailable : LyricsTranslationResult
 }

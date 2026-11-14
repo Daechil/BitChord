@@ -498,7 +498,11 @@ private const val LYRICS_UNAVAILABLE_FADE_MS = 900
 internal sealed interface LyricsTranslationUiState {
     data object Idle : LyricsTranslationUiState
     data object Loading : LyricsTranslationUiState
-    data class Ready(val lines: List<LyricLine>) : LyricsTranslationUiState
+    data class Ready(
+        val lines: List<LyricLine>,
+        /** Written by Claude rather than Google Translate. */
+        val byClaude: Boolean = false,
+    ) : LyricsTranslationUiState
     data object SameLanguage : LyricsTranslationUiState
 }
 
@@ -3171,7 +3175,7 @@ internal fun rememberLyricsTranslation(
                         )
                     ) {
                         is LyricsTranslationResult.Translated -> {
-                            translationState = LyricsTranslationUiState.Ready(result.lines)
+                            translationState = LyricsTranslationUiState.Ready(result.lines, result.byClaude)
                             lyricsDisplayMode = LyricsDisplayMode.Translated
                             translationTransition++
                             haptics.play(Haptic.ToggleOn)
@@ -3252,6 +3256,10 @@ internal fun rememberLyricsTranslation(
             stringResource(Res.string.translating_lyrics_to, translationLanguageName)
         romanizationState is LyricsTranslationUiState.Loading ->
             stringResource(Res.string.romanizing_lyrics)
+        // Named only when Claude wrote it: Google Translate is the default the
+        // line has always meant, and naming it too would be noise.
+        showingTranslation && (translationState as? LyricsTranslationUiState.Ready)?.byClaude == true ->
+            stringResource(Res.string.lyrics_translated_claude, translationLanguageName)
         showingTranslation ->
             stringResource(Res.string.lyrics_translated_to, translationLanguageName)
         showingRomanization ->

@@ -531,6 +531,12 @@ object AppSettings {
      */
     val translationLanguage = MutableStateFlow("")
 
+    /** Translate lyrics with Claude instead of Google Translate. See [LyricsTranslation.claudeEnabled]. */
+    val claudeTranslation = MutableStateFlow(false)
+
+    /** The user's own Claude API key from the Anthropic Console. Stays on this device. */
+    val claudeApiKey = MutableStateFlow("")
+
     /**
      * Plays a looping video behind the cover art on the player when one is
      * published for the track — Spotify's Canvas, Apple's motion artwork.
@@ -1050,6 +1056,10 @@ object AppSettings {
         lyricsOffsetMs.value = prefs.getInt(KEY_LYRICS_OFFSET_MS, 0)
             .coerceIn(MIN_LYRICS_OFFSET_MS, MAX_LYRICS_OFFSET_MS)
         translationLanguage.value = prefs.getString(KEY_TRANSLATION_LANGUAGE, "").orEmpty()
+        claudeApiKey.value = prefs.getString(KEY_CLAUDE_API_KEY, "").orEmpty()
+        claudeTranslation.value = prefs.getBoolean(KEY_CLAUDE_TRANSLATION, false)
+        com.music.bitchord.data.lyrics.LyricsTranslation.claudeApiKey = claudeApiKey.value
+        com.music.bitchord.data.lyrics.LyricsTranslation.claudeEnabled = claudeTranslation.value
         if (highPerformanceMode.value) {
             reduceAnimation.value = false
             reduceDynamicBlur.value = false
@@ -1564,6 +1574,19 @@ object AppSettings {
     fun setTranslationLanguage(value: String) {
         translationLanguage.value = value
         prefs.edit().putString(KEY_TRANSLATION_LANGUAGE, value).apply()
+    }
+
+    fun setClaudeTranslation(value: Boolean) {
+        claudeTranslation.value = value
+        prefs.edit().putBoolean(KEY_CLAUDE_TRANSLATION, value).apply()
+        com.music.bitchord.data.lyrics.LyricsTranslation.claudeEnabled = value
+    }
+
+    fun setClaudeApiKey(value: String) {
+        val normalized = value.trim()
+        claudeApiKey.value = normalized
+        prefs.edit().putString(KEY_CLAUDE_API_KEY, normalized).apply()
+        com.music.bitchord.data.lyrics.LyricsTranslation.claudeApiKey = normalized
     }
 
     fun setSyncedLyrics(value: Boolean) {
@@ -2204,6 +2227,7 @@ object AppSettings {
         KEY_LISTENBRAINZ_TOKEN,
         KEY_SPOTIFY_SPDC_TOKEN,
         KEY_PAXSENIX_API_KEY,
+        KEY_CLAUDE_API_KEY,
     )
 
     /**
@@ -2312,6 +2336,8 @@ object AppSettings {
     private const val KEY_LYRICS_BLUR = "lyrics_blur"
     private const val KEY_LYRICS_OFFSET_MS = "lyrics_offset_ms"
     private const val KEY_TRANSLATION_LANGUAGE = "translation_language"
+    private const val KEY_CLAUDE_API_KEY = "claude_api_key"
+    private const val KEY_CLAUDE_TRANSLATION = "claude_translation"
     private const val KEY_ANIMATED_CANVAS = "animated_canvas"
     private const val KEY_CANVAS_OVER_CELLULAR = "canvas_over_cellular"
     private const val KEY_SPOTIFY_CANVAS_AUTO_HIDE = "spotify_canvas_auto_hide"

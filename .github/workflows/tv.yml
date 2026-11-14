@@ -4,31 +4,8 @@ name: TV
 # a change under app/, shared/, sharedUi/ or native/ can break it as easily as
 # one under tv/.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'tv/**'
-      - 'app/**'
-      - 'shared/**'
-      - 'sharedUi/**'
-      - 'native/**'
-      - 'build.gradle.kts'
-      - 'settings.gradle.kts'
-      - 'gradle.properties'
-      - 'gradle/**'
-      - '.github/workflows/tv.yml'
-  pull_request:
-    paths:
-      - 'tv/**'
-      - 'app/**'
-      - 'shared/**'
-      - 'sharedUi/**'
-      - 'native/**'
-      - 'build.gradle.kts'
-      - 'settings.gradle.kts'
-      - 'gradle.properties'
-      - 'gradle/**'
-      - '.github/workflows/tv.yml'
+  # Disabled in this fork; run by hand if needed.
+  workflow_dispatch:
 
 concurrency:
   group: tv-${{ github.workflow }}-${{ github.ref }}

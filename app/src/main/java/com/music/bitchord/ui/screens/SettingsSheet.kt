@@ -198,6 +198,8 @@ fun SettingsScreen(
     onOpenReplay: () -> Unit,
     onLyricsSources: () -> Unit,
     onTranslationLanguage: () -> Unit,
+    /** Opens the Claude API key alert (AI lyric translation), hosted by the activity above the tab bar. */
+    onClaudeKey: () -> Unit = {},
     onSources: () -> Unit,
     onListenTogether: () -> Unit,
     onWearOs: () -> Unit,
@@ -260,6 +262,10 @@ fun SettingsScreen(
     val syncedLyrics by AppSettings.syncedLyrics.collectAsStateWithLifecycle()
     val lyricsSources by AppSettings.lyricsSources.collectAsStateWithLifecycle()
     val translationLanguage by AppSettings.translationLanguage.collectAsStateWithLifecycle()
+    val claudeTranslation by AppSettings.claudeTranslation.collectAsStateWithLifecycle()
+    val claudeApiKey by AppSettings.claudeApiKey.collectAsStateWithLifecycle()
+    val claudeKeyRejected by com.music.bitchord.data.lyrics.LyricsTranslation.claudeKeyRejected
+        .collectAsStateWithLifecycle()
     val theme by AppSettings.themeMode.collectAsStateWithLifecycle()
     val appFont by AppSettings.appFont.collectAsStateWithLifecycle()
     val sessionId by AppSettings.audioSessionId.collectAsStateWithLifecycle()
@@ -1318,6 +1324,30 @@ fun SettingsScreen(
                         },
                         trailing = { Chevron() },
                         onClick = onTranslationLanguage,
+                    )
+                }
+                val claudeTranslationTitle = stringResource(R.string.claude_translation)
+                row(claudeTranslationTitle, "lyrics", "translate", "claude", "anthropic", "ai") {
+                    SettingsRow(
+                        icon = SfIcons.AutoAwesome,
+                        title = claudeTranslationTitle,
+                        subtitle = stringResource(
+                            when {
+                                claudeApiKey.isBlank() -> R.string.claude_translation_subtitle_missing
+                                claudeKeyRejected -> R.string.claude_translation_subtitle_rejected
+                                else -> R.string.claude_translation_subtitle_ready
+                            },
+                        ) + if (claudeApiKey.length >= 8) " (••••${claudeApiKey.takeLast(4)})" else "",
+                        trailing = {
+                            IosSwitch(
+                                checked = claudeTranslation && claudeApiKey.isNotBlank(),
+                                onCheckedChange = { on ->
+                                    if (on && claudeApiKey.isBlank()) onClaudeKey()
+                                    else AppSettings.setClaudeTranslation(on)
+                                },
+                            )
+                        },
+                        onClick = onClaudeKey,
                     )
                 }
             }

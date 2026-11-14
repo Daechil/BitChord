@@ -191,7 +191,10 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
         targetLanguageTag: String,
     ): LyricsTranslationResult =
         when (val result = LyricsTranslation.translate(trackId, lines, targetLanguageTag)) {
-            is LyricsTranslation.Result.Translated -> LyricsTranslationResult.Translated(result.lines)
+            is LyricsTranslation.Result.Translated -> LyricsTranslationResult.Translated(
+                lines = result.lines,
+                byClaude = result.engine == LyricsTranslation.Engine.CLAUDE,
+            )
             is LyricsTranslation.Result.SameLanguage -> LyricsTranslationResult.SameLanguage(result.language)
             LyricsTranslation.Result.Unavailable -> LyricsTranslationResult.Unavailable
         }

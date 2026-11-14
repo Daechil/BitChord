@@ -68,13 +68,23 @@ val addonAuthServer: String = (
 // See the root build.gradle.kts: one version for the phone and its watch app.
 val betaSuffix = rootProject.extra["bitchordBetaSuffix"] as String
 
+/*
+ * A personal build for one phone (this fork's CI) needs one ABI, not three plus
+ * a universal APK: `-Pbitchord.arm64Only=true` compiles the native code once
+ * and ships a single arm64-v8a APK. ndk.abiFilters and ABI splits cannot be
+ * combined, so the splits are switched off in that mode.
+ */
+val arm64Only = providers.gradleProperty("bitchord.arm64Only").orNull == "true"
+
 android {
     namespace = "com.music.bitchord"
     // InnerTubeX's AAR requires compiling against 37; targetSdk (runtime behaviour) stays 36.
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.music.bitchord"
+        // Renamed from com.music.bitchord so this build installs next to the
+        // official BitChord instead of replacing it.
+        applicationId = "com.music.bitchord.ko"
         // 26 keeps reach wide; real-time blur (RenderEffect) kicks in on API 31+,
         // Haze falls back to a translucent scrim below that.
         minSdk = 26
@@ -83,6 +93,10 @@ android {
         versionName = rootProject.extra["bitchordVersionName"] as String
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        if (arm64Only) {
+            ndk { abiFilters += "arm64-v8a" }
+        }
 
         // Last.fm credentials are supplied locally and never committed.
         buildConfigField("String", "LASTFM_API_KEY", "\"${lastfmApiKey.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
@@ -105,7 +119,7 @@ android {
 
     splits {
         abi {
-            isEnable = true
+            isEnable = !arm64Only
             reset()
             include("armeabi-v7a", "arm64-v8a", "x86_64")
             isUniversalApk = true
@@ -132,7 +146,7 @@ android {
     productFlavors {
         create("dev") {
             dimension = "env"
-            applicationId = "com.dev.bitchord"
+            applicationId = "com.dev.bitchord.ko"
             resValue("string", "app_name", "BitChord Dev")
         }
         create("prod") {
@@ -187,9 +201,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // Null without a keystore to sign with: the build then produces
-            // app-release-unsigned.apk instead of failing outright.
-            signingConfig = signingConfigs.findByName("release")
+            // Falls back to the debug key when no release keystore is present,
+            // so a fork without the signing secrets still produces an
+            // installable APK (one that has to be reinstalled, not updated,
+            // whenever the debug key changes — see keystore.properties.example).
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
         /*
          * The release build, installable next to the dev and prod apps: same R8,

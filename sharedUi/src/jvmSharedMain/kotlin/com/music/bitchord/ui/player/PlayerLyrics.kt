@@ -505,6 +505,8 @@ internal sealed interface LyricsTranslationUiState {
         val byClaude: Boolean = false,
         /** Claude was asked and failed; Google Translate stepped in. */
         val claudeFellBack: Boolean = false,
+        /** Why Claude failed, for the status line. */
+        val claudeFailure: com.music.bitchord.data.lyrics.ClaudeFailure? = null,
     ) : LyricsTranslationUiState
     data object SameLanguage : LyricsTranslationUiState
 }
@@ -3186,7 +3188,7 @@ internal fun rememberLyricsTranslation(
                 )
             ) {
                 is LyricsTranslationResult.Translated -> {
-                    translationState = LyricsTranslationUiState.Ready(result.lines, result.byClaude, result.claudeFellBack)
+                    translationState = LyricsTranslationUiState.Ready(result.lines, result.byClaude, result.claudeFellBack, result.claudeFailure)
                     lyricsDisplayMode = LyricsDisplayMode.Translated
                     translationTransition++
                     haptics.play(Haptic.ToggleOn)
@@ -3299,7 +3301,11 @@ internal fun rememberLyricsTranslation(
         // Claude was on and did not answer: say so, so a flat translation is
         // understood as Google's stand-in rather than Claude's work.
         showingTranslation && (translationState as? LyricsTranslationUiState.Ready)?.claudeFellBack == true ->
-            stringResource(Res.string.lyrics_translated_google_fallback, translationLanguageName)
+            stringResource(
+                Res.string.lyrics_translated_google_fallback,
+                translationLanguageName,
+                claudeFailureLabel((translationState as? LyricsTranslationUiState.Ready)?.claudeFailure),
+            )
         showingTranslation ->
             stringResource(Res.string.lyrics_translated_to, translationLanguageName)
         showingRomanization ->

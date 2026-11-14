@@ -497,6 +497,16 @@
     <string name="claude_usage_previous">Last month: about $%1$s</string>
     <string name="claude_usage_note">Estimated from list prices; the Anthropic Console has the exact bill.</string>
     <string name="claude_usage_reset">Reset this month\'s count</string>
+    <string name="claude_log">Claude diagnostics log</string>
+    <string name="claude_log_empty">No Claude requests recorded yet</string>
+    <string name="claude_log_subtitle">Last %1$d requests · %2$d failed</string>
+    <string name="claude_log_ok">used</string>
+    <string name="claude_log_copy">Copy log</string>
+    <string name="claude_log_copied">Claude log copied</string>
+    <string name="claude_log_clear">Clear log</string>
+    <string name="claude_purpose_translate">Translation</string>
+    <string name="claude_purpose_meaning">Song meaning</string>
+    <string name="claude_purpose_original_name">Original title</string>
     <string name="search_languages">Search languages</string>
     <string name="no_languages_match">No languages match</string>
     <string name="connect_account_first">Connect an account first</string>

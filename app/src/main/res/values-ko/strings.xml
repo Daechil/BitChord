@@ -458,6 +458,16 @@
     <string name="claude_usage_previous">지난달: 약 $%1$s</string>
     <string name="claude_usage_note">정가 기준 추정치입니다. 정확한 금액은 Anthropic 콘솔에서 확인하십시오.</string>
     <string name="claude_usage_reset">이번 달 집계 초기화</string>
+    <string name="claude_log">Claude 진단 기록</string>
+    <string name="claude_log_empty">아직 기록된 Claude 요청이 없습니다</string>
+    <string name="claude_log_subtitle">최근 %1$d건 · 실패 %2$d건</string>
+    <string name="claude_log_ok">사용됨</string>
+    <string name="claude_log_copy">기록 복사</string>
+    <string name="claude_log_copied">Claude 기록을 복사했습니다</string>
+    <string name="claude_log_clear">기록 지우기</string>
+    <string name="claude_purpose_translate">번역</string>
+    <string name="claude_purpose_meaning">노래 해석</string>
+    <string name="claude_purpose_original_name">원제 찾기</string>
     <string name="translation_language_description">번역 버튼을 눌렀을 때 가사를 번역할 언어입니다.</string>
     <string name="translation_language_app_default">앱 언어</string>
     <string name="translation_language_subtitle">앱 언어 따르기</string>

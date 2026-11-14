@@ -379,6 +379,8 @@ sealed interface LyricsTranslationResult {
         val byClaude: Boolean = false,
         /** Claude was asked and failed, so this is Google's; the status line says that too. */
         val claudeFellBack: Boolean = false,
+        /** Why Claude failed, named on the status line. */
+        val claudeFailure: com.music.bitchord.data.lyrics.ClaudeFailure? = null,
     ) : LyricsTranslationResult
     data class SameLanguage(val language: String) : LyricsTranslationResult
     data object Unavailable : LyricsTranslationResult

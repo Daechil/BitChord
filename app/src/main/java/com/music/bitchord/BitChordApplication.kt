@@ -101,6 +101,8 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory, Configu
         migrateScriptOnlyAppLocale()
         LyricsTranslation.cacheDir = cacheDir
         LyricsTranslation.keepDir = filesDir
+        // Read off the main thread; the Settings row shows it once it is in.
+        CoroutineScope(Dispatchers.IO).launch { com.music.bitchord.data.lyrics.ClaudeDiagnostics.load() }
         // PlaybackService shares this process, so seeding the cookie here means
         // stream resolution is authenticated from the first play onwards.
         authStore = AuthStore(this)

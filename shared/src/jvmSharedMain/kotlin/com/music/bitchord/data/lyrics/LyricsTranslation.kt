@@ -64,6 +64,8 @@ object LyricsTranslation {
             val engine: Engine = Engine.GOOGLE,
             /** Claude was asked first and gave nothing usable, so this is Google's answer instead. */
             val claudeFellBack: Boolean = false,
+            /** Why Claude gave nothing usable, when [claudeFellBack]. */
+            val claudeFailure: ClaudeFailure? = null,
         ) : Result
 
         data class SameLanguage(val language: String) : Result
@@ -183,18 +185,32 @@ object LyricsTranslation {
 
         // Claude where it is set up and answers in full; whatever goes wrong
         // there, the lyric sheet must not, so anything short of a complete
-        // answer falls through to Google Translate below.
-        val claudeTried = claudeReady
+        // answer falls through to Google Translate below — with the reason
+        // kept, for the status line and the diagnostics log.
+        val claudeTried = claudeEnabled && cleanClaudeKey().isNotEmpty()
+        var claudeFailure: ClaudeFailure? = null
         if (claudeTried) {
-            val viaClaude = try {
+            val attempt = try {
                 claudeEntry(trackId, slots, target, fresh)
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (_: Exception) {
-                null
+            } catch (error: Exception) {
+                ClaudeDiagnostics.record(
+                    ClaudeDiagnostics.Entry(
+                        at = System.currentTimeMillis(),
+                        purpose = ClaudeDiagnostics.PURPOSE_TRANSLATE,
+                        model = claudeModel,
+                        failure = ClaudeFailure.ERROR.name,
+                        linesAsked = slots.size,
+                        detail = error.toString(),
+                    ),
+                )
+                ClaudeAttempt(null, fromCache = false, failure = ClaudeFailure.ERROR)
             }
-            if (viaClaude != null) {
-                val (entry, fromCache) = viaClaude
+            claudeFailure = attempt.failure
+            val entry = attempt.entry
+            if (entry != null) {
+                val fromCache = attempt.fromCache
                 return if (sameLanguage(entry.sourceLanguage, target)) {
                     Result.SameLanguage(entry.sourceLanguage)
                 } else {
@@ -221,6 +237,7 @@ object LyricsTranslation {
                     sourceLanguage = cached.sourceLanguage,
                     fromCache = true,
                     claudeFellBack = claudeTried,
+                    claudeFailure = claudeFailure,
                 )
             }
         }
@@ -284,6 +301,7 @@ object LyricsTranslation {
                 sourceLanguage = source,
                 fromCache = false,
                 claudeFellBack = claudeTried,
+                claudeFailure = claudeFailure,
             )
         }
     }
@@ -442,43 +460,46 @@ object LyricsTranslation {
             return key.isNotEmpty() && key != rejectedClaudeKey
         }
 
-    private val claudeReady: Boolean
-        get() = claudeEnabled && claudeKeyUsable && System.currentTimeMillis() >= claudeCooldownUntil
-
     /**
      * Claude's answer for the whole song, cached separately from Google's so
      * switching engines never shows the other engine's text. Null whenever the
      * answer can't be used as-is, which sends the caller back to Google.
-     * The flag says whether the entry came from the cache.
      */
     private suspend fun claudeEntry(
         trackId: String,
         slots: List<TextSlot>,
         target: String,
         fresh: Boolean,
-    ): Pair<CachedTranslation, Boolean>? {
+    ): ClaudeAttempt {
         // The style is part of the key: a song read in 반말 and the same song
         // read in 존댓말 are two answers, and switching between them must not
         // show the other one.
         val cacheKey = cacheKey("claude\u0000$translationSpeech\u0000$translationMode\u0000$trackId", target, slots)
         val cached = if (fresh) null else memory.get(cacheKey) ?: readCache(cacheKey)?.also { memory.put(cacheKey, it) }
         if (cached != null && cached.version == CACHE_VERSION && cached.texts.size == slots.size) {
-            return cached.copy(engine = ENGINE_CLAUDE) to true
+            return ClaudeAttempt(cached.copy(engine = ENGINE_CLAUDE), fromCache = true, failure = null)
         }
-        val fresh = requestClaudeTranslation(slots, target) ?: return null
-        if (fresh.translations.size != slots.size) return null
-        return CachedTranslation(
+        val reply = requestClaudeTranslation(slots, target)
+        val fresh = reply.value ?: return ClaudeAttempt(null, fromCache = false, failure = reply.failure ?: ClaudeFailure.ERROR)
+        val entry = CachedTranslation(
             sourceLanguage = fresh.sourceLanguage,
             targetLanguage = target,
             // A line left empty (often a bare "oh" or "yeah") keeps the
             // original rather than showing a blank translation under it.
             texts = fresh.translations.mapIndexed { index, text -> text.ifBlank { slots[index].text } },
             engine = ENGINE_CLAUDE,
-        ).also {
-            memory.put(cacheKey, it)
-            writeCache(cacheKey, it)
-        } to false
+        )
+        memory.put(cacheKey, entry)
+        writeCache(cacheKey, entry)
+        return ClaudeAttempt(entry, fromCache = false, failure = null)
     }
+
+    /** What [claudeEntry] came back with: the entry, or why there is none. */
+    private class ClaudeAttempt(
+        val entry: CachedTranslation?,
+        val fromCache: Boolean,
+        val failure: ClaudeFailure?,
+    )
 
     private fun translationInstruction(target: String, count: Int): String {
         val locale = Locale.forLanguageTag(target.replace('_', '-'))
@@ -512,7 +533,7 @@ object LyricsTranslation {
         }
     }
 
-    private suspend fun requestClaudeTranslation(slots: List<TextSlot>, target: String): BatchAnswer? {
+    private suspend fun requestClaudeTranslation(slots: List<TextSlot>, target: String): ClaudeResult<BatchAnswer> {
         val input = buildJsonObject {
             put("target_language", target)
             put("line_count", slots.size)
@@ -533,13 +554,14 @@ object LyricsTranslation {
                 }
             }
         }
-        val text = askClaude(
+        return askClaude(
+            purpose = ClaudeDiagnostics.PURPOSE_TRANSLATE,
             system = translationInstruction(target, slots.size),
             input = input.toString(),
             schema = TRANSLATION_SCHEMA,
             effort = "medium",
-        ) ?: return null
-        return parseTranslation(text, slots.size)
+            linesAsked = slots.size,
+        ) { text -> parseTranslation(text, slots.size) }
     }
 
     private val TRANSLATION_SCHEMA: JsonObject by lazy {
@@ -560,22 +582,75 @@ object LyricsTranslation {
         }
     }
 
+    /** What a caller made of Claude's answer text: the value, or why it is unusable. */
+    internal class Parsed<T : Any>(
+        val value: T?,
+        val failure: ClaudeFailure? = null,
+        val linesGot: Int? = null,
+        val detail: String? = null,
+    )
+
+    /** The outcome of [askClaude]: the parsed value, or why there is none. */
+    internal class ClaudeResult<T : Any>(val value: T?, val failure: ClaudeFailure?)
+
     /**
      * One Messages API request: [system] as the instructions, [input] as the
-     * user's turn, the answer held to the JSON [schema]. Returns that JSON as
-     * text, or null for any failure — the callers all have somewhere else to go.
+     * user's turn, the answer held to the JSON [schema] and read by [parse].
+     * Every call — sent or not, answered or not — leaves an entry in
+     * [ClaudeDiagnostics]; the callers all have somewhere else to go on failure.
      */
-    internal suspend fun askClaude(
+    internal suspend fun <T : Any> askClaude(
+        purpose: String,
         system: String,
         input: String,
         schema: JsonObject,
         effort: String,
         maxTokens: Int = 16_000,
-    ): String? {
+        /** Lines sent, for a translation: logged beside the count that came back. */
+        linesAsked: Int? = null,
+        parse: (String) -> Parsed<T>,
+    ): ClaudeResult<T> {
         val key = cleanClaudeKey()
-        if (key.isEmpty() || key == rejectedClaudeKey) return null
-        if (System.currentTimeMillis() < claudeCooldownUntil) return null
         val model = claudeModel
+        val started = System.nanoTime()
+        suspend fun done(
+            failure: ClaudeFailure?,
+            value: T? = null,
+            httpCode: Int? = null,
+            stopReason: String? = null,
+            linesGot: Int? = null,
+            inputTokens: Long? = null,
+            outputTokens: Long? = null,
+            detail: String? = null,
+            sent: Boolean = true,
+        ): ClaudeResult<T> {
+            ClaudeDiagnostics.record(
+                ClaudeDiagnostics.Entry(
+                    at = System.currentTimeMillis(),
+                    purpose = purpose,
+                    model = model,
+                    failure = failure?.name,
+                    httpCode = httpCode,
+                    stopReason = stopReason,
+                    elapsedMs = if (sent) (System.nanoTime() - started) / 1_000_000L else 0L,
+                    linesAsked = linesAsked,
+                    linesGot = linesGot,
+                    inputTokens = inputTokens,
+                    outputTokens = outputTokens,
+                    detail = detail,
+                ),
+            )
+            return ClaudeResult(value, failure)
+        }
+        if (key.isEmpty()) return ClaudeResult(null, ClaudeFailure.KEY_REJECTED)
+        if (key == rejectedClaudeKey) {
+            return done(ClaudeFailure.KEY_REJECTED, detail = "not sent: this key was refused earlier", sent = false)
+        }
+        val now = System.currentTimeMillis()
+        if (now < claudeCooldownUntil) {
+            val seconds = (claudeCooldownUntil - now + 999) / 1000
+            return done(ClaudeFailure.COOLDOWN, detail = "not sent: resting ${seconds}s after a rate limit or overload", sent = false)
+        }
         val body = buildJsonObject {
             put("model", model)
             put("max_tokens", maxTokens)
@@ -605,28 +680,102 @@ object LyricsTranslation {
             claudeClient.newCall(request).awaitResponse()
         } catch (cancelled: CancellationException) {
             throw cancelled
-        } catch (_: IOException) {
-            return null
+        } catch (error: IOException) {
+            // OkHttp's call and read deadlines both surface as an interrupted read.
+            val failure = if (error is java.io.InterruptedIOException) ClaudeFailure.TIMEOUT else ClaudeFailure.NETWORK
+            return done(failure, detail = "${error::class.java.simpleName}: ${error.message}")
         }
-        when {
-            code in 200..299 -> {
-                recordUsage(model, text)
-                return claudeText(text)
+        if (code in 200..299) {
+            recordUsage(model, text)
+            val meta = responseMeta(text)
+            when (meta.stopReason) {
+                "refusal" -> return done(
+                    ClaudeFailure.REFUSAL, httpCode = code, stopReason = meta.stopReason,
+                    inputTokens = meta.inputTokens, outputTokens = meta.outputTokens, detail = meta.refusalCategory,
+                )
+                "max_tokens" -> return done(
+                    ClaudeFailure.CUT_OFF, httpCode = code, stopReason = meta.stopReason,
+                    inputTokens = meta.inputTokens, outputTokens = meta.outputTokens,
+                )
             }
+            val answer = claudeText(text) ?: return done(
+                ClaudeFailure.BAD_ANSWER, httpCode = code, stopReason = meta.stopReason,
+                inputTokens = meta.inputTokens, outputTokens = meta.outputTokens, detail = "no text block in the answer",
+            )
+            val parsed = try {
+                parse(answer)
+            } catch (error: Exception) {
+                Parsed<T>(null, ClaudeFailure.BAD_ANSWER, detail = error.toString())
+            }
+            val failure = parsed.failure ?: if (parsed.value == null) ClaudeFailure.BAD_ANSWER else null
+            return done(
+                failure, value = parsed.value?.takeIf { failure == null }, httpCode = code, stopReason = meta.stopReason,
+                linesGot = parsed.linesGot, inputTokens = meta.inputTokens, outputTokens = meta.outputTokens,
+                detail = parsed.detail,
+            )
+        }
+        val failure = when {
             // A bad key, or an account with nothing left to spend, fails the
             // same every time: stop asking with it and let Settings say why.
-            code == 401 || code == 403 ||
-                (code == 400 && text.contains("credit balance", ignoreCase = true)) -> {
+            code == 401 || code == 403 -> {
                 rejectedClaudeKey = key
                 claudeKeyRejected.value = true
+                ClaudeFailure.KEY_REJECTED
+            }
+            code == 400 && text.contains("credit balance", ignoreCase = true) -> {
+                rejectedClaudeKey = key
+                claudeKeyRejected.value = true
+                ClaudeFailure.NO_CREDIT
             }
             // Rate limited or overloaded: rest a minute rather than delay
             // every translation in the meantime.
-            code == 429 || code == 529 ->
+            code == 429 -> {
                 claudeCooldownUntil = System.currentTimeMillis() + CLAUDE_COOLDOWN_MS
+                ClaudeFailure.RATE_LIMIT
+            }
+            code == 529 -> {
+                claudeCooldownUntil = System.currentTimeMillis() + CLAUDE_COOLDOWN_MS
+                ClaudeFailure.OVERLOADED
+            }
+            code >= 500 -> ClaudeFailure.SERVER_ERROR
+            code in 400..499 -> ClaudeFailure.BAD_REQUEST
+            else -> ClaudeFailure.ERROR
         }
-        return null
+        return done(failure, httpCode = code, detail = apiErrorMessage(text))
     }
+
+    private class ResponseMeta(
+        val stopReason: String?,
+        val refusalCategory: String?,
+        val inputTokens: Long?,
+        val outputTokens: Long?,
+    )
+
+    /** The stop reason, refusal category and token counts of an answer, whatever else it holds. */
+    private fun responseMeta(response: String): ResponseMeta = runCatching {
+        val root = json.parseToJsonElement(response).jsonObject
+        val usage = root["usage"] as? JsonObject
+        ResponseMeta(
+            stopReason = root["stop_reason"]?.jsonPrimitive?.contentOrNull,
+            refusalCategory = (root["stop_details"] as? JsonObject)?.let { details ->
+                listOfNotNull(
+                    details["category"]?.jsonPrimitive?.contentOrNull,
+                    details["explanation"]?.jsonPrimitive?.contentOrNull,
+                ).joinToString(": ").ifBlank { null }
+            },
+            inputTokens = usage?.get("input_tokens")?.jsonPrimitive?.contentOrNull?.toLongOrNull(),
+            outputTokens = usage?.get("output_tokens")?.jsonPrimitive?.contentOrNull?.toLongOrNull(),
+        )
+    }.getOrElse { ResponseMeta(null, null, null, null) }
+
+    /** "rate_limit_error: Number of request tokens has exceeded…" out of an error body, or its start. */
+    private fun apiErrorMessage(response: String): String = runCatching {
+        val error = json.parseToJsonElement(response).jsonObject["error"]?.jsonObject
+        listOfNotNull(
+            error?.get("type")?.jsonPrimitive?.contentOrNull,
+            error?.get("message")?.jsonPrimitive?.contentOrNull,
+        ).joinToString(": ").ifBlank { null }
+    }.getOrNull() ?: response.take(200)
 
     /** What the answer cost, handed to [usageSink]; a response without a usage block counts nothing. */
     private fun recordUsage(model: String, response: String) {
@@ -657,19 +806,28 @@ object LyricsTranslation {
             .takeIf { it.isNotEmpty() }
     }.getOrNull()
 
-    private fun parseTranslation(text: String, expected: Int): BatchAnswer? = runCatching {
-        val answer = json.parseToJsonElement(text).jsonObject
-        val translations = answer["translations"]!!.jsonArray.map {
-            it.jsonPrimitive.contentOrNull.orEmpty().trim()
+    private fun parseTranslation(text: String, expected: Int): Parsed<BatchAnswer> {
+        val answer = runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull()
+            ?: return Parsed(null, ClaudeFailure.BAD_ANSWER, detail = "not a JSON object: ${text.take(80)}")
+        val items = (answer["translations"] as? kotlinx.serialization.json.JsonArray)
+            ?: return Parsed(null, ClaudeFailure.BAD_ANSWER, detail = "no \"translations\" array")
+        val translations = items.map { (it as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull.orEmpty().trim() }
+        if (translations.size != expected) {
+            return Parsed(null, ClaudeFailure.LINE_MISMATCH, linesGot = translations.size)
         }
-        if (translations.size != expected || translations.all { it.isBlank() }) return@runCatching null
+        if (translations.all { it.isBlank() }) {
+            return Parsed(null, ClaudeFailure.BAD_ANSWER, linesGot = translations.size, detail = "every line blank")
+        }
         val source = answer["source_language"]?.jsonPrimitive?.contentOrNull.orEmpty().trim()
-        BatchAnswer(
-            translations = translations,
-            sourceLanguage = source.ifBlank { "und" },
-            sourceWeight = text.length,
+        return Parsed(
+            BatchAnswer(
+                translations = translations,
+                sourceLanguage = source.ifBlank { "und" },
+                sourceWeight = text.length,
+            ),
+            linesGot = translations.size,
         )
-    }.getOrNull()
+    }
 
     /** Status code and body, for callers that branch on the code. */
     private suspend fun Call.awaitResponse(): Pair<Int, String> = suspendCancellableCoroutine { continuation ->
@@ -1089,11 +1247,15 @@ object LyricsTranslation {
         }
         val answer = try {
             askClaude(
+                purpose = ClaudeDiagnostics.PURPOSE_MEANING,
                 system = meaningInstruction(target),
                 input = input.toString(),
                 schema = MEANING_SCHEMA,
                 effort = "medium",
-            )?.let { parseMeaning(it) }
+            ) { text ->
+                parseMeaning(text)?.let { Parsed<SongMeaning>(it) }
+                    ?: Parsed<SongMeaning>(null, ClaudeFailure.BAD_ANSWER, detail = "summary or meaning missing")
+            }.value
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
@@ -1205,12 +1367,16 @@ object LyricsTranslation {
         }
         val answer = try {
             askClaude(
+                purpose = ClaudeDiagnostics.PURPOSE_ORIGINAL_NAME,
                 system = NATIVE_NAME_INSTRUCTION,
                 input = input.toString(),
                 schema = NATIVE_NAME_SCHEMA,
                 effort = "low",
                 maxTokens = 8_000,
-            )?.let { text -> runCatching { json.decodeFromString<NativeNameAnswer>(text) }.getOrNull() }
+            ) { text ->
+                runCatching { json.decodeFromString<NativeNameAnswer>(text) }.getOrNull()?.let { Parsed<NativeNameAnswer>(it) }
+                    ?: Parsed<NativeNameAnswer>(null, ClaudeFailure.BAD_ANSWER, detail = "not the expected JSON: ${text.take(80)}")
+            }.value
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {

@@ -669,6 +669,7 @@ private fun BitChordApp(
     var showClaudeSpeech by remember { mutableStateOf(false) }
     var showClaudeMode by remember { mutableStateOf(false) }
     var showClaudeUsage by remember { mutableStateOf(false) }
+    var showClaudeLog by remember { mutableStateOf(false) }
     var showAccountSelector by remember { mutableStateOf(false) }
     var showListenBrainzLogin by remember { mutableStateOf(false) }
     var showLastfmLogin by remember { mutableStateOf(false) }
@@ -3142,6 +3143,7 @@ private fun BitChordApp(
                                 onClaudeSpeech = { showClaudeSpeech = true },
                                 onClaudeMode = { showClaudeMode = true },
                                 onClaudeUsage = { showClaudeUsage = true },
+                                onClaudeLog = { showClaudeLog = true },
                                 onSources = { navigator.push(AppRoute.Sources) },
                                 onListenTogether = { navigator.push(AppRoute.ListenTogether) },
                                 onWearOs = { navigator.push(AppRoute.WearOs) },
@@ -5583,6 +5585,8 @@ private fun BitChordApp(
             onDismissMode = { showClaudeMode = false },
             showUsage = showClaudeUsage,
             onDismissUsage = { showClaudeUsage = false },
+            showLog = showClaudeLog,
+            onDismissLog = { showClaudeLog = false },
         )
 
         if (showListenBrainzLogin) {

@@ -205,6 +205,7 @@ fun SettingsScreen(
     onClaudeSpeech: () -> Unit = {},
     onClaudeMode: () -> Unit = {},
     onClaudeUsage: () -> Unit = {},
+    onClaudeLog: () -> Unit = {},
     onSources: () -> Unit,
     onListenTogether: () -> Unit,
     onWearOs: () -> Unit,
@@ -274,6 +275,7 @@ fun SettingsScreen(
     val claudeSpeech by AppSettings.claudeSpeech.collectAsStateWithLifecycle()
     val claudeMode by AppSettings.claudeMode.collectAsStateWithLifecycle()
     val claudeUsage by AppSettings.claudeUsage.collectAsStateWithLifecycle()
+    val claudeLog by com.music.bitchord.data.lyrics.ClaudeDiagnostics.entries.collectAsStateWithLifecycle()
     val claudeKeyRejected by com.music.bitchord.data.lyrics.LyricsTranslation.claudeKeyRejected
         .collectAsStateWithLifecycle()
     val theme by AppSettings.themeMode.collectAsStateWithLifecycle()
@@ -1423,6 +1425,24 @@ fun SettingsScreen(
                             },
                             trailing = { Chevron() },
                             onClick = onClaudeUsage,
+                        )
+                    }
+                    val claudeLogTitle = stringResource(R.string.claude_log)
+                    row(claudeLogTitle, "claude", "log", "debug", "diagnostics", "error", "로그", "진단", "오류") {
+                        SettingsRow(
+                            icon = SfIcons.AutoAwesome,
+                            title = claudeLogTitle,
+                            subtitle = if (claudeLog.isEmpty()) {
+                                stringResource(R.string.claude_log_empty)
+                            } else {
+                                stringResource(
+                                    R.string.claude_log_subtitle,
+                                    claudeLog.size,
+                                    claudeLog.count { it.failed },
+                                )
+                            },
+                            trailing = { Chevron() },
+                            onClick = onClaudeLog,
                         )
                     }
                 }

@@ -11,6 +11,11 @@
     <!-- Saving a track to Music outlives the screen it was asked from. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Lock screen lyrics: lets the player put its lyrics screen over the
+         lock screen as the screen goes off. Without this declaration the app
+         is missing from the system's "Display over other apps" list, so it
+         could never be granted. Asked for only when that setting is on. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <!-- Touch feedback. The system's own haptics switch is honoured on top of
          this, so granting it doesn't override a user who turned buzzing off. -->

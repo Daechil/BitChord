@@ -902,10 +902,6 @@ fun NowPlayingScreen(
     var showLyricsProviders by remember { mutableStateOf(false) }
     var showSongMeaning by remember { mutableStateOf(false) }
     val songMeaningAvailable by PlayerPlatform.host.songMeaningAvailable.collectAsStateWithLifecycle()
-    // The lines handed to Claude's notes from the pick bar; null while the
-    // sheet is closed.
-    var lineNotesPick by remember { mutableStateOf<List<String>?>(null) }
-    val lineNotesAvailable by PlayerPlatform.host.lineNotesAvailable.collectAsStateWithLifecycle()
     // Gated on the Bluetooth permission the first time — see [rememberOutputPicker].
     val openAudioOutput = rememberOutputPicker { showAudioOutput = true }
     // Listening in a party whose host has taken the controls: the transport
@@ -1143,7 +1139,6 @@ fun NowPlayingScreen(
         artworkUrl = remoteArt,
         haptics = haptics,
         onCard = { lyricsShare = it },
-        onExplain = { lineNotesPick = it },
     )
     // Nothing here resets [lyricsOpen] on a track change, deliberately. The
     // panel is a place, not a property of the track: someone reading along who
@@ -1732,16 +1727,6 @@ fun NowPlayingScreen(
                 onDismiss = { showSongMeaning = false },
             )
         }
-        lineNotesPick?.let { picked ->
-            LineNotesSheet(
-                hazeState = playerHaze,
-                song = song,
-                lines = lyrics.orEmpty(),
-                picked = picked,
-                targetLanguage = lyricsTranslation.targetLanguage,
-                onDismiss = { lineNotesPick = null },
-            )
-        }
         if (showAudioPipeline) {
             AudioPipelineDialog(
                 hazeState = playerHaze,
@@ -2295,8 +2280,6 @@ fun NowPlayingScreen(
                                         !lyricPicker.overBudget,
                                     onCancel = lyricPicker.cancel,
                                     onShare = lyricPicker.share,
-                                    onExplain = if (lineNotesAvailable) lyricPicker.explain else null,
-                                    explainEnabled = lyricPicker.canExplain,
                                 )
                             },
                             romanizationToggle = {
@@ -3982,8 +3965,6 @@ fun NowPlayingScreen(
                                         !lyricPicker.overBudget,
                                     onCancel = lyricPicker.cancel,
                                     onShare = lyricPicker.share,
-                                    onExplain = if (lineNotesAvailable) lyricPicker.explain else null,
-                                    explainEnabled = lyricPicker.canExplain,
                                     modifier = Modifier.align(Alignment.BottomCenter),
                                 )
                             }

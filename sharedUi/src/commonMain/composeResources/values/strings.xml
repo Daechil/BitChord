@@ -96,12 +96,6 @@
     <string name="lyrics_translated_to">Translated to %1$s</string>
     <string name="lyrics_translated_claude">Translated to %1$s · Claude</string>
     <string name="lyrics_translated_claude_sonnet">Translated to %1$s · Claude Sonnet (Haiku declined)</string>
-    <string name="lyrics_explain">Explain</string>
-    <string name="line_notes_title">Line notes</string>
-    <string name="line_notes_loading">Claude is reading these lines…</string>
-    <string name="line_notes_unavailable">Couldn’t explain these lines right now.</string>
-    <string name="line_notes_footer">Written by Claude. It can be wrong.</string>
-    <string name="line_notes_footer_sonnet">Written by Claude Sonnet (Haiku declined). It can be wrong.</string>
     <string name="lyrics_translated_google_fallback">Translated to %1$s · Google Translate (Claude: %2$s)</string>
     <string name="claude_fail_cooldown">resting after a rate limit</string>
     <string name="claude_fail_key_rejected">key refused</string>

@@ -222,7 +222,6 @@ private fun ClaudeLogAlert(hazeState: HazeState, onDismiss: () -> Unit) {
     val purposeTranslate = stringResource(R.string.claude_purpose_translate)
     val purposeMeaning = stringResource(R.string.claude_purpose_meaning)
     val purposeName = stringResource(R.string.claude_purpose_original_name)
-    val purposeLines = stringResource(R.string.claude_purpose_lines)
     val haikuLabel = stringResource(R.string.claude_model_haiku)
     val sonnetLabel = stringResource(R.string.claude_model_sonnet)
     // Every label the lines can need, resolved up front: the loop below is not
@@ -234,7 +233,6 @@ private fun ClaudeLogAlert(hazeState: HazeState, onDismiss: () -> Unit) {
             ClaudeDiagnostics.PURPOSE_TRANSLATE -> purposeTranslate
             ClaudeDiagnostics.PURPOSE_MEANING -> purposeMeaning
             ClaudeDiagnostics.PURPOSE_ORIGINAL_NAME -> purposeName
-            ClaudeDiagnostics.PURPOSE_LINES -> purposeLines
             else -> entry.purpose
         }
         val model = when (entry.model) {

@@ -233,35 +233,6 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
             targetLanguageTag = targetLanguageTag,
         )
 
-    override val lineNotesAvailable: StateFlow<Boolean> by lazy {
-        combine(
-            AppSettings.claudeLineNotes,
-            AppSettings.claudeApiKey,
-            LyricsTranslation.claudeKeyRejected,
-        ) { on, key, rejected ->
-            on && key.isNotBlank() && !rejected
-        }.stateIn(
-            scope,
-            SharingStarted.Eagerly,
-            AppSettings.claudeLineNotes.value && AppSettings.claudeApiKey.value.isNotBlank(),
-        )
-    }
-
-    override suspend fun explainLines(
-        song: Song,
-        lines: List<LyricLine>,
-        picked: List<String>,
-        targetLanguageTag: String,
-    ): LyricsTranslation.LineNotesResult =
-        LyricsTranslation.explainLines(
-            trackId = song.videoId,
-            title = song.title,
-            artist = song.artist,
-            lines = lines,
-            picked = picked,
-            targetLanguageTag = targetLanguageTag,
-        )
-
     override fun showMessage(message: String) {
         main.post { Toast.makeText(app, message, Toast.LENGTH_SHORT).show() }
     }

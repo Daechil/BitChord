@@ -267,7 +267,6 @@ fun SettingsScreen(
     val playerTheme by AppSettings.playerTheme.collectAsStateWithLifecycle()
     val syncedLyrics by AppSettings.syncedLyrics.collectAsStateWithLifecycle()
     val resumeOnHeadphones by AppSettings.resumeOnHeadphones.collectAsStateWithLifecycle()
-    val claudeLineNotes by AppSettings.claudeLineNotes.collectAsStateWithLifecycle()
     val keepDownloadTranslations by AppSettings.keepDownloadTranslations.collectAsStateWithLifecycle()
     val lyricsSources by AppSettings.lyricsSources.collectAsStateWithLifecycle()
     val translationLanguage by AppSettings.translationLanguage.collectAsStateWithLifecycle()
@@ -682,21 +681,6 @@ fun SettingsScreen(
                         subtitle = stringResource(claudeModeLabelRes(claudeMode)),
                         trailing = { Chevron() },
                         onClick = onClaudeMode,
-                    )
-                }
-                val claudeLineNotesTitle = stringResource(R.string.claude_line_notes)
-                row(claudeLineNotesTitle, "claude", "lyrics", "explain", "line", "풀이", "해석", "가사") {
-                    SettingsRow(
-                        icon = SfIcons.Info,
-                        title = claudeLineNotesTitle,
-                        subtitle = stringResource(R.string.claude_line_notes_subtitle),
-                        trailing = {
-                            IosSwitch(
-                                checked = claudeLineNotes,
-                                onCheckedChange = AppSettings::setClaudeLineNotes,
-                            )
-                        },
-                        onClick = { AppSettings.setClaudeLineNotes(!claudeLineNotes) },
                     )
                 }
                 val claudeUsageTitle = stringResource(R.string.claude_usage)

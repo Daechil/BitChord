@@ -497,6 +497,10 @@
     <string name="claude_usage_previous">Last month: about $%1$s</string>
     <string name="claude_usage_note">Estimated from list prices; the Anthropic Console has the exact bill.</string>
     <string name="claude_usage_reset">Reset this month\'s count</string>
+    <string name="ko_features">BitChord KO features</string>
+    <string name="ko_features_claude">Claude AI</string>
+    <string name="ko_features_claude_footer">These use your own Claude API key and are billed to that account by use. Without a key, lyrics are translated by Google Translate as before.</string>
+    <string name="ko_features_playback">Playback</string>
     <string name="claude_log">Claude diagnostics log</string>
     <string name="claude_log_empty">No Claude requests recorded yet</string>
     <string name="claude_log_subtitle">Last %1$d requests · %2$d failed</string>

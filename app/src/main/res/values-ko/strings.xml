@@ -458,6 +458,10 @@
     <string name="claude_usage_previous">지난달: 약 $%1$s</string>
     <string name="claude_usage_note">정가 기준 추정치입니다. 정확한 금액은 Anthropic 콘솔에서 확인하십시오.</string>
     <string name="claude_usage_reset">이번 달 집계 초기화</string>
+    <string name="ko_features">BitChord KO 기능</string>
+    <string name="ko_features_claude">Claude AI</string>
+    <string name="ko_features_claude_footer">내 Claude API 키로 동작하며, 사용한 만큼 그 계정에 요금이 청구됩니다. 키가 없으면 지금처럼 Google 번역으로 가사를 번역합니다.</string>
+    <string name="ko_features_playback">재생</string>
     <string name="claude_log">Claude 진단 기록</string>
     <string name="claude_log_empty">아직 기록된 Claude 요청이 없습니다</string>
     <string name="claude_log_subtitle">최근 %1$d건 · 실패 %2$d건</string>

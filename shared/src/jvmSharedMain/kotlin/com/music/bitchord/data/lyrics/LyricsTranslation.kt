@@ -501,7 +501,7 @@ object LyricsTranslation {
         val failure: ClaudeFailure?,
     )
 
-    private fun translationInstruction(target: String, count: Int): String {
+    private fun translationInstruction(target: String, count: Int, keyed: Boolean): String {
         val locale = Locale.forLanguageTag(target.replace('_', '-'))
         val languageName = locale.getDisplayName(Locale.ENGLISH).ifBlank { target }
         val korean = canonicalLanguage(target) == "ko"
@@ -510,7 +510,11 @@ object LyricsTranslation {
             appendLine("Translate every input line into $languageName ($target).")
             appendLine()
             appendLine("Rules:")
-            appendLine("1. Return exactly $count translations in \"translations\", one per input line, in the same order. Never merge, split, skip, reorder or add lines.")
+            if (keyed) {
+                appendLine("1. \"translations\" is an object with one key per input line: the line's index \"i\" (\"0\" to \"${count - 1}\") as the key and that one line's translation as the value. All $count keys are required. Never put more than one line in a value, and never merge, split, skip or add lines.")
+            } else {
+                appendLine("1. Return exactly $count translations in \"translations\", one array item per input line, in the same order. Never put several lines in one item, and never merge, split, skip, reorder or add lines.")
+            }
             appendLine("2. Read the whole song first. Keep one consistent narrator voice, speech level and tone across all lines.")
             if (korean) {
                 when (translationSpeech) {
@@ -553,15 +557,50 @@ object LyricsTranslation {
                     })
                 }
             }
-        }
-        return askClaude(
+        }.toString()
+        suspend fun ask(keyed: Boolean) = askClaude(
             purpose = ClaudeDiagnostics.PURPOSE_TRANSLATE,
-            system = translationInstruction(target, slots.size),
-            input = input.toString(),
-            schema = TRANSLATION_SCHEMA,
+            system = translationInstruction(target, slots.size, keyed),
+            input = input,
+            schema = if (keyed) keyedTranslationSchema(slots.size) else TRANSLATION_SCHEMA,
             effort = "medium",
             linesAsked = slots.size,
-        ) { text -> parseTranslation(text, slots.size) }
+        ) { text -> parseTranslation(text, slots.size, keyed) }
+        // One required key per line holds the answer to the line count: the
+        // structured output cannot end until every line has its own value,
+        // which an array — any length satisfies "an array of strings" — never
+        // did. A schema that large may still be refused for a very long song;
+        // the array, with the split-up repair in [parseTranslation], is then
+        // the next best thing.
+        if (slots.size > MAX_KEYED_LINES) return ask(keyed = false)
+        val keyed = ask(keyed = true)
+        return if (keyed.failure == ClaudeFailure.BAD_REQUEST) ask(keyed = false) else keyed
+    }
+
+    /** Past this many lines the per-line schema is not tried; see [requestClaudeTranslation]. */
+    private const val MAX_KEYED_LINES = 200
+
+    /** `{"source_language": "...", "translations": {"0": "...", …, "<count-1>": "..."}}`, every key required. */
+    private fun keyedTranslationSchema(count: Int): JsonObject = buildJsonObject {
+        put("type", "object")
+        putJsonObject("properties") {
+            putJsonObject("source_language") { put("type", "string") }
+            putJsonObject("translations") {
+                put("type", "object")
+                putJsonObject("properties") {
+                    for (index in 0 until count) putJsonObject(index.toString()) { put("type", "string") }
+                }
+                putJsonArray("required") {
+                    for (index in 0 until count) add(index.toString())
+                }
+                put("additionalProperties", false)
+            }
+        }
+        putJsonArray("required") {
+            add("source_language")
+            add("translations")
+        }
+        put("additionalProperties", false)
     }
 
     private val TRANSLATION_SCHEMA: JsonObject by lazy {
@@ -806,19 +845,71 @@ object LyricsTranslation {
             .takeIf { it.isNotEmpty() }
     }.getOrNull()
 
-    private fun parseTranslation(text: String, expected: Int): Parsed<BatchAnswer> {
+    private fun parseTranslation(text: String, expected: Int, keyed: Boolean): Parsed<BatchAnswer> {
         val answer = runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull()
-            ?: return Parsed(null, ClaudeFailure.BAD_ANSWER, detail = "not a JSON object: ${text.take(80)}")
-        val items = (answer["translations"] as? kotlinx.serialization.json.JsonArray)
-            ?: return Parsed(null, ClaudeFailure.BAD_ANSWER, detail = "no \"translations\" array")
-        val translations = items.map { (it as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull.orEmpty().trim() }
-        if (translations.size != expected) {
-            return Parsed(null, ClaudeFailure.LINE_MISMATCH, linesGot = translations.size)
+            ?: return Parsed(null, ClaudeFailure.BAD_ANSWER, detail = "not a JSON object (${text.length} chars)")
+        val source = answer["source_language"]?.jsonPrimitive?.contentOrNull.orEmpty().trim()
+        fun primitive(element: kotlinx.serialization.json.JsonElement?): String? =
+            (element as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull?.trim()
+
+        val field = answer["translations"]
+        val translations: List<String> = when {
+            keyed && field is JsonObject -> {
+                val values = (0 until expected).map { primitive(field[it.toString()]) }
+                val missing = values.indices.filter { values[it] == null }
+                if (missing.isNotEmpty()) {
+                    return Parsed(
+                        null, ClaudeFailure.LINE_MISMATCH, linesGot = expected - missing.size,
+                        detail = "keyed answer missing ${missing.size} keys (first: ${missing.take(5).joinToString()})",
+                    )
+                }
+                val lines = values.map { it.orEmpty() }
+                // Several lines crammed into one value, leaving others blank, is
+                // the array failure again in another shape: not usable as is.
+                val crammed = lines.count { it.contains('\n') }
+                val blank = lines.count { it.isBlank() }
+                if (crammed > 0 && blank > 0) {
+                    return Parsed(
+                        null, ClaudeFailure.LINE_MISMATCH, linesGot = expected - blank,
+                        detail = "keyed answer: $crammed values hold several lines, $blank are blank",
+                    )
+                }
+                lines
+            }
+            field is kotlinx.serialization.json.JsonArray -> {
+                val items = field.map { primitive(it).orEmpty() }
+                if (items.size == expected) {
+                    items
+                } else {
+                    // The failure seen in the log: every line in one item (or a
+                    // few), separated by line breaks. Split back apart, it is the
+                    // answer — taken only when the count then comes out exact.
+                    val split = items.flatMap { item -> item.split('\n').map(String::trim).filter(String::isNotEmpty) }
+                    val breaks = items.sumOf { item -> item.count { it == '\n' } }
+                    val shape = "items=${items.size}, line breaks inside=$breaks, split=${split.size}"
+                    if (split.size != expected) {
+                        return Parsed(null, ClaudeFailure.LINE_MISMATCH, linesGot = items.size, detail = shape)
+                    }
+                    return finishTranslation(split, source, text, detail = "repaired: $shape")
+                }
+            }
+            else -> return Parsed(
+                null, ClaudeFailure.BAD_ANSWER,
+                detail = "\"translations\" is ${if (field == null) "missing" else field::class.simpleName}",
+            )
         }
+        return finishTranslation(translations, source, text, detail = null)
+    }
+
+    private fun finishTranslation(
+        translations: List<String>,
+        source: String,
+        text: String,
+        detail: String?,
+    ): Parsed<BatchAnswer> {
         if (translations.all { it.isBlank() }) {
             return Parsed(null, ClaudeFailure.BAD_ANSWER, linesGot = translations.size, detail = "every line blank")
         }
-        val source = answer["source_language"]?.jsonPrimitive?.contentOrNull.orEmpty().trim()
         return Parsed(
             BatchAnswer(
                 translations = translations,
@@ -826,6 +917,7 @@ object LyricsTranslation {
                 sourceWeight = text.length,
             ),
             linesGot = translations.size,
+            detail = detail,
         )
     }
 

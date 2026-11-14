@@ -619,6 +619,129 @@ fun SettingsScreen(
             }
         }
 
+        // This build's own additions, in one tab rather than spread through
+        // upstream's: what needs the user's Claude key, and the small
+        // playback touches. Search still finds each row from anywhere.
+        if (shows(SettingsCategory.KO_FEATURES)) SearchableSettingsGroup(
+            search,
+            header = stringResource(R.string.ko_features_claude),
+            footer = stringResource(R.string.ko_features_claude_footer),
+        ) {
+            val claudeTranslationTitle = stringResource(R.string.claude_translation)
+            row(claudeTranslationTitle, "lyrics", "translate", "claude", "anthropic", "ai") {
+                SettingsRow(
+                    icon = SfIcons.AutoAwesome,
+                    title = claudeTranslationTitle,
+                    subtitle = stringResource(
+                        when {
+                            claudeApiKey.isBlank() -> R.string.claude_translation_subtitle_missing
+                            claudeKeyRejected -> R.string.claude_translation_subtitle_rejected
+                            else -> R.string.claude_translation_subtitle_ready
+                        },
+                    ) + if (claudeApiKey.length >= 8) " (••••${claudeApiKey.takeLast(4)})" else "",
+                    trailing = {
+                        IosSwitch(
+                            checked = claudeTranslation && claudeApiKey.isNotBlank(),
+                            onCheckedChange = { on ->
+                                if (on && claudeApiKey.isBlank()) onClaudeKey()
+                                else AppSettings.setClaudeTranslation(on)
+                            },
+                        )
+                    },
+                    onClick = onClaudeKey,
+                )
+            }
+            if (claudeApiKey.isNotBlank()) {
+                val claudeModelTitle = stringResource(R.string.claude_model)
+                row(claudeModelTitle, "claude", "model", "haiku", "sonnet", "ai") {
+                    SettingsRow(
+                        icon = SfIcons.AutoAwesome,
+                        title = claudeModelTitle,
+                        subtitle = stringResource(claudeModelLabelRes(claudeModel)),
+                        trailing = { Chevron() },
+                        onClick = onClaudeModel,
+                    )
+                }
+                val claudeSpeechTitle = stringResource(R.string.claude_speech)
+                row(claudeSpeechTitle, "claude", "translate", "style", "반말", "존댓말", "말투") {
+                    SettingsRow(
+                        icon = SfIcons.Translate,
+                        title = claudeSpeechTitle,
+                        subtitle = stringResource(claudeSpeechLabelRes(claudeSpeech)),
+                        trailing = { Chevron() },
+                        onClick = onClaudeSpeech,
+                    )
+                }
+                val claudeModeTitle = stringResource(R.string.claude_mode)
+                row(claudeModeTitle, "claude", "translate", "style", "literal", "직역", "의역") {
+                    SettingsRow(
+                        icon = SfIcons.Translate,
+                        title = claudeModeTitle,
+                        subtitle = stringResource(claudeModeLabelRes(claudeMode)),
+                        trailing = { Chevron() },
+                        onClick = onClaudeMode,
+                    )
+                }
+                val claudeUsageTitle = stringResource(R.string.claude_usage)
+                row(claudeUsageTitle, "claude", "usage", "tokens", "cost", "사용량", "비용") {
+                    SettingsRow(
+                        icon = SfIcons.AutoAwesome,
+                        title = claudeUsageTitle,
+                        subtitle = if (claudeUsage.isEmpty) {
+                            stringResource(R.string.claude_usage_none)
+                        } else {
+                            stringResource(
+                                R.string.claude_usage_subtitle,
+                                compactTokens(claudeUsage.inputTokens),
+                                compactTokens(claudeUsage.outputTokens),
+                                String.format(Locale.US, "%.2f", claudeUsage.estimatedUsd()),
+                            )
+                        },
+                        trailing = { Chevron() },
+                        onClick = onClaudeUsage,
+                    )
+                }
+                val claudeLogTitle = stringResource(R.string.claude_log)
+                row(claudeLogTitle, "claude", "log", "debug", "diagnostics", "error", "로그", "진단", "오류") {
+                    SettingsRow(
+                        icon = SfIcons.AutoAwesome,
+                        title = claudeLogTitle,
+                        subtitle = if (claudeLog.isEmpty()) {
+                            stringResource(R.string.claude_log_empty)
+                        } else {
+                            stringResource(
+                                R.string.claude_log_subtitle,
+                                claudeLog.size,
+                                claudeLog.count { it.failed },
+                            )
+                        },
+                        trailing = { Chevron() },
+                        onClick = onClaudeLog,
+                    )
+                }
+            }
+        }
+        if (shows(SettingsCategory.KO_FEATURES)) SearchableSettingsGroup(
+            search,
+            header = stringResource(R.string.ko_features_playback),
+        ) {
+            val resumeOnHeadphonesTitle = stringResource(R.string.resume_on_headphones)
+            row(resumeOnHeadphonesTitle, "headphones", "earbuds", "bluetooth", "resume", "이어폰") {
+                SettingsRow(
+                    icon = SfIcons.Bluetooth,
+                    title = resumeOnHeadphonesTitle,
+                    subtitle = stringResource(R.string.resume_on_headphones_subtitle),
+                    trailing = {
+                        IosSwitch(
+                            checked = resumeOnHeadphones,
+                            onCheckedChange = AppSettings::setResumeOnHeadphones,
+                        )
+                    },
+                    onClick = { AppSettings.setResumeOnHeadphones(!resumeOnHeadphones) },
+                )
+            }
+        }
+
         // Its own group rather than rows bolted onto the two above, because a
         // download is not a third kind of connection. The ceilings answer "what
         // does this minute cost"; these answer "what am I keeping, and when may
@@ -672,21 +795,6 @@ fun SettingsScreen(
             header = stringResource(R.string.playback),
             footer = stringResource(R.string.bit_perfect_bypassed_footer).takeIf { bitPerfectReady },
         ) {
-            val resumeOnHeadphonesTitle = stringResource(R.string.resume_on_headphones)
-            row(resumeOnHeadphonesTitle, "headphones", "earbuds", "bluetooth", "resume", "이어폰") {
-                SettingsRow(
-                    icon = SfIcons.Bluetooth,
-                    title = resumeOnHeadphonesTitle,
-                    subtitle = stringResource(R.string.resume_on_headphones_subtitle),
-                    trailing = {
-                        IosSwitch(
-                            checked = resumeOnHeadphones,
-                            onCheckedChange = AppSettings::setResumeOnHeadphones,
-                        )
-                    },
-                    onClick = { AppSettings.setResumeOnHeadphones(!resumeOnHeadphones) },
-                )
-            }
             val outputPrecisionTitle = stringResource(R.string.output_precision)
             row(outputPrecisionTitle, "pcm", "bit depth", "sample rate", "dac") {
                 SettingsRow(
@@ -1352,99 +1460,6 @@ fun SettingsScreen(
                         trailing = { Chevron() },
                         onClick = onTranslationLanguage,
                     )
-                }
-                val claudeTranslationTitle = stringResource(R.string.claude_translation)
-                row(claudeTranslationTitle, "lyrics", "translate", "claude", "anthropic", "ai") {
-                    SettingsRow(
-                        icon = SfIcons.AutoAwesome,
-                        title = claudeTranslationTitle,
-                        subtitle = stringResource(
-                            when {
-                                claudeApiKey.isBlank() -> R.string.claude_translation_subtitle_missing
-                                claudeKeyRejected -> R.string.claude_translation_subtitle_rejected
-                                else -> R.string.claude_translation_subtitle_ready
-                            },
-                        ) + if (claudeApiKey.length >= 8) " (••••${claudeApiKey.takeLast(4)})" else "",
-                        trailing = {
-                            IosSwitch(
-                                checked = claudeTranslation && claudeApiKey.isNotBlank(),
-                                onCheckedChange = { on ->
-                                    if (on && claudeApiKey.isBlank()) onClaudeKey()
-                                    else AppSettings.setClaudeTranslation(on)
-                                },
-                            )
-                        },
-                        onClick = onClaudeKey,
-                    )
-                }
-                if (claudeApiKey.isNotBlank()) {
-                    val claudeModelTitle = stringResource(R.string.claude_model)
-                    row(claudeModelTitle, "claude", "model", "haiku", "sonnet", "ai") {
-                        SettingsRow(
-                            icon = SfIcons.AutoAwesome,
-                            title = claudeModelTitle,
-                            subtitle = stringResource(claudeModelLabelRes(claudeModel)),
-                            trailing = { Chevron() },
-                            onClick = onClaudeModel,
-                        )
-                    }
-                    val claudeSpeechTitle = stringResource(R.string.claude_speech)
-                    row(claudeSpeechTitle, "claude", "translate", "style", "반말", "존댓말", "말투") {
-                        SettingsRow(
-                            icon = SfIcons.Translate,
-                            title = claudeSpeechTitle,
-                            subtitle = stringResource(claudeSpeechLabelRes(claudeSpeech)),
-                            trailing = { Chevron() },
-                            onClick = onClaudeSpeech,
-                        )
-                    }
-                    val claudeModeTitle = stringResource(R.string.claude_mode)
-                    row(claudeModeTitle, "claude", "translate", "style", "literal", "직역", "의역") {
-                        SettingsRow(
-                            icon = SfIcons.Translate,
-                            title = claudeModeTitle,
-                            subtitle = stringResource(claudeModeLabelRes(claudeMode)),
-                            trailing = { Chevron() },
-                            onClick = onClaudeMode,
-                        )
-                    }
-                    val claudeUsageTitle = stringResource(R.string.claude_usage)
-                    row(claudeUsageTitle, "claude", "usage", "tokens", "cost", "사용량", "비용") {
-                        SettingsRow(
-                            icon = SfIcons.AutoAwesome,
-                            title = claudeUsageTitle,
-                            subtitle = if (claudeUsage.isEmpty) {
-                                stringResource(R.string.claude_usage_none)
-                            } else {
-                                stringResource(
-                                    R.string.claude_usage_subtitle,
-                                    compactTokens(claudeUsage.inputTokens),
-                                    compactTokens(claudeUsage.outputTokens),
-                                    String.format(Locale.US, "%.2f", claudeUsage.estimatedUsd()),
-                                )
-                            },
-                            trailing = { Chevron() },
-                            onClick = onClaudeUsage,
-                        )
-                    }
-                    val claudeLogTitle = stringResource(R.string.claude_log)
-                    row(claudeLogTitle, "claude", "log", "debug", "diagnostics", "error", "로그", "진단", "오류") {
-                        SettingsRow(
-                            icon = SfIcons.AutoAwesome,
-                            title = claudeLogTitle,
-                            subtitle = if (claudeLog.isEmpty()) {
-                                stringResource(R.string.claude_log_empty)
-                            } else {
-                                stringResource(
-                                    R.string.claude_log_subtitle,
-                                    claudeLog.size,
-                                    claudeLog.count { it.failed },
-                                )
-                            },
-                            trailing = { Chevron() },
-                            onClick = onClaudeLog,
-                        )
-                    }
                 }
             }
         }
@@ -2944,6 +2959,8 @@ internal fun SegmentedControl(
  * they stay on the main page, where they always were.
  */
 enum class SettingsCategory(@param:StringRes val title: Int) {
+    /** This build's own features — Claude, headphone resume. First, so they are easy to find. */
+    KO_FEATURES(R.string.ko_features),
     DOWNLOADS(R.string.downloads),
     PLAYBACK(R.string.playback),
     CONTENT_PREFERENCES(R.string.content_preferences),
@@ -2958,6 +2975,7 @@ enum class SettingsCategory(@param:StringRes val title: Int) {
 
     val icon: ImageVector
         get() = when (this) {
+            KO_FEATURES -> SfIcons.AutoAwesome
             DOWNLOADS -> SfIcons.Download
             PLAYBACK -> SfIcons.PlayCircle
             CONTENT_PREFERENCES -> SfIcons.Video

@@ -37,6 +37,7 @@ import com.music.bitchord.data.lyrics.LyricLine
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.sharedui.resources.Res
 import com.music.bitchord.sharedui.resources.cancel
+import com.music.bitchord.sharedui.resources.lyrics_explain
 import com.music.bitchord.sharedui.resources.lyrics_share_pick_limit
 import com.music.bitchord.sharedui.resources.share
 import com.music.bitchord.ui.haptics.Haptic

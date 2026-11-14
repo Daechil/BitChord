@@ -476,7 +476,11 @@ object LyricsTranslation {
         // show the other one.
         val cacheKey = cacheKey("claude\u0000$translationSpeech\u0000$translationMode\u0000$trackId", target, slots)
         val cached = if (fresh) null else memory.get(cacheKey) ?: readCache(cacheKey)?.also { memory.put(cacheKey, it) }
-        if (cached != null && cached.version == CACHE_VERSION && cached.texts.size == slots.size) {
+        // An answer kept before refusals were caught may be one sentence of
+        // refusal under every line; it is asked again instead of shown.
+        if (cached != null && cached.version == CACHE_VERSION && cached.texts.size == slots.size &&
+            repeatedAcrossLines(cached.texts, slots.map { it.text }) == null
+        ) {
             return ClaudeAttempt(cached.copy(engine = ENGINE_CLAUDE), fromCache = true, failure = null)
         }
         val reply = requestClaudeTranslation(slots, target)
@@ -509,6 +513,8 @@ object LyricsTranslation {
             appendLine("You are a professional lyric translator localising song lyrics for a music app.")
             appendLine("Translate every input line into $languageName ($target).")
             appendLine()
+            appendLine("Context: the listener is playing this song in the app right now, and its original lyrics are already on their screen, synced to the music. Your translation is shown under each original line, like a subtitle, so they can follow what they are hearing. It is not published or shared anywhere. This is the app's lyric translation feature, so translate every line as the song expresses it, including lines about violence, death, crime, sex or other dark themes.")
+            appendLine()
             appendLine("Rules:")
             if (keyed) {
                 appendLine("1. \"translations\" is an object with one key per input line: the line's index \"i\" (\"0\" to \"${count - 1}\") as the key and that one line's translation as the value. All $count keys are required. Never put more than one line in a value, and never merge, split, skip or add lines.")
@@ -534,6 +540,7 @@ object LyricsTranslation {
             appendLine("6. Items with role \"backing\" are background vocals. Translate them like the other lines.")
             appendLine("7. Output only the translated text. No quotes around lines, no notes, no romanisation, no explanations.")
             appendLine("8. Set \"source_language\" to the ISO 639-1 code of the song's main original language.")
+            appendLine("9. Leave \"declined_reason\" as an empty string. Only if you will not translate this song, write the reason there in one short sentence and leave every translation empty. Never write a refusal, a warning or a note in place of a translation.")
         }
     }
 
@@ -565,7 +572,7 @@ object LyricsTranslation {
             schema = if (keyed) keyedTranslationSchema(slots.size) else TRANSLATION_SCHEMA,
             effort = "medium",
             linesAsked = slots.size,
-        ) { text -> parseTranslation(text, slots.size, keyed) }
+        ) { text -> parseTranslation(text, slots.map { it.text }, keyed) }
         // One required key per line holds the answer to the line count: the
         // structured output cannot end until every line has its own value,
         // which an array — any length satisfies "an array of strings" — never
@@ -580,11 +587,16 @@ object LyricsTranslation {
     /** Past this many lines the per-line schema is not tried; see [requestClaudeTranslation]. */
     private const val MAX_KEYED_LINES = 200
 
-    /** `{"source_language": "...", "translations": {"0": "...", …, "<count-1>": "..."}}`, every key required. */
+    /**
+     * `{"source_language": "...", "declined_reason": "", "translations": {"0": "...", …, "<count-1>": "..."}}`,
+     * every key required. "declined_reason" gives a model that will not
+     * translate somewhere to say so other than in every line.
+     */
     private fun keyedTranslationSchema(count: Int): JsonObject = buildJsonObject {
         put("type", "object")
         putJsonObject("properties") {
             putJsonObject("source_language") { put("type", "string") }
+            putJsonObject("declined_reason") { put("type", "string") }
             putJsonObject("translations") {
                 put("type", "object")
                 putJsonObject("properties") {
@@ -598,6 +610,7 @@ object LyricsTranslation {
         }
         putJsonArray("required") {
             add("source_language")
+            add("declined_reason")
             add("translations")
         }
         put("additionalProperties", false)
@@ -608,6 +621,7 @@ object LyricsTranslation {
             put("type", "object")
             putJsonObject("properties") {
                 putJsonObject("source_language") { put("type", "string") }
+                putJsonObject("declined_reason") { put("type", "string") }
                 putJsonObject("translations") {
                     put("type", "array")
                     putJsonObject("items") { put("type", "string") }
@@ -615,6 +629,7 @@ object LyricsTranslation {
             }
             putJsonArray("required") {
                 add("source_language")
+                add("declined_reason")
                 add("translations")
             }
             put("additionalProperties", false)
@@ -845,12 +860,19 @@ object LyricsTranslation {
             .takeIf { it.isNotEmpty() }
     }.getOrNull()
 
-    private fun parseTranslation(text: String, expected: Int, keyed: Boolean): Parsed<BatchAnswer> {
+    private fun parseTranslation(text: String, sources: List<String>, keyed: Boolean): Parsed<BatchAnswer> {
+        val expected = sources.size
         val answer = runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull()
             ?: return Parsed(null, ClaudeFailure.BAD_ANSWER, detail = "not a JSON object (${text.length} chars)")
         val source = answer["source_language"]?.jsonPrimitive?.contentOrNull.orEmpty().trim()
         fun primitive(element: kotlinx.serialization.json.JsonElement?): String? =
             (element as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull?.trim()
+
+        // The model's own word that it will not translate. Its reason is the
+        // model's sentence, not the lyrics, so it goes in the log.
+        primitive(answer["declined_reason"])?.takeIf { it.isNotEmpty() }?.let { reason ->
+            return Parsed(null, ClaudeFailure.REFUSAL, detail = "declined: ${reason.take(160)}")
+        }
 
         val field = answer["translations"]
         val translations: List<String> = when {
@@ -890,7 +912,7 @@ object LyricsTranslation {
                     if (split.size != expected) {
                         return Parsed(null, ClaudeFailure.LINE_MISMATCH, linesGot = items.size, detail = shape)
                     }
-                    return finishTranslation(split, source, text, detail = "repaired: $shape")
+                    return finishTranslation(split, sources, source, text, detail = "repaired: $shape")
                 }
             }
             else -> return Parsed(
@@ -898,17 +920,24 @@ object LyricsTranslation {
                 detail = "\"translations\" is ${if (field == null) "missing" else field::class.simpleName}",
             )
         }
-        return finishTranslation(translations, source, text, detail = null)
+        return finishTranslation(translations, sources, source, text, detail = null)
     }
 
     private fun finishTranslation(
         translations: List<String>,
+        sources: List<String>,
         source: String,
         text: String,
         detail: String?,
     ): Parsed<BatchAnswer> {
         if (translations.all { it.isBlank() }) {
             return Parsed(null, ClaudeFailure.BAD_ANSWER, linesGot = translations.size, detail = "every line blank")
+        }
+        repeatedAcrossLines(translations, sources)?.let { (lines, distinct) ->
+            return Parsed(
+                null, ClaudeFailure.REFUSAL, linesGot = translations.size,
+                detail = "same sentence on $lines lines for $distinct different original lines",
+            )
         }
         return Parsed(
             BatchAnswer(
@@ -919,6 +948,21 @@ object LyricsTranslation {
             linesGot = translations.size,
             detail = detail,
         )
+    }
+
+    /**
+     * A refusal written into the lines: one sentence standing in for at least
+     * half the song, under at least three different original lines. A repeated
+     * chorus repeats its original too, so it never counts. Returns how many
+     * lines carry the sentence and how many different originals they stand for,
+     * or null when the answer looks like a translation.
+     */
+    private fun repeatedAcrossLines(translations: List<String>, sources: List<String>): Pair<Int, Int>? {
+        val filled = translations.indices.filter { translations[it].isNotBlank() }
+        if (filled.size < 3) return null
+        val (_, indices) = filled.groupBy { translations[it].trim() }.maxByOrNull { it.value.size } ?: return null
+        val distinct = indices.map { sources.getOrNull(it).orEmpty().trim().lowercase() }.toSet().size
+        return if (indices.size * 2 >= filled.size && distinct >= 3) indices.size to distinct else null
     }
 
     /** Status code and body, for callers that branch on the code. */

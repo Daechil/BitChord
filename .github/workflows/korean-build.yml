@@ -47,32 +47,45 @@ jobs:
             echo "::warning::No signing key configured; signing with a throwaway debug key (reinstall needed on update)."
           fi
 
+      - name: Version
+        id: version
+        run: |
+          # Upstream's version, read from the one place it is set, then this
+          # run's number: 1.9.1-ko.7. See koBuild in app/build.gradle.kts.
+          BASE=$(sed -n 's/^extra\["bitchordVersionName"\] = "\(.*\)"$/\1/p' build.gradle.kts)
+          if [ -z "$BASE" ]; then echo "::error::bitchordVersionName not found in build.gradle.kts"; exit 1; fi
+          VERSION="$BASE-ko.${{ github.run_number }}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "apk=BitChord-KO-$VERSION-arm64.apk" >> "$GITHUB_OUTPUT"
+          echo "Building $VERSION"
+
       - name: Build
         run: |
           chmod +x gradlew
-          ./gradlew assembleProdRelease -Pbitchord.arm64Only=true --stacktrace
+          ./gradlew :app:assembleProdRelease -Pbitchord.arm64Only=true \
+            -Pbitchord.koBuild=${{ github.run_number }} \
+            -Pbitchord.updateRepo=${{ github.repository }} \
+            --stacktrace
 
       - name: Collect APK
-        id: apk
         run: |
           APK=$(ls app/build/outputs/apk/prod/release/*.apk | head -1)
           mkdir -p out
-          cp "$APK" out/BitChord-ko-arm64.apk
+          cp "$APK" "out/${{ steps.version.outputs.apk }}"
           ls -la out
-          echo "tag=ko-${{ github.run_number }}" >> "$GITHUB_OUTPUT"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: BitChord-ko-arm64
-          path: out/BitChord-ko-arm64.apk
+          name: BitChord-KO-${{ steps.version.outputs.version }}
+          path: out/${{ steps.version.outputs.apk }}
 
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ steps.apk.outputs.tag }}" out/BitChord-ko-arm64.apk \
+          gh release create "v${{ steps.version.outputs.version }}" "out/${{ steps.version.outputs.apk }}" \
             --repo "${{ github.repository }}" \
             --target "${{ github.sha }}" \
-            --title "BitChord KO (빌드 ${{ github.run_number }})" \
-            --notes "휴대폰에서 BitChord-ko-arm64.apk 를 눌러 받은 뒤 설치하십시오."
+            --title "BitChord KO ${{ steps.version.outputs.version }}" \
+            --notes "버전 ${{ steps.version.outputs.version }} (빌드 ${{ github.run_number }}, 커밋 ${GITHUB_SHA::7}). 휴대폰에서 ${{ steps.version.outputs.apk }} 를 눌러 받은 뒤 설치하십시오."

@@ -42,8 +42,10 @@ object AppUpdateChecker {
 
     private const val CACHE_SUBDIR = "updates"
 
-    private const val LATEST_RELEASE_URL =
-        "https://api.github.com/repos/kushagrasinghx/BitChord/releases/latest"
+    // Upstream's releases, or — for this fork's numbered builds — the fork's
+    // own, whose APKs install over this package. See app/build.gradle.kts.
+    private val LATEST_RELEASE_URL =
+        "https://api.github.com/repos/${BuildConfig.UPDATE_REPO}/releases/latest"
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -226,13 +228,21 @@ object AppUpdateChecker {
         )
     }
 
-    /** A version split into its numeric dotted parts and whether it carries a "-suffix" (e.g. "-beta2"). */
-    private data class ParsedVersion(val parts: List<Int>, val isPreRelease: Boolean)
+    /**
+     * A version split into its numeric dotted parts, this fork's build number
+     * ("-ko.7" — a release of its own, not a pre-release), and whether it
+     * carries any other "-suffix" (e.g. "-beta2").
+     */
+    private data class ParsedVersion(val parts: List<Int>, val isPreRelease: Boolean, val koBuild: Int? = null)
+
+    private val KO_BUILD = Regex("""-ko\.(\d+)""")
 
     private fun parseVersion(raw: String): ParsedVersion {
-        val dash = raw.indexOf('-')
-        val base = if (dash >= 0) raw.substring(0, dash) else raw
-        return ParsedVersion(base.split(".").map { it.toIntOrNull() ?: 0 }, dash >= 0)
+        val koBuild = KO_BUILD.find(raw)?.groupValues?.get(1)?.toIntOrNull()
+        val rest = KO_BUILD.replace(raw, "")
+        val dash = rest.indexOf('-')
+        val base = if (dash >= 0) rest.substring(0, dash) else rest
+        return ParsedVersion(base.split(".").map { it.toIntOrNull() ?: 0 }, dash >= 0, koBuild)
     }
 
     /**
@@ -251,6 +261,10 @@ object AppUpdateChecker {
             val b = c.parts.getOrElse(i) { 0 }
             if (a != b) return a > b
         }
+        // Same upstream version: the later fork build wins.
+        val lb = l.koBuild ?: 0
+        val cb = c.koBuild ?: 0
+        if (lb != cb) return lb > cb
         return c.isPreRelease && !l.isPreRelease
     }
 }

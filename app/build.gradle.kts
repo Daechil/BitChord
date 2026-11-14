@@ -76,6 +76,25 @@ val betaSuffix = rootProject.extra["bitchordBetaSuffix"] as String
  */
 val arm64Only = providers.gradleProperty("bitchord.arm64Only").orNull == "true"
 
+/*
+ * This fork's build number — the CI run number, `-Pbitchord.koBuild=N` — so
+ * every APK says which build it is, in its version and its file name:
+ *
+ *     versionName  1.9.1-ko.7       (upstream's version, then "-ko.<build>")
+ *     versionCode  39007            (upstream's code × 1000 + build)
+ *     file         BitChord-KO-1.9.1-ko.7-arm64.apk
+ *
+ * The code keeps rising across builds of one upstream version and jumps past
+ * all of them when upstream bumps its own, so each APK installs over the last.
+ * Without the property (a local build) the version is upstream's, untouched.
+ *
+ * `-Pbitchord.updateRepo=owner/name` points the in-app update check at that
+ * repository's releases, where the fork's own APKs are; see AppUpdateChecker.
+ */
+val koBuild = providers.gradleProperty("bitchord.koBuild").orNull?.toIntOrNull()
+val updateRepo = providers.gradleProperty("bitchord.updateRepo").orNull?.takeIf { it.isNotBlank() }
+    ?: "kushagrasinghx/BitChord"
+
 android {
     namespace = "com.music.bitchord"
     // InnerTubeX's AAR requires compiling against 37; targetSdk (runtime behaviour) stays 36.
@@ -89,8 +108,10 @@ android {
         // Haze falls back to a translucent scrim below that.
         minSdk = 26
         targetSdk = 36
-        versionCode = rootProject.extra["bitchordVersionCode"] as Int
-        versionName = rootProject.extra["bitchordVersionName"] as String
+        val baseVersionCode = rootProject.extra["bitchordVersionCode"] as Int
+        val baseVersionName = rootProject.extra["bitchordVersionName"] as String
+        versionCode = if (koBuild != null) baseVersionCode * 1000 + koBuild else baseVersionCode
+        versionName = if (koBuild != null) "$baseVersionName-ko.$koBuild" else baseVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -114,7 +135,10 @@ android {
         // Which release assets are this app's: the phone and TV APKs ship in
         // the same GitHub release, told apart by file name. See
         // AppUpdateChecker.apkAssetUrl.
-        buildConfigField("String", "UPDATE_APK_PREFIX", "\"BitChord-\"")
+        buildConfigField("String", "UPDATE_APK_PREFIX", if (koBuild != null) "\"BitChord-KO-\"" else "\"BitChord-\"")
+        // Whose releases the update check reads: upstream's, or this fork's
+        // own once its builds carry their ko number (see [koBuild]).
+        buildConfigField("String", "UPDATE_REPO", "\"$updateRepo\"")
     }
 
     splits {

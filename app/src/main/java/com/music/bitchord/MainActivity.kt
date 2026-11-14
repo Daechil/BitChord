@@ -289,7 +289,7 @@ import com.music.bitchord.ui.components.topBarContentPadding
 import com.music.bitchord.ui.components.topBarHeight
 import com.music.bitchord.ui.components.AppLanguageDialog
 import com.music.bitchord.ui.components.TranslationLanguageDialog
-import com.music.bitchord.ui.components.ApiKeyAlert
+import com.music.bitchord.ui.components.ClaudeAlerts
 import com.music.bitchord.ui.components.LyricsSourcesDialog
 import com.music.bitchord.ui.components.ServerEditorHost
 import com.music.bitchord.ui.components.UpdateAvailableDialog
@@ -5571,146 +5571,19 @@ private fun BitChordApp(
             )
         }
 
-        if (showClaudeKey) {
-            BackHandler { showClaudeKey = false }
-            val savedKey by AppSettings.claudeApiKey.collectAsStateWithLifecycle()
-            var keyInput by remember { mutableStateOf(savedKey) }
-            ApiKeyAlert(
-                hazeState = hazeState,
-                titleRes = R.string.claude_api_key,
-                descriptionRes = R.string.claude_api_key_description,
-                value = keyInput,
-                onValueChange = { keyInput = it },
-                hasSavedKey = savedKey.isNotBlank(),
-                onSave = {
-                    val key = keyInput.trim()
-                    if (key.isNotEmpty()) {
-                        AppSettings.setClaudeApiKey(key)
-                        AppSettings.setClaudeTranslation(true)
-                        showClaudeKey = false
-                    }
-                },
-                onRemove = {
-                    AppSettings.setClaudeApiKey("")
-                    AppSettings.setClaudeTranslation(false)
-                    showClaudeKey = false
-                },
-                onDismiss = { showClaudeKey = false },
-            )
-        }
-
-        if (showClaudeModel) {
-            BackHandler { showClaudeModel = false }
-            val selected by AppSettings.claudeModel.collectAsStateWithLifecycle()
-            val options = listOf(
-                com.music.bitchord.data.lyrics.LyricsTranslation.CLAUDE_HAIKU,
-                com.music.bitchord.data.lyrics.LyricsTranslation.CLAUDE_SONNET,
-            )
-            // Resolved here: the alert's label lambdas are not composable.
-            val labels = options.associateWith { stringResource(com.music.bitchord.ui.screens.claudeModelLabelRes(it)) }
-            val details = options.associateWith { stringResource(com.music.bitchord.ui.screens.claudeModelDetailRes(it)) }
-            ChoiceAlert(
-                hazeState = hazeState,
-                title = stringResource(R.string.claude_model),
-                message = stringResource(R.string.claude_model_description),
-                options = options,
-                selected = selected,
-                label = { labels[it].orEmpty() },
-                detail = { details[it] },
-                onSelect = {
-                    AppSettings.setClaudeModel(it)
-                    showClaudeModel = false
-                },
-                onDismiss = { showClaudeModel = false },
-            )
-        }
-
-        if (showClaudeSpeech) {
-            BackHandler { showClaudeSpeech = false }
-            val selected by AppSettings.claudeSpeech.collectAsStateWithLifecycle()
-            val options = listOf(
-                com.music.bitchord.data.lyrics.LyricsTranslation.SPEECH_AUTO,
-                com.music.bitchord.data.lyrics.LyricsTranslation.SPEECH_CASUAL,
-                com.music.bitchord.data.lyrics.LyricsTranslation.SPEECH_POLITE,
-            )
-            val labels = options.associateWith { stringResource(com.music.bitchord.ui.screens.claudeSpeechLabelRes(it)) }
-            ChoiceAlert(
-                hazeState = hazeState,
-                title = stringResource(R.string.claude_speech),
-                message = stringResource(R.string.claude_speech_description),
-                options = options,
-                selected = selected,
-                label = { labels[it].orEmpty() },
-                onSelect = {
-                    AppSettings.setClaudeSpeech(it)
-                    showClaudeSpeech = false
-                },
-                onDismiss = { showClaudeSpeech = false },
-            )
-        }
-
-        if (showClaudeMode) {
-            BackHandler { showClaudeMode = false }
-            val selected by AppSettings.claudeMode.collectAsStateWithLifecycle()
-            val options = listOf(
-                com.music.bitchord.data.lyrics.LyricsTranslation.MODE_NATURAL,
-                com.music.bitchord.data.lyrics.LyricsTranslation.MODE_LITERAL,
-            )
-            val labels = options.associateWith { stringResource(com.music.bitchord.ui.screens.claudeModeLabelRes(it)) }
-            ChoiceAlert(
-                hazeState = hazeState,
-                title = stringResource(R.string.claude_mode),
-                message = stringResource(R.string.claude_mode_description),
-                options = options,
-                selected = selected,
-                label = { labels[it].orEmpty() },
-                onSelect = {
-                    AppSettings.setClaudeMode(it)
-                    showClaudeMode = false
-                },
-                onDismiss = { showClaudeMode = false },
-            )
-        }
-
-        if (showClaudeUsage) {
-            BackHandler { showClaudeUsage = false }
-            val usage by AppSettings.claudeUsage.collectAsStateWithLifecycle()
-            val totalLine = stringResource(
-                R.string.claude_usage_subtitle,
-                com.music.bitchord.ui.screens.compactTokens(usage.inputTokens),
-                com.music.bitchord.ui.screens.compactTokens(usage.outputTokens),
-                String.format(java.util.Locale.US, "%.2f", usage.estimatedUsd()),
-            )
-            val haikuLabel = stringResource(R.string.claude_model_haiku)
-            val sonnetLabel = stringResource(R.string.claude_model_sonnet)
-            val previousLine = usage.previousMonthUsd?.let {
-                stringResource(R.string.claude_usage_previous, String.format(java.util.Locale.US, "%.2f", it))
-            }
-            val noteLine = stringResource(R.string.claude_usage_note)
-            val lines = buildList {
-                add(totalLine)
-                usage.inputByModel.keys.union(usage.outputByModel.keys).sorted().forEach { model ->
-                    val label = if (model == com.music.bitchord.data.lyrics.LyricsTranslation.CLAUDE_SONNET) sonnetLabel else haikuLabel
-                    add(
-                        "$label: ${com.music.bitchord.ui.screens.compactTokens(usage.inputByModel[model] ?: 0L)} / " +
-                            com.music.bitchord.ui.screens.compactTokens(usage.outputByModel[model] ?: 0L),
-                    )
-                }
-                previousLine?.let { add(it) }
-                add(noteLine)
-            }
-            ConfirmationAlert(
-                hazeState = hazeState,
-                title = stringResource(R.string.claude_usage),
-                description = lines.joinToString("\n"),
-                confirmLabel = stringResource(R.string.claude_usage_reset),
-                onConfirm = {
-                    AppSettings.resetClaudeUsage()
-                    showClaudeUsage = false
-                },
-                onDismiss = { showClaudeUsage = false },
-            )
-        }
+        ClaudeAlerts(
+            hazeState = hazeState,
+            showKey = showClaudeKey,
+            onDismissKey = { showClaudeKey = false },
+            showModel = showClaudeModel,
+            onDismissModel = { showClaudeModel = false },
+            showSpeech = showClaudeSpeech,
+            onDismissSpeech = { showClaudeSpeech = false },
+            showMode = showClaudeMode,
+            onDismissMode = { showClaudeMode = false },
+            showUsage = showClaudeUsage,
+            onDismissUsage = { showClaudeUsage = false },
+        )
 
         if (showListenBrainzLogin) {
             var tokenInput by remember { mutableStateOf(listenBrainzToken) }

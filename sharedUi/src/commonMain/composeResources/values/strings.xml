@@ -95,6 +95,7 @@
     <string name="lyrics_share_pick_limit">Card is full</string>
     <string name="lyrics_translated_to">Translated to %1$s</string>
     <string name="lyrics_translated_claude">Translated to %1$s · Claude</string>
+    <string name="lyrics_translated_claude_sonnet">Translated to %1$s · Claude Sonnet (Haiku declined)</string>
     <string name="lyrics_translated_google_fallback">Translated to %1$s · Google Translate (Claude: %2$s)</string>
     <string name="claude_fail_cooldown">resting after a rate limit</string>
     <string name="claude_fail_key_rejected">key refused</string>

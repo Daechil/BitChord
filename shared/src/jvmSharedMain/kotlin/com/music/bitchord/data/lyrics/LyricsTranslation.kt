@@ -66,6 +66,8 @@ object LyricsTranslation {
             val claudeFellBack: Boolean = false,
             /** Why Claude gave nothing usable, when [claudeFellBack]. */
             val claudeFailure: ClaudeFailure? = null,
+            /** Haiku declined the song and Sonnet translated it instead. */
+            val sonnetStandIn: Boolean = false,
         ) : Result
 
         data class SameLanguage(val language: String) : Result
@@ -145,6 +147,8 @@ object LyricsTranslation {
         val texts: List<String>,
         /** [ENGINE_CLAUDE] or [ENGINE_GOOGLE]; entries from before this existed are Google's. */
         val engine: String = ENGINE_GOOGLE,
+        /** Sonnet's answer, asked because Haiku declined the song. */
+        val sonnetStandIn: Boolean = false,
     )
 
     private data class TextSlot(
@@ -219,6 +223,7 @@ object LyricsTranslation {
                         sourceLanguage = entry.sourceLanguage,
                         fromCache = fromCache,
                         engine = Engine.CLAUDE,
+                        sonnetStandIn = entry.sonnetStandIn,
                     )
                 }
             }
@@ -483,7 +488,13 @@ object LyricsTranslation {
         ) {
             return ClaudeAttempt(cached.copy(engine = ENGINE_CLAUDE), fromCache = true, failure = null)
         }
-        val reply = requestClaudeTranslation(slots, target)
+        val model = claudeModel
+        var reply = requestClaudeTranslation(slots, target, model)
+        // Haiku turns some songs down as copyrighted text that Sonnet
+        // translates; one more request, to Sonnet, before Google stands in.
+        // Only for a refusal: any other failure would fail Sonnet the same way.
+        val standIn = reply.failure == ClaudeFailure.REFUSAL && model == CLAUDE_HAIKU
+        if (standIn) reply = requestClaudeTranslation(slots, target, CLAUDE_SONNET)
         val fresh = reply.value ?: return ClaudeAttempt(null, fromCache = false, failure = reply.failure ?: ClaudeFailure.ERROR)
         val entry = CachedTranslation(
             sourceLanguage = fresh.sourceLanguage,
@@ -492,6 +503,7 @@ object LyricsTranslation {
             // original rather than showing a blank translation under it.
             texts = fresh.translations.mapIndexed { index, text -> text.ifBlank { slots[index].text } },
             engine = ENGINE_CLAUDE,
+            sonnetStandIn = standIn,
         )
         memory.put(cacheKey, entry)
         writeCache(cacheKey, entry)
@@ -544,7 +556,11 @@ object LyricsTranslation {
         }
     }
 
-    private suspend fun requestClaudeTranslation(slots: List<TextSlot>, target: String): ClaudeResult<BatchAnswer> {
+    private suspend fun requestClaudeTranslation(
+        slots: List<TextSlot>,
+        target: String,
+        model: String,
+    ): ClaudeResult<BatchAnswer> {
         val input = buildJsonObject {
             put("target_language", target)
             put("line_count", slots.size)
@@ -567,6 +583,7 @@ object LyricsTranslation {
         }.toString()
         suspend fun ask(keyed: Boolean) = askClaude(
             purpose = ClaudeDiagnostics.PURPOSE_TRANSLATE,
+            model = model,
             system = translationInstruction(target, slots.size, keyed),
             input = input,
             schema = if (keyed) keyedTranslationSchema(slots.size) else TRANSLATION_SCHEMA,
@@ -656,6 +673,8 @@ object LyricsTranslation {
     internal suspend fun <T : Any> askClaude(
         purpose: String,
         system: String,
+        /** The settings' model unless a caller needs a particular one. */
+        model: String = claudeModel,
         input: String,
         schema: JsonObject,
         effort: String,
@@ -665,7 +684,6 @@ object LyricsTranslation {
         parse: (String) -> Parsed<T>,
     ): ClaudeResult<T> {
         val key = cleanClaudeKey()
-        val model = claudeModel
         val started = System.nanoTime()
         suspend fun done(
             failure: ClaudeFailure?,

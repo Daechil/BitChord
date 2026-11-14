@@ -197,6 +197,7 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
                 byClaude = result.engine == LyricsTranslation.Engine.CLAUDE,
                 claudeFellBack = result.claudeFellBack,
                 claudeFailure = result.claudeFailure,
+                sonnetStandIn = result.sonnetStandIn,
             )
             is LyricsTranslation.Result.SameLanguage -> LyricsTranslationResult.SameLanguage(result.language)
             LyricsTranslation.Result.Unavailable -> LyricsTranslationResult.Unavailable

@@ -507,6 +507,8 @@ internal sealed interface LyricsTranslationUiState {
         val claudeFellBack: Boolean = false,
         /** Why Claude failed, for the status line. */
         val claudeFailure: com.music.bitchord.data.lyrics.ClaudeFailure? = null,
+        /** Sonnet's translation, asked because Haiku declined. */
+        val sonnetStandIn: Boolean = false,
     ) : LyricsTranslationUiState
     data object SameLanguage : LyricsTranslationUiState
 }
@@ -3188,7 +3190,7 @@ internal fun rememberLyricsTranslation(
                 )
             ) {
                 is LyricsTranslationResult.Translated -> {
-                    translationState = LyricsTranslationUiState.Ready(result.lines, result.byClaude, result.claudeFellBack, result.claudeFailure)
+                    translationState = LyricsTranslationUiState.Ready(result.lines, result.byClaude, result.claudeFellBack, result.claudeFailure, result.sonnetStandIn)
                     lyricsDisplayMode = LyricsDisplayMode.Translated
                     translationTransition++
                     haptics.play(Haptic.ToggleOn)
@@ -3296,6 +3298,8 @@ internal fun rememberLyricsTranslation(
             stringResource(Res.string.romanizing_lyrics)
         // Named only when Claude wrote it: Google Translate is the default the
         // line has always meant, and naming it too would be noise.
+        showingTranslation && (translationState as? LyricsTranslationUiState.Ready)?.sonnetStandIn == true ->
+            stringResource(Res.string.lyrics_translated_claude_sonnet, translationLanguageName)
         showingTranslation && (translationState as? LyricsTranslationUiState.Ready)?.byClaude == true ->
             stringResource(Res.string.lyrics_translated_claude, translationLanguageName)
         // Claude was on and did not answer: say so, so a flat translation is

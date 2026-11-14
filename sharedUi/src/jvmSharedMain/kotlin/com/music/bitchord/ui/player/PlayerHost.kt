@@ -381,6 +381,8 @@ sealed interface LyricsTranslationResult {
         val claudeFellBack: Boolean = false,
         /** Why Claude failed, named on the status line. */
         val claudeFailure: com.music.bitchord.data.lyrics.ClaudeFailure? = null,
+        /** Haiku declined and Sonnet translated it; the status line names Sonnet. */
+        val sonnetStandIn: Boolean = false,
     ) : LyricsTranslationResult
     data class SameLanguage(val language: String) : LyricsTranslationResult
     data object Unavailable : LyricsTranslationResult

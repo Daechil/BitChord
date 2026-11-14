@@ -389,7 +389,11 @@ sealed interface LyricsTranslationResult {
 }
 
 sealed interface LyricsRomanizationResult {
-    data class Romanized(val lines: List<LyricLine>) : LyricsRomanizationResult
+    data class Romanized(
+        val lines: List<LyricLine>,
+        /** Claude's reading in the reader's own script, not Google's romanisation. */
+        val byClaude: Boolean = false,
+    ) : LyricsRomanizationResult
     data object AlreadyRomanized : LyricsRomanizationResult
     data object Unavailable : LyricsRomanizationResult
 }

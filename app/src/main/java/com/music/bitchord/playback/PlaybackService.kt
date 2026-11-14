@@ -1340,6 +1340,7 @@ class PlaybackService : MediaLibraryService() {
         QualityUpgrade.forgetLastSession()
         headphoneResume.attach()
         com.music.bitchord.lockscreen.LockScreenLyrics.attach(this) { player?.currentMediaItem != null }
+        com.music.bitchord.lockscreen.FloatingLyrics.attach(this)
 
         setMediaNotificationProvider(
             DefaultMediaNotificationProvider.Builder(this)
@@ -7867,6 +7868,7 @@ class PlaybackService : MediaLibraryService() {
         bluetoothTracker.stop()
         headphoneResume.detach()
         com.music.bitchord.lockscreen.LockScreenLyrics.detach(this)
+        com.music.bitchord.lockscreen.FloatingLyrics.detach(this)
         audioManager?.unregisterAudioDeviceCallback(outputDeviceCallback)
         partySync?.stop()
         partySync = null
@@ -8022,6 +8024,12 @@ class PlaybackService : MediaLibraryService() {
 
     private fun updateLyricSubtitle() {
         val exoPlayer = player ?: return
+        // Ahead of the track check, so a cleared queue takes the bar away too.
+        com.music.bitchord.lockscreen.FloatingLyrics.tick(
+            this,
+            exoPlayer.isPlaying && exoPlayer.currentMediaItem != null,
+            crossfade?.loopPositionMs() ?: exoPlayer.currentPosition,
+        )
         val currentSong = exoPlayer.currentMediaItem?.toSong() ?: return
         val lines = serviceLyrics
         val pos = crossfade?.loopPositionMs() ?: exoPlayer.currentPosition

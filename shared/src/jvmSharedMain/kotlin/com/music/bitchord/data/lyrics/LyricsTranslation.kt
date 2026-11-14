@@ -421,13 +421,28 @@ object LyricsTranslation {
     @Volatile
     var claudeModel: String = CLAUDE_HAIKU
 
-    /** Korean speech level the translation is written in: [SPEECH_AUTO], [SPEECH_CASUAL] or [SPEECH_POLITE]. */
+    /** The register the translation is written in, in any language that has one: [SPEECH_AUTO], [SPEECH_CASUAL] or [SPEECH_POLITE]. */
     @Volatile
     var translationSpeech: String = SPEECH_AUTO
 
     /** How close to the words: [MODE_NATURAL] (idiomatic) or [MODE_LITERAL] (close to the original). */
     @Volatile
     var translationMode: String = MODE_NATURAL
+
+    /**
+     * True once this month's Claude spending has reached the limit the user
+     * set; nothing more is sent until the month turns or the limit is raised.
+     */
+    @Volatile
+    var claudeOverBudget: () -> Boolean = { false }
+
+    /** Ask Sonnet once when Haiku declines a song, rather than going straight to Google. */
+    @Volatile
+    var sonnetStandInEnabled: Boolean = true
+
+    /** Write how lyrics are pronounced, in the reader's own script, with Claude — see [claudeReading]. */
+    @Volatile
+    var claudeReadingEnabled: Boolean = true
 
     /** Told what every Claude answer cost in tokens, so the app can keep a tally. */
     @Volatile
@@ -516,7 +531,7 @@ object LyricsTranslation {
         // Haiku turns some songs down as copyrighted text that Sonnet
         // translates; one more request, to Sonnet, before Google stands in.
         // Only for a refusal: any other failure would fail Sonnet the same way.
-        val standIn = reply.failure == ClaudeFailure.REFUSAL && model == CLAUDE_HAIKU
+        val standIn = reply.failure == ClaudeFailure.REFUSAL && model == CLAUDE_HAIKU && sonnetStandInEnabled
         if (standIn) reply = requestClaudeTranslation(slots, target, CLAUDE_SONNET)
         val fresh = reply.value ?: return ClaudeAttempt(null, fromCache = false, failure = reply.failure ?: ClaudeFailure.ERROR)
         val entry = CachedTranslation(
@@ -557,13 +572,15 @@ object LyricsTranslation {
                 appendLine("1. Return exactly $count translations in \"translations\", one array item per input line, in the same order. Never put several lines in one item, and never merge, split, skip, reorder or add lines.")
             }
             appendLine("2. Read the whole song first. Keep one consistent narrator voice, speech level and tone across all lines.")
+            val (casualHint, politeHint) = registerHints(target)
+            when (translationSpeech) {
+                SPEECH_CASUAL -> appendLine("   Write every line in the casual, intimate register of $languageName, as between close friends$casualHint. Never switch to a formal register.")
+                SPEECH_POLITE -> appendLine("   Write every line in the polite register of $languageName$politeHint. Never switch to a casual register.")
+                else -> appendLine("   If $languageName has casual and polite registers$casualHint$politeHint, pick the one that suits the song and use it for every line. Never mix them. Most songs read naturally in the casual one.")
+            }
+            appendLine("   Write natural, idiomatic modern $languageName as on an official $languageName lyric sheet, not translationese.")
             if (korean) {
-                when (translationSpeech) {
-                    SPEECH_CASUAL -> appendLine("   For Korean, write every line in casual speech (반말). Never switch to 존댓말.")
-                    SPEECH_POLITE -> appendLine("   For Korean, write every line in polite speech (존댓말, 해요체). Never switch to 반말.")
-                    else -> appendLine("   For Korean, pick either casual speech (반말) or polite speech (존댓말) to suit the song and use it for every line. Never mix them. Most songs read naturally in 반말.")
-                }
-                appendLine("   Write natural modern Korean as on an official Korean lyric sheet, not translationese. Avoid stiff words such as '당신' unless the song truly calls for it.")
+                appendLine("   For Korean, avoid stiff words such as '당신' unless the song truly calls for it.")
             }
             if (translationMode == MODE_LITERAL) {
                 appendLine("3. Stay close to the original words and sentence structure: a faithful, literal translation that a learner can line up with the source. Render idioms by their plain meaning rather than replacing them with a target-language idiom. Keep each line roughly as short as the original.")
@@ -579,10 +596,73 @@ object LyricsTranslation {
         }
     }
 
+    private fun readingInstruction(target: String, count: Int, keyed: Boolean): String {
+        val locale = Locale.forLanguageTag(target.replace('_', '-'))
+        val languageName = locale.getDisplayName(Locale.ENGLISH).ifBlank { target }
+        val script = when (canonicalLanguage(target)) {
+            "ko" -> "in Hangul, the way Korean fans write foreign lyrics to sing along, for example 歌え -> 우타에, 君の名は -> 키미노 나와, I love you -> 아이 러브 유"
+            "ja" -> "in katakana, the way Japanese fans write foreign lyrics to sing along, for example 사랑해 -> サランヘ"
+            "ru" -> "in Cyrillic, using the usual Russian transcription of the source language (Polivanov for Japanese, Kontsevich for Korean)"
+            "he" -> "in the Hebrew alphabet"
+            "hi" -> "in Devanagari"
+            "th" -> "in Thai script"
+            else -> "in the Latin alphabet, using the source language's standard romanisation: Hepburn for Japanese, Revised Romanization for Korean, pinyin with tone marks for Mandarin, and the usual system for any other script"
+        }
+        return buildString {
+            appendLine("You write how song lyrics sound, for a music app, so a $languageName ($target) speaker can sing along.")
+            appendLine("For every input line, write how the original line is pronounced, $script.")
+            appendLine()
+            appendLine("Context: the listener is playing this song right now and its original lyrics are already on their screen; this reading is shown under each line. It is not published or shared anywhere.")
+            appendLine()
+            appendLine("Rules:")
+            if (keyed) {
+                appendLine("1. \"translations\" is an object with one key per input line: the line's index \"i\" (\"0\" to \"${count - 1}\") as the key and that one line's reading as the value. All $count keys are required. Never put more than one line in a value, and never merge, split, skip or add lines.")
+            } else {
+                appendLine("1. Return exactly $count readings in \"translations\", one array item per input line, in the same order. Never put several lines in one item, and never merge, split, skip, reorder or add lines.")
+            }
+            appendLine("2. Write the sounds of the original words; never translate them. Read words the way the singer sings them, including the song's own readings of kanji.")
+            appendLine("3. A line already written in that script, and names or words a $languageName reader would write as they are, may be kept as they are.")
+            appendLine("4. Items with role \"section\" are labels such as Verse or Chorus: keep them as they are.")
+            appendLine("5. Output only the reading. No quotes, no notes, no translation.")
+            appendLine("6. Set \"source_language\" to the ISO 639-1 code of the song's main original language.")
+            appendLine("7. Leave \"declined_reason\" as an empty string. Only if you will not do this, write the reason there in one short sentence and leave every value empty. Never write a refusal in place of a reading.")
+        }
+    }
+
+    /**
+     * How [target]'s casual and polite registers are usually named, as " (…)"
+     * fragments for the instruction — empty for a language without a common
+     * name for them, where the plain words "casual" and "polite" do.
+     */
+    private fun registerHints(target: String): Pair<String, String> {
+        val (casual, polite) = when (canonicalLanguage(target)) {
+            "ko" -> "반말" to "존댓말, 해요체"
+            "ja" -> "タメ口" to "です・ます調"
+            "zh" -> "你" to "您"
+            "fr" -> "tu" to "vous"
+            "de" -> "du" to "Sie"
+            "es" -> "tú" to "usted"
+            "it" -> "tu" to "Lei"
+            "pt" -> "você/tu" to "o senhor/a senhora"
+            "pl" -> "ty" to "Pan/Pani"
+            "ru" -> "ты" to "вы"
+            "tr" -> "sen" to "siz"
+            "hi" -> "तुम" to "आप"
+            "id" -> "kamu" to "Anda"
+            "vi" -> "anh/em" to "bạn/quý vị"
+            "th" -> "ฉัน/เธอ" to "ผม/ดิฉัน/คุณ"
+            "he" -> "אתה/את" to "אתם"
+            else -> return "" to ""
+        }
+        return " ($casual)" to " ($polite)"
+    }
+
     private suspend fun requestClaudeTranslation(
         slots: List<TextSlot>,
         target: String,
         model: String,
+        /** How each line sounds, in [target]'s script, rather than what it means — see [claudeReading]. */
+        reading: Boolean = false,
     ): ClaudeResult<BatchAnswer> {
         val input = buildJsonObject {
             put("target_language", target)
@@ -605,9 +685,9 @@ object LyricsTranslation {
             }
         }.toString()
         suspend fun ask(keyed: Boolean) = askClaude(
-            purpose = ClaudeDiagnostics.PURPOSE_TRANSLATE,
+            purpose = if (reading) ClaudeDiagnostics.PURPOSE_READING else ClaudeDiagnostics.PURPOSE_TRANSLATE,
             model = model,
-            system = translationInstruction(target, slots.size, keyed),
+            system = if (reading) readingInstruction(target, slots.size, keyed) else translationInstruction(target, slots.size, keyed),
             input = input,
             schema = if (keyed) keyedTranslationSchema(slots.size) else TRANSLATION_SCHEMA,
             effort = "medium",
@@ -740,6 +820,9 @@ object LyricsTranslation {
         if (key.isEmpty()) return ClaudeResult(null, ClaudeFailure.KEY_REJECTED)
         if (key == rejectedClaudeKey) {
             return done(ClaudeFailure.KEY_REJECTED, detail = "not sent: this key was refused earlier", sent = false)
+        }
+        if (claudeOverBudget()) {
+            return done(ClaudeFailure.BUDGET, detail = "not sent: this month's limit is reached", sent = false)
         }
         val now = System.currentTimeMillis()
         if (now < claudeCooldownUntil) {
@@ -1363,6 +1446,83 @@ object LyricsTranslation {
             kept += file.length()
             if (kept > maxBytes) file.delete()
         }
+    }
+
+    // ---- How the lyrics sound, in the reader's own script --------------------
+
+    /**
+     * How each line is pronounced, written the way a [targetLanguageTag]
+     * reader spells sounds — Hangul for Korean (歌え -> 우타에), katakana for
+     * Japanese, the standard romanisation for languages in the Latin alphabet —
+     * from Claude, for the romanize button.
+     *
+     * Null whenever Claude has nothing to add: it is off or not set up, the
+     * reading setting is off, the lyrics are already in the reader's script,
+     * or the request failed. The caller then uses [romanize], Google's
+     * romanisation, as before. Kept per song and language like a translation.
+     */
+    suspend fun claudeReading(
+        trackId: String,
+        lines: List<LyricLine>,
+        targetLanguageTag: String,
+    ): RomanizationResult? {
+        if (!claudeEnabled || !claudeReadingEnabled || cleanClaudeKey().isEmpty()) return null
+        val target = targetLanguageTag.trim()
+        if (target.isBlank() || lines.isEmpty()) return null
+        val slots = flatten(lines)
+        if (slots.isEmpty() || alreadyInScriptOf(target, slots)) return null
+        val cacheKey = cacheKey("reading\u0000$trackId", target, slots)
+        val cached = memory.get(cacheKey) ?: readCache(cacheKey)?.also { memory.put(cacheKey, it) }
+        if (cached != null && cached.version == CACHE_VERSION && cached.texts.size == slots.size &&
+            repeatedAcrossLines(cached.texts, slots.map { it.text }) == null
+        ) {
+            if (keepTranslationFor(trackId) && !isKept(cacheKey)) writeCache(cacheKey, cached, keep = true)
+            return RomanizationResult.Romanized(rebuild(lines, slots, cached.texts), cached.sourceLanguage, fromCache = true)
+        }
+        val model = claudeModel
+        var reply = requestClaudeTranslation(slots, target, model, reading = true)
+        if (reply.failure == ClaudeFailure.REFUSAL && model == CLAUDE_HAIKU && sonnetStandInEnabled) {
+            reply = requestClaudeTranslation(slots, target, CLAUDE_SONNET, reading = true)
+        }
+        val answer = reply.value ?: return null
+        val entry = CachedTranslation(
+            sourceLanguage = answer.sourceLanguage,
+            targetLanguage = target,
+            texts = answer.translations.mapIndexed { index, text -> text.ifBlank { slots[index].text } },
+            engine = ENGINE_CLAUDE,
+        )
+        memory.put(cacheKey, entry)
+        writeCache(cacheKey, entry, keep = keepTranslationFor(trackId))
+        return RomanizationResult.Romanized(rebuild(lines, slots, entry.texts), entry.sourceLanguage, fromCache = false)
+    }
+
+    /**
+     * Whether the lyrics' letters are already, four in five, in the script
+     * [target]'s readers write — a Korean song for a Korean reader — where a
+     * reading would only repeat them and Google's romanisation still has a use.
+     */
+    private fun alreadyInScriptOf(target: String, slots: List<TextSlot>): Boolean {
+        val wanted: Set<Character.UnicodeScript> = when (canonicalLanguage(target)) {
+            "ko" -> setOf(Character.UnicodeScript.HANGUL)
+            "ja" -> setOf(Character.UnicodeScript.HIRAGANA, Character.UnicodeScript.KATAKANA, Character.UnicodeScript.HAN)
+            "zh" -> setOf(Character.UnicodeScript.HAN)
+            "ru" -> setOf(Character.UnicodeScript.CYRILLIC)
+            "he" -> setOf(Character.UnicodeScript.HEBREW)
+            "hi" -> setOf(Character.UnicodeScript.DEVANAGARI)
+            "th" -> setOf(Character.UnicodeScript.THAI)
+            else -> setOf(Character.UnicodeScript.LATIN)
+        }
+        var letters = 0
+        var inScript = 0
+        slots.filterNot { it.sectionHeader }.forEach { slot ->
+            slot.text.codePoints().forEach { codePoint ->
+                if (Character.isLetter(codePoint)) {
+                    letters++
+                    if (Character.UnicodeScript.of(codePoint) in wanted) inScript++
+                }
+            }
+        }
+        return letters == 0 || inScript * 5 >= letters * 4
     }
 
     // ---- What a song means ---------------------------------------------------

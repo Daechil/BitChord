@@ -3268,7 +3268,7 @@ internal fun rememberLyricsTranslation(
                         )
                     ) {
                         is LyricsRomanizationResult.Romanized -> {
-                            romanizationState = LyricsTranslationUiState.Ready(result.lines)
+                            romanizationState = LyricsTranslationUiState.Ready(result.lines, byClaude = result.byClaude)
                             lyricsDisplayMode = LyricsDisplayMode.Romanized
                             translationTransition++
                             haptics.play(Haptic.ToggleOn)
@@ -3312,6 +3312,8 @@ internal fun rememberLyricsTranslation(
             )
         showingTranslation ->
             stringResource(Res.string.lyrics_translated_to, translationLanguageName)
+        showingRomanization && (romanizationState as? LyricsTranslationUiState.Ready)?.byClaude == true ->
+            stringResource(Res.string.lyrics_reading_claude)
         showingRomanization ->
             stringResource(Res.string.lyrics_romanized)
         translationState is LyricsTranslationUiState.SameLanguage ->

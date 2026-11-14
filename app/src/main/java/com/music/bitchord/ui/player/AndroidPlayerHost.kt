@@ -207,12 +207,18 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
         trackId: String,
         lines: List<LyricLine>,
         targetLanguageTag: String,
-    ): LyricsRomanizationResult =
-        when (val result = LyricsTranslation.romanize(trackId, lines, targetLanguageTag)) {
+    ): LyricsRomanizationResult {
+        // Claude's reading in the reader's own script first, where it is set
+        // up and the lyrics are in another script; Google's romanisation for
+        // everything else, as before.
+        (LyricsTranslation.claudeReading(trackId, lines, targetLanguageTag) as? LyricsTranslation.RomanizationResult.Romanized)
+            ?.let { return LyricsRomanizationResult.Romanized(it.lines, byClaude = true) }
+        return when (val result = LyricsTranslation.romanize(trackId, lines, targetLanguageTag)) {
             is LyricsTranslation.RomanizationResult.Romanized -> LyricsRomanizationResult.Romanized(result.lines)
             LyricsTranslation.RomanizationResult.AlreadyRomanized -> LyricsRomanizationResult.AlreadyRomanized
             LyricsTranslation.RomanizationResult.Unavailable -> LyricsRomanizationResult.Unavailable
         }
+    }
 
     override val songMeaningAvailable: StateFlow<Boolean> by lazy {
         combine(AppSettings.claudeApiKey, LyricsTranslation.claudeKeyRejected) { key, rejected ->

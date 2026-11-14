@@ -16,6 +16,8 @@ import kotlinx.serialization.json.Json
 enum class ClaudeFailure {
     /** Not sent: resting after a rate limit or an overloaded answer. */
     COOLDOWN,
+    /** Not sent: this month's spending limit is reached. */
+    BUDGET,
     /** 401/403, or a key refused earlier and not sent again. */
     KEY_REJECTED,
     /** 400 "credit balance is too low". */
@@ -55,6 +57,7 @@ object ClaudeDiagnostics {
     const val PURPOSE_TRANSLATE = "translate"
     const val PURPOSE_MEANING = "meaning"
     const val PURPOSE_ORIGINAL_NAME = "original_name"
+    const val PURPOSE_READING = "reading"
 
     @Serializable
     data class Entry(

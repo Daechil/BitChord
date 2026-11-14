@@ -546,6 +546,21 @@ object AppSettings {
     /** Idiomatic or literal — see [LyricsTranslation.translationMode]. */
     val claudeMode = MutableStateFlow(com.music.bitchord.data.lyrics.LyricsTranslation.MODE_NATURAL)
 
+    /** Dollars a month Claude may spend before Google takes over; 0 for no limit. */
+    val claudeMonthlyCap = MutableStateFlow(0.0)
+
+    /** Ask Sonnet once when Haiku declines a song. See [LyricsTranslation.sonnetStandInEnabled]. */
+    val claudeSonnetStandIn = MutableStateFlow(true)
+
+    /** The romanize button shows Claude's reading in the reader's own script. See [LyricsTranslation.claudeReading]. */
+    val claudeReading = MutableStateFlow(true)
+
+    /** A small bar of the current lyric line over other apps while playing. See FloatingLyrics. */
+    val floatingLyrics = MutableStateFlow(false)
+
+    /** The floating bar lets touches through and cannot be moved. */
+    val floatingLyricsLocked = MutableStateFlow(false)
+
     /**
      * What Claude has been asked this month, in tokens per model, so Settings
      * can show roughly what it costs. Reset by hand; rolls over by itself when
@@ -1123,6 +1138,14 @@ object AppSettings {
         com.music.bitchord.data.lyrics.LyricsTranslation.translationMode = claudeMode.value
         claudeUsage.value = readClaudeUsage()
         com.music.bitchord.data.lyrics.LyricsTranslation.usageSink = ::recordClaudeUsage
+        claudeMonthlyCap.value = prefs.getFloat(KEY_CLAUDE_MONTHLY_CAP, 0f).toDouble()
+        claudeSonnetStandIn.value = prefs.getBoolean(KEY_CLAUDE_SONNET_STAND_IN, true)
+        claudeReading.value = prefs.getBoolean(KEY_CLAUDE_READING, true)
+        floatingLyrics.value = prefs.getBoolean(KEY_FLOATING_LYRICS, false)
+        floatingLyricsLocked.value = prefs.getBoolean(KEY_FLOATING_LYRICS_LOCKED, false)
+        com.music.bitchord.data.lyrics.LyricsTranslation.sonnetStandInEnabled = claudeSonnetStandIn.value
+        com.music.bitchord.data.lyrics.LyricsTranslation.claudeReadingEnabled = claudeReading.value
+        com.music.bitchord.data.lyrics.LyricsTranslation.claudeOverBudget = ::claudeOverBudget
         if (highPerformanceMode.value) {
             reduceAnimation.value = false
             reduceDynamicBlur.value = false
@@ -1671,6 +1694,44 @@ object AppSettings {
         claudeMode.value = value
         prefs.edit().putString(KEY_CLAUDE_MODE, value).apply()
         com.music.bitchord.data.lyrics.LyricsTranslation.translationMode = value
+    }
+
+    fun setClaudeMonthlyCap(value: Double) {
+        claudeMonthlyCap.value = value
+        prefs.edit().putFloat(KEY_CLAUDE_MONTHLY_CAP, value.toFloat()).apply()
+    }
+
+    /** This month's estimated Claude spending, in dollars: zero once the month has turned. */
+    fun claudeSpentThisMonth(): Double {
+        val usage = claudeUsage.value
+        return if (usage.month == currentMonth()) usage.estimatedUsd() else 0.0
+    }
+
+    private fun claudeOverBudget(): Boolean {
+        val cap = claudeMonthlyCap.value
+        return cap > 0.0 && claudeSpentThisMonth() >= cap
+    }
+
+    fun setClaudeSonnetStandIn(value: Boolean) {
+        claudeSonnetStandIn.value = value
+        prefs.edit().putBoolean(KEY_CLAUDE_SONNET_STAND_IN, value).apply()
+        com.music.bitchord.data.lyrics.LyricsTranslation.sonnetStandInEnabled = value
+    }
+
+    fun setClaudeReading(value: Boolean) {
+        claudeReading.value = value
+        prefs.edit().putBoolean(KEY_CLAUDE_READING, value).apply()
+        com.music.bitchord.data.lyrics.LyricsTranslation.claudeReadingEnabled = value
+    }
+
+    fun setFloatingLyrics(value: Boolean) {
+        floatingLyrics.value = value
+        prefs.edit().putBoolean(KEY_FLOATING_LYRICS, value).apply()
+    }
+
+    fun setFloatingLyricsLocked(value: Boolean) {
+        floatingLyricsLocked.value = value
+        prefs.edit().putBoolean(KEY_FLOATING_LYRICS_LOCKED, value).apply()
     }
 
     /** Called from the network thread with every Claude answer's token counts. */
@@ -2490,6 +2551,11 @@ object AppSettings {
     private const val KEY_CLAUDE_MODEL = "claude_model"
     private const val KEY_CLAUDE_SPEECH = "claude_speech"
     private const val KEY_CLAUDE_MODE = "claude_mode"
+    private const val KEY_CLAUDE_MONTHLY_CAP = "ko_claude_monthly_cap"
+    private const val KEY_CLAUDE_SONNET_STAND_IN = "ko_claude_sonnet_stand_in"
+    private const val KEY_CLAUDE_READING = "ko_claude_reading"
+    private const val KEY_FLOATING_LYRICS = "ko_floating_lyrics"
+    private const val KEY_FLOATING_LYRICS_LOCKED = "ko_floating_lyrics_locked"
     private const val KEY_CLAUDE_USAGE = "claude_usage"
     private const val KEY_ANIMATED_CANVAS = "animated_canvas"
     private const val KEY_CANVAS_OVER_CELLULAR = "canvas_over_cellular"

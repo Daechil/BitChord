@@ -37,6 +37,24 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.R
 import com.music.bitchord.data.settings.AppSettings
 import dev.chrisbanes.haze.HazeState
+import kotlinx.coroutines.flow.MutableStateFlow
+
+/**
+ * Alerts opened from the KO settings tab that have no state of their own in
+ * MainActivity: set the flag and [ClaudeAlerts] shows it. Kept here so the
+ * app's main composable, which is near the JVM's method size limit, does not
+ * grow with each one.
+ */
+object KoAlerts {
+    val monthlyCap = MutableStateFlow(false)
+}
+
+/** The monthly limits offered, in dollars; 0 is no limit. */
+private val MONTHLY_CAPS = listOf(0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0)
+
+/** "$1", "$0.50" — how a limit reads on its row and in the list. */
+fun monthlyCapLabel(cap: Double): String =
+    if (cap == Math.floor(cap)) "$" + cap.toLong() else "$" + String.format(java.util.Locale.US, "%.2f", cap)
 
 /**
  * The Claude alerts Settings opens — API key, model, speech level, style and
@@ -60,6 +78,25 @@ fun ClaudeAlerts(
     showLog: Boolean = false,
     onDismissLog: () -> Unit = {},
 ) {
+    val showCap by KoAlerts.monthlyCap.collectAsStateWithLifecycle()
+    if (showCap) {
+        BackHandler { KoAlerts.monthlyCap.value = false }
+        val selected by AppSettings.claudeMonthlyCap.collectAsStateWithLifecycle()
+        val noneLabel = stringResource(R.string.claude_monthly_cap_none)
+        ChoiceAlert(
+            hazeState = hazeState,
+            title = stringResource(R.string.claude_monthly_cap),
+            message = stringResource(R.string.claude_monthly_cap_description),
+            options = MONTHLY_CAPS,
+            selected = MONTHLY_CAPS.minByOrNull { kotlin.math.abs(it - selected) } ?: 0.0,
+            label = { if (it <= 0.0) noneLabel else monthlyCapLabel(it) },
+            onSelect = {
+                AppSettings.setClaudeMonthlyCap(it)
+                KoAlerts.monthlyCap.value = false
+            },
+            onDismiss = { KoAlerts.monthlyCap.value = false },
+        )
+    }
     if (showLog) {
         BackHandler { onDismissLog() }
         ClaudeLogAlert(hazeState = hazeState, onDismiss = onDismissLog)
@@ -222,6 +259,7 @@ private fun ClaudeLogAlert(hazeState: HazeState, onDismiss: () -> Unit) {
     val purposeTranslate = stringResource(R.string.claude_purpose_translate)
     val purposeMeaning = stringResource(R.string.claude_purpose_meaning)
     val purposeName = stringResource(R.string.claude_purpose_original_name)
+    val purposeReading = stringResource(R.string.claude_purpose_reading)
     val haikuLabel = stringResource(R.string.claude_model_haiku)
     val sonnetLabel = stringResource(R.string.claude_model_sonnet)
     // Every label the lines can need, resolved up front: the loop below is not
@@ -233,6 +271,7 @@ private fun ClaudeLogAlert(hazeState: HazeState, onDismiss: () -> Unit) {
             ClaudeDiagnostics.PURPOSE_TRANSLATE -> purposeTranslate
             ClaudeDiagnostics.PURPOSE_MEANING -> purposeMeaning
             ClaudeDiagnostics.PURPOSE_ORIGINAL_NAME -> purposeName
+            ClaudeDiagnostics.PURPOSE_READING -> purposeReading
             else -> entry.purpose
         }
         val model = when (entry.model) {

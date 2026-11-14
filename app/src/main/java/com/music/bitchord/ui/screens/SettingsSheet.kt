@@ -271,6 +271,11 @@ fun SettingsScreen(
     val resumeOnHeadphones by AppSettings.resumeOnHeadphones.collectAsStateWithLifecycle()
     val keepDownloadTranslations by AppSettings.keepDownloadTranslations.collectAsStateWithLifecycle()
     val lockScreenLyrics by AppSettings.lockScreenLyrics.collectAsStateWithLifecycle()
+    val floatingLyrics by AppSettings.floatingLyrics.collectAsStateWithLifecycle()
+    val floatingLyricsLocked by AppSettings.floatingLyricsLocked.collectAsStateWithLifecycle()
+    val claudeReading by AppSettings.claudeReading.collectAsStateWithLifecycle()
+    val claudeMonthlyCap by AppSettings.claudeMonthlyCap.collectAsStateWithLifecycle()
+    val claudeSonnetStandIn by AppSettings.claudeSonnetStandIn.collectAsStateWithLifecycle()
     // Read again each time the sheet comes back to the front, which is how a
     // grant made in the system's own screen shows up here.
     val settingsLifecycle by LocalLifecycleOwner.current.lifecycle.currentStateFlow
@@ -702,6 +707,36 @@ fun SettingsScreen(
                         onClick = onClaudeMode,
                     )
                 }
+                val claudeReadingTitle = stringResource(R.string.claude_reading)
+                row(claudeReadingTitle, "claude", "pronunciation", "romanize", "reading", "발음", "독음", "로마자") {
+                    SettingsRow(
+                        icon = SfIcons.Translate,
+                        title = claudeReadingTitle,
+                        subtitle = stringResource(R.string.claude_reading_subtitle),
+                        trailing = {
+                            IosSwitch(
+                                checked = claudeReading,
+                                onCheckedChange = AppSettings::setClaudeReading,
+                            )
+                        },
+                        onClick = { AppSettings.setClaudeReading(!claudeReading) },
+                    )
+                }
+                val claudeSonnetStandInTitle = stringResource(R.string.claude_sonnet_stand_in)
+                row(claudeSonnetStandInTitle, "claude", "sonnet", "haiku", "refusal", "거절", "재시도") {
+                    SettingsRow(
+                        icon = SfIcons.AutoAwesome,
+                        title = claudeSonnetStandInTitle,
+                        subtitle = stringResource(R.string.claude_sonnet_stand_in_subtitle),
+                        trailing = {
+                            IosSwitch(
+                                checked = claudeSonnetStandIn,
+                                onCheckedChange = AppSettings::setClaudeSonnetStandIn,
+                            )
+                        },
+                        onClick = { AppSettings.setClaudeSonnetStandIn(!claudeSonnetStandIn) },
+                    )
+                }
                 val claudeUsageTitle = stringResource(R.string.claude_usage)
                 row(claudeUsageTitle, "claude", "usage", "tokens", "cost", "사용량", "비용") {
                     SettingsRow(
@@ -719,6 +754,24 @@ fun SettingsScreen(
                         },
                         trailing = { Chevron() },
                         onClick = onClaudeUsage,
+                    )
+                }
+                val claudeMonthlyCapTitle = stringResource(R.string.claude_monthly_cap)
+                row(claudeMonthlyCapTitle, "claude", "limit", "budget", "cost", "한도", "요금", "비용") {
+                    SettingsRow(
+                        icon = SfIcons.AutoAwesome,
+                        title = claudeMonthlyCapTitle,
+                        subtitle = stringResource(
+                            R.string.claude_monthly_cap_subtitle,
+                            if (claudeMonthlyCap <= 0.0) {
+                                stringResource(R.string.claude_monthly_cap_none)
+                            } else {
+                                com.music.bitchord.ui.components.monthlyCapLabel(claudeMonthlyCap)
+                            },
+                            String.format(Locale.US, "%.2f", AppSettings.claudeSpentThisMonth()),
+                        ),
+                        trailing = { Chevron() },
+                        onClick = { com.music.bitchord.ui.components.KoAlerts.monthlyCap.value = true },
                     )
                 }
                 val claudeLogTitle = stringResource(R.string.claude_log)
@@ -760,6 +813,55 @@ fun SettingsScreen(
                     },
                     onClick = { AppSettings.setResumeOnHeadphones(!resumeOnHeadphones) },
                 )
+            }
+            val floatingLyricsTitle = stringResource(R.string.floating_lyrics)
+            row(floatingLyricsTitle, "lyrics", "floating", "overlay", "플로팅", "가사") {
+                SettingsRow(
+                    icon = SfIcons.Translate,
+                    title = floatingLyricsTitle,
+                    subtitle = stringResource(
+                        if (floatingLyrics && !canDrawOverlays) {
+                            R.string.lock_screen_lyrics_needs_permission
+                        } else {
+                            R.string.floating_lyrics_subtitle
+                        },
+                    ),
+                    trailing = {
+                        IosSwitch(
+                            checked = floatingLyrics && canDrawOverlays,
+                            onCheckedChange = { on ->
+                                AppSettings.setFloatingLyrics(on)
+                                if (on && !canDrawOverlays) openOverlayPermission()
+                            },
+                        )
+                    },
+                    onClick = {
+                        if (floatingLyrics && !canDrawOverlays) {
+                            openOverlayPermission()
+                        } else {
+                            val on = !floatingLyrics
+                            AppSettings.setFloatingLyrics(on)
+                            if (on && !canDrawOverlays) openOverlayPermission()
+                        }
+                    },
+                )
+            }
+            if (floatingLyrics) {
+                val floatingLyricsLockedTitle = stringResource(R.string.floating_lyrics_locked)
+                row(floatingLyricsLockedTitle, "lyrics", "floating", "lock", "플로팅", "고정") {
+                    SettingsRow(
+                        icon = SfIcons.Lock,
+                        title = floatingLyricsLockedTitle,
+                        subtitle = stringResource(R.string.floating_lyrics_locked_subtitle),
+                        trailing = {
+                            IosSwitch(
+                                checked = floatingLyricsLocked,
+                                onCheckedChange = AppSettings::setFloatingLyricsLocked,
+                            )
+                        },
+                        onClick = { AppSettings.setFloatingLyricsLocked(!floatingLyricsLocked) },
+                    )
+                }
             }
             val lockScreenLyricsTitle = stringResource(R.string.lock_screen_lyrics)
             row(lockScreenLyricsTitle, "lyrics", "lock screen", "lockscreen", "잠금", "가사") {

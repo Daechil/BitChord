@@ -300,6 +300,8 @@ fun SettingsScreen(
     val claudeMode by AppSettings.claudeMode.collectAsStateWithLifecycle()
     val claudeUsage by AppSettings.claudeUsage.collectAsStateWithLifecycle()
     val claudeLog by com.music.bitchord.data.lyrics.ClaudeDiagnostics.entries.collectAsStateWithLifecycle()
+    val aheadJobs by com.music.bitchord.download.TranslateAhead.jobs.collectAsStateWithLifecycle()
+    val aheadIntro by AppSettings.translateAheadIntro.collectAsStateWithLifecycle()
     val claudeKeyRejected by com.music.bitchord.data.lyrics.LyricsTranslation.claudeKeyRejected
         .collectAsStateWithLifecycle()
     val theme by AppSettings.themeMode.collectAsStateWithLifecycle()
@@ -790,6 +792,39 @@ fun SettingsScreen(
                         },
                         trailing = { Chevron() },
                         onClick = onClaudeLog,
+                    )
+                }
+                val aheadLogTitle = stringResource(R.string.translate_ahead_log)
+                row(aheadLogTitle, "claude", "batch", "translate", "ahead", "playlist", "log", "미리", "번역", "기록", "재생목록") {
+                    SettingsRow(
+                        icon = SfIcons.AutoAwesome,
+                        title = aheadLogTitle,
+                        subtitle = if (aheadJobs.isEmpty()) {
+                            stringResource(R.string.translate_ahead_log_empty)
+                        } else {
+                            stringResource(
+                                R.string.translate_ahead_log_subtitle,
+                                aheadJobs.size,
+                                aheadJobs.count { it.active },
+                            )
+                        },
+                        trailing = { Chevron() },
+                        onClick = { com.music.bitchord.ui.components.KoAlerts.aheadLog.value = true },
+                    )
+                }
+                val aheadIntroTitle = stringResource(R.string.translate_ahead_intro_setting)
+                row(aheadIntroTitle, "claude", "batch", "translate", "ahead", "ask", "미리", "번역", "안내") {
+                    SettingsRow(
+                        icon = SfIcons.AutoAwesome,
+                        title = aheadIntroTitle,
+                        subtitle = stringResource(R.string.translate_ahead_intro_setting_subtitle),
+                        trailing = {
+                            IosSwitch(
+                                checked = aheadIntro,
+                                onCheckedChange = AppSettings::setTranslateAheadIntro,
+                            )
+                        },
+                        onClick = { AppSettings.setTranslateAheadIntro(!aheadIntro) },
                     )
                 }
             }

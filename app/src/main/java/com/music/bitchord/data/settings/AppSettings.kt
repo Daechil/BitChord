@@ -561,6 +561,15 @@ object AppSettings {
     /** The floating bar lets touches through and cannot be moved. */
     val floatingLyricsLocked = MutableStateFlow(false)
 
+    /** Whether "Translate lyrics ahead" explains itself and asks before sending; off, it sends with the last choices. */
+    val translateAheadIntro = MutableStateFlow(true)
+
+    /** The model last chosen for translating ahead. */
+    val translateAheadModel = MutableStateFlow(com.music.bitchord.data.lyrics.LyricsTranslation.CLAUDE_HAIKU)
+
+    /** Whether the pronunciation was last asked for along with the translation. */
+    val translateAheadReading = MutableStateFlow(false)
+
     /**
      * What Claude has been asked this month, in tokens per model, so Settings
      * can show roughly what it costs. Reset by hand; rolls over by itself when
@@ -588,9 +597,17 @@ object AppSettings {
     }
 
     /** Dollars per million input and output tokens, by model; the newest Haiku's rates for anything unknown. */
-    fun claudePricePerMillion(model: String): Pair<Double, Double> = when (model) {
-        com.music.bitchord.data.lyrics.LyricsTranslation.CLAUDE_SONNET -> 2.0 to 10.0
-        else -> 0.10 to 0.50
+    fun claudePricePerMillion(model: String): Pair<Double, Double> {
+        // Tokens that went through a batch are billed at half the list price.
+        val suffix = com.music.bitchord.data.lyrics.LyricsTranslation.BATCH_MODEL_SUFFIX
+        if (model.endsWith(suffix)) {
+            val (input, output) = claudePricePerMillion(model.removeSuffix(suffix))
+            return input / 2 to output / 2
+        }
+        return when (model) {
+            com.music.bitchord.data.lyrics.LyricsTranslation.CLAUDE_SONNET -> 2.0 to 10.0
+            else -> 0.10 to 0.50
+        }
     }
 
     private fun currentMonth(): String = java.time.YearMonth.now().toString()
@@ -1143,6 +1160,10 @@ object AppSettings {
         claudeReading.value = prefs.getBoolean(KEY_CLAUDE_READING, true)
         floatingLyrics.value = prefs.getBoolean(KEY_FLOATING_LYRICS, false)
         floatingLyricsLocked.value = prefs.getBoolean(KEY_FLOATING_LYRICS_LOCKED, false)
+        translateAheadIntro.value = prefs.getBoolean(KEY_TRANSLATE_AHEAD_INTRO, true)
+        translateAheadModel.value = prefs.getString(KEY_TRANSLATE_AHEAD_MODEL, null)
+            ?: com.music.bitchord.data.lyrics.LyricsTranslation.CLAUDE_HAIKU
+        translateAheadReading.value = prefs.getBoolean(KEY_TRANSLATE_AHEAD_READING, false)
         com.music.bitchord.data.lyrics.LyricsTranslation.sonnetStandInEnabled = claudeSonnetStandIn.value
         com.music.bitchord.data.lyrics.LyricsTranslation.claudeReadingEnabled = claudeReading.value
         com.music.bitchord.data.lyrics.LyricsTranslation.claudeOverBudget = ::claudeOverBudget
@@ -1732,6 +1753,21 @@ object AppSettings {
     fun setFloatingLyricsLocked(value: Boolean) {
         floatingLyricsLocked.value = value
         prefs.edit().putBoolean(KEY_FLOATING_LYRICS_LOCKED, value).apply()
+    }
+
+    fun setTranslateAheadIntro(value: Boolean) {
+        translateAheadIntro.value = value
+        prefs.edit().putBoolean(KEY_TRANSLATE_AHEAD_INTRO, value).apply()
+    }
+
+    /** Remembers what translating ahead was last asked with, for the next time and for when the intro is off. */
+    fun setTranslateAheadChoice(model: String, reading: Boolean) {
+        translateAheadModel.value = model
+        translateAheadReading.value = reading
+        prefs.edit()
+            .putString(KEY_TRANSLATE_AHEAD_MODEL, model)
+            .putBoolean(KEY_TRANSLATE_AHEAD_READING, reading)
+            .apply()
     }
 
     /** Called from the network thread with every Claude answer's token counts. */
@@ -2556,6 +2592,9 @@ object AppSettings {
     private const val KEY_CLAUDE_READING = "ko_claude_reading"
     private const val KEY_FLOATING_LYRICS = "ko_floating_lyrics"
     private const val KEY_FLOATING_LYRICS_LOCKED = "ko_floating_lyrics_locked"
+    private const val KEY_TRANSLATE_AHEAD_INTRO = "ko_translate_ahead_intro"
+    private const val KEY_TRANSLATE_AHEAD_MODEL = "ko_translate_ahead_model"
+    private const val KEY_TRANSLATE_AHEAD_READING = "ko_translate_ahead_reading"
     private const val KEY_CLAUDE_USAGE = "claude_usage"
     private const val KEY_ANIMATED_CANVAS = "animated_canvas"
     private const val KEY_CANVAS_OVER_CELLULAR = "canvas_over_cellular"

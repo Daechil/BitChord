@@ -47,6 +47,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
  */
 object KoAlerts {
     val monthlyCap = MutableStateFlow(false)
+
+    /** The log of playlists and albums translated ahead. */
+    val aheadLog = MutableStateFlow(false)
 }
 
 /** The monthly limits offered, in dollars; 0 is no limit. */
@@ -78,6 +81,7 @@ fun ClaudeAlerts(
     showLog: Boolean = false,
     onDismissLog: () -> Unit = {},
 ) {
+    TranslateAheadAlerts(hazeState)
     val showCap by KoAlerts.monthlyCap.collectAsStateWithLifecycle()
     if (showCap) {
         BackHandler { KoAlerts.monthlyCap.value = false }
@@ -220,7 +224,11 @@ fun ClaudeAlerts(
         val lines = buildList {
             add(totalLine)
             usage.inputByModel.keys.union(usage.outputByModel.keys).sorted().forEach { model ->
-                val label = if (model == com.music.bitchord.data.lyrics.LyricsTranslation.CLAUDE_SONNET) sonnetLabel else haikuLabel
+                // Tokens that went through a batch are tallied apart: they cost half.
+                val batch = model.endsWith(com.music.bitchord.data.lyrics.LyricsTranslation.BATCH_MODEL_SUFFIX)
+                val plain = model.removeSuffix(com.music.bitchord.data.lyrics.LyricsTranslation.BATCH_MODEL_SUFFIX)
+                val label = (if (plain == com.music.bitchord.data.lyrics.LyricsTranslation.CLAUDE_SONNET) sonnetLabel else haikuLabel) +
+                    if (batch) " (Batch)" else ""
                 add(
                     "$label: ${com.music.bitchord.ui.screens.compactTokens(usage.inputByModel[model] ?: 0L)} / " +
                         com.music.bitchord.ui.screens.compactTokens(usage.outputByModel[model] ?: 0L),
@@ -260,6 +268,7 @@ private fun ClaudeLogAlert(hazeState: HazeState, onDismiss: () -> Unit) {
     val purposeMeaning = stringResource(R.string.claude_purpose_meaning)
     val purposeName = stringResource(R.string.claude_purpose_original_name)
     val purposeReading = stringResource(R.string.claude_purpose_reading)
+    val purposeBatch = stringResource(R.string.claude_purpose_batch)
     val haikuLabel = stringResource(R.string.claude_model_haiku)
     val sonnetLabel = stringResource(R.string.claude_model_sonnet)
     // Every label the lines can need, resolved up front: the loop below is not
@@ -272,6 +281,7 @@ private fun ClaudeLogAlert(hazeState: HazeState, onDismiss: () -> Unit) {
             ClaudeDiagnostics.PURPOSE_MEANING -> purposeMeaning
             ClaudeDiagnostics.PURPOSE_ORIGINAL_NAME -> purposeName
             ClaudeDiagnostics.PURPOSE_READING -> purposeReading
+            ClaudeDiagnostics.PURPOSE_BATCH -> purposeBatch
             else -> entry.purpose
         }
         val model = when (entry.model) {

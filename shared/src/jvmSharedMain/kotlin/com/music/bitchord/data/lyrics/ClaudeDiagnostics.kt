@@ -58,6 +58,8 @@ object ClaudeDiagnostics {
     const val PURPOSE_MEANING = "meaning"
     const val PURPOSE_ORIGINAL_NAME = "original_name"
     const val PURPOSE_READING = "reading"
+    /** A batch of songs translated ahead: one entry when it is sent, one when its answers are filed. */
+    const val PURPOSE_BATCH = "batch"
 
     @Serializable
     data class Entry(

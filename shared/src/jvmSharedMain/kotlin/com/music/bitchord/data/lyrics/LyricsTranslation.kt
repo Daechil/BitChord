@@ -525,6 +525,14 @@ object LyricsTranslation {
             if (keepTranslationFor(trackId) && !isKept(cacheKey)) writeCache(cacheKey, cached, keep = true)
             return ClaudeAttempt(cached.copy(engine = ENGINE_CLAUDE), fromCache = true, failure = null)
         }
+        if (!fresh) {
+            val prefix = "claude\u0000$translationSpeech\u0000$translationMode\u0000$trackId"
+            fromAhead(trackId, prefix, target, slots, report = !cacheOnly)?.let { ahead ->
+                memory.put(cacheKey, ahead)
+                writeCache(cacheKey, ahead, keep = true)
+                return ClaudeAttempt(ahead, fromCache = true, failure = null)
+            }
+        }
         if (cacheOnly) return ClaudeAttempt(null, fromCache = false, failure = null)
         val model = claudeModel
         var reply = requestClaudeTranslation(slots, target, model)
@@ -664,26 +672,7 @@ object LyricsTranslation {
         /** How each line sounds, in [target]'s script, rather than what it means — see [claudeReading]. */
         reading: Boolean = false,
     ): ClaudeResult<BatchAnswer> {
-        val input = buildJsonObject {
-            put("target_language", target)
-            put("line_count", slots.size)
-            putJsonArray("lines") {
-                slots.forEachIndexed { index, slot ->
-                    add(buildJsonObject {
-                        put("i", index)
-                        put(
-                            "role",
-                            when {
-                                slot.sectionHeader -> "section"
-                                slot.background -> "backing"
-                                else -> "lyric"
-                            },
-                        )
-                        put("text", slot.text)
-                    })
-                }
-            }
-        }.toString()
+        val input = translationInput(slots, target)
         suspend fun ask(keyed: Boolean) = askClaude(
             purpose = if (reading) ClaudeDiagnostics.PURPOSE_READING else ClaudeDiagnostics.PURPOSE_TRANSLATE,
             model = model,
@@ -703,6 +692,28 @@ object LyricsTranslation {
         val keyed = ask(keyed = true)
         return if (keyed.failure == ClaudeFailure.BAD_REQUEST) ask(keyed = false) else keyed
     }
+
+    /** The user's turn of a translation or reading request: the lines, numbered, each with its role. */
+    private fun translationInput(slots: List<TextSlot>, target: String): String = buildJsonObject {
+        put("target_language", target)
+        put("line_count", slots.size)
+        putJsonArray("lines") {
+            slots.forEachIndexed { index, slot ->
+                add(buildJsonObject {
+                    put("i", index)
+                    put(
+                        "role",
+                        when {
+                            slot.sectionHeader -> "section"
+                            slot.background -> "backing"
+                            else -> "lyric"
+                        },
+                    )
+                    put("text", slot.text)
+                })
+            }
+        }
+    }.toString()
 
     /** Past this many lines the per-line schema is not tried; see [requestClaudeTranslation]. */
     private const val MAX_KEYED_LINES = 200
@@ -829,24 +840,7 @@ object LyricsTranslation {
             val seconds = (claudeCooldownUntil - now + 999) / 1000
             return done(ClaudeFailure.COOLDOWN, detail = "not sent: resting ${seconds}s after a rate limit or overload", sent = false)
         }
-        val body = buildJsonObject {
-            put("model", model)
-            put("max_tokens", maxTokens)
-            put("system", system)
-            putJsonArray("messages") {
-                add(buildJsonObject {
-                    put("role", "user")
-                    put("content", input)
-                })
-            }
-            putJsonObject("output_config") {
-                put("effort", effort)
-                putJsonObject("format") {
-                    put("type", "json_schema")
-                    put("schema", schema)
-                }
-            }
-        }.toString()
+        val body = claudeBody(model, system, input, schema, effort, maxTokens).toString()
         val request = Request.Builder()
             .url(CLAUDE_ENDPOINT)
             .header("x-api-key", key)
@@ -920,6 +914,33 @@ object LyricsTranslation {
             else -> ClaudeFailure.ERROR
         }
         return done(failure, httpCode = code, detail = apiErrorMessage(text))
+    }
+
+    /** A Messages API request body — the same one whether sent now or in a batch. */
+    private fun claudeBody(
+        model: String,
+        system: String,
+        input: String,
+        schema: JsonObject,
+        effort: String,
+        maxTokens: Int = 16_000,
+    ): JsonObject = buildJsonObject {
+        put("model", model)
+        put("max_tokens", maxTokens)
+        put("system", system)
+        putJsonArray("messages") {
+            add(buildJsonObject {
+                put("role", "user")
+                put("content", input)
+            })
+        }
+        putJsonObject("output_config") {
+            put("effort", effort)
+            putJsonObject("format") {
+                put("type", "json_schema")
+                put("schema", schema)
+            }
+        }
     }
 
     private class ResponseMeta(
@@ -1479,6 +1500,11 @@ object LyricsTranslation {
             if (keepTranslationFor(trackId) && !isKept(cacheKey)) writeCache(cacheKey, cached, keep = true)
             return RomanizationResult.Romanized(rebuild(lines, slots, cached.texts), cached.sourceLanguage, fromCache = true)
         }
+        fromAhead(trackId, "reading\u0000$trackId", target, slots, report = true)?.let { ahead ->
+            memory.put(cacheKey, ahead)
+            writeCache(cacheKey, ahead, keep = true)
+            return RomanizationResult.Romanized(rebuild(lines, slots, ahead.texts), ahead.sourceLanguage, fromCache = true)
+        }
         val model = claudeModel
         var reply = requestClaudeTranslation(slots, target, model, reading = true)
         if (reply.failure == ClaudeFailure.REFUSAL && model == CLAUDE_HAIKU && sonnetStandInEnabled) {
@@ -1524,6 +1550,406 @@ object LyricsTranslation {
         }
         return letters == 0 || inScript * 5 >= letters * 4
     }
+
+    // ---- Translating ahead, through the Message Batches API ------------------
+    //
+    // A playlist's songs asked for in one batch, at half the price, answered
+    // within the day rather than within the minute. The app decides what goes
+    // in a batch and remembers it; this builds each song's request, sends the
+    // batch, and files each answer where the player will look for it.
+
+    /** Added to a model's name in [usageSink] for tokens billed at the batch rate, half the list price. */
+    const val BATCH_MODEL_SUFFIX = ":batch"
+    private const val BATCH_ENDPOINT = "https://api.anthropic.com/v1/messages/batches"
+    private const val AHEAD_PREFIX = "ahead\u0000"
+
+    /**
+     * Languages written in a script of their own, where lyrics already in that
+     * script are already in the language. Not so for Cyrillic, Han or Latin,
+     * which many languages share.
+     */
+    private val SCRIPT_IS_LANGUAGE = setOf("ko", "th")
+
+    /** Told when a song translated ahead is played with lyrics that answer does not cover, and is asked again. */
+    @Volatile
+    var aheadMismatch: ((trackId: String) -> Unit)? = null
+
+    /** One song's request in a batch, and what filing its answer takes once it is back. */
+    @Serializable
+    data class AheadItem(
+        val customId: String,
+        val trackId: String,
+        /** A pronunciation ([claudeReading]) rather than a translation. */
+        val reading: Boolean,
+        val cacheKey: String,
+        val aheadKey: String,
+        val target: String,
+        val model: String,
+        val keyed: Boolean,
+        /** The lines as sent. Kept on the device until the answer is filed, never logged. */
+        val sources: List<String>,
+    )
+
+    enum class AheadSkip { NOTHING_TO_TRANSLATE, ALREADY_TRANSLATED, SAME_LANGUAGE }
+
+    /** Either a request to put in a batch ([item] and [params]), or why this song needs none ([skip]). */
+    class AheadRequest(val item: AheadItem?, val params: JsonObject?, val skip: AheadSkip?)
+
+    /**
+     * The request that would translate [lines] (or write how they sound, when
+     * [reading]) in the style Settings has now — or the reason none is needed.
+     */
+    suspend fun aheadRequest(
+        customId: String,
+        trackId: String,
+        lines: List<LyricLine>,
+        targetLanguageTag: String,
+        model: String,
+        reading: Boolean,
+    ): AheadRequest {
+        val target = targetLanguageTag.trim()
+        val slots = if (target.isBlank()) emptyList() else flatten(lines)
+        if (slots.isEmpty()) return AheadRequest(null, null, AheadSkip.NOTHING_TO_TRANSLATE)
+        if (alreadyInScriptOf(target, slots) && (reading || canonicalLanguage(target) in SCRIPT_IS_LANGUAGE)) {
+            return AheadRequest(null, null, AheadSkip.SAME_LANGUAGE)
+        }
+        val prefix = if (reading) {
+            "reading\u0000$trackId"
+        } else {
+            "claude\u0000$translationSpeech\u0000$translationMode\u0000$trackId"
+        }
+        val key = cacheKey(prefix, target, slots)
+        val cached = readCache(key)
+        if (cached != null && cached.texts.size == slots.size &&
+            repeatedAcrossLines(cached.texts, slots.map { it.text }) == null
+        ) {
+            return AheadRequest(null, null, AheadSkip.ALREADY_TRANSLATED)
+        }
+        if (fromAhead(trackId, prefix, target, slots, report = false) != null) {
+            return AheadRequest(null, null, AheadSkip.ALREADY_TRANSLATED)
+        }
+        // A batch has no second try with the other schema, so the per-line one
+        // is used wherever the player would have tried it first.
+        val keyed = slots.size <= MAX_KEYED_LINES
+        val params = claudeBody(
+            model = model,
+            system = if (reading) readingInstruction(target, slots.size, keyed) else translationInstruction(target, slots.size, keyed),
+            input = translationInput(slots, target),
+            schema = if (keyed) keyedTranslationSchema(slots.size) else TRANSLATION_SCHEMA,
+            effort = "medium",
+        )
+        val item = AheadItem(
+            customId = customId,
+            trackId = trackId,
+            reading = reading,
+            cacheKey = key,
+            aheadKey = aheadKey(prefix, target),
+            target = target,
+            model = model,
+            keyed = keyed,
+            sources = slots.map { it.text },
+        )
+        return AheadRequest(item, params, null)
+    }
+
+    private fun aheadKey(prefix: String, target: String): String = cacheKey(AHEAD_PREFIX + prefix, target, emptyList())
+
+    /**
+     * An answer for [slots] put together from one translated ahead for other
+     * lyrics of the same song: the same lines from another source, timed or
+     * split differently. Only when every line here was a line there; otherwise
+     * null, and — when [report] — [aheadMismatch] hears of it.
+     */
+    private suspend fun fromAhead(
+        trackId: String,
+        prefix: String,
+        target: String,
+        slots: List<TextSlot>,
+        report: Boolean,
+    ): CachedTranslation? {
+        val ahead = readCache(aheadKey(prefix, target)) ?: return null
+        val half = ahead.texts.size / 2
+        if (half == 0 || ahead.texts.size != half * 2) return null
+        val bySource = HashMap<String, String>(half * 2)
+        for (index in 0 until half) bySource.putIfAbsent(ahead.texts[index].trim(), ahead.texts[half + index])
+        val texts = ArrayList<String>(slots.size)
+        for (slot in slots) {
+            val text = bySource[slot.text.trim()]
+            if (text == null) {
+                if (report) aheadMismatch?.invoke(trackId)
+                return null
+            }
+            texts += text
+        }
+        return CachedTranslation(
+            sourceLanguage = ahead.sourceLanguage,
+            targetLanguage = target,
+            texts = texts,
+            engine = ENGINE_CLAUDE,
+        )
+    }
+
+    private val batchClient by lazy {
+        Http.client.newBuilder()
+            // A few hundred songs go up in one body and come back in one.
+            .callTimeout(180, TimeUnit.SECONDS)
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(120, TimeUnit.SECONDS)
+            .writeTimeout(120, TimeUnit.SECONDS)
+            .build()
+    }
+
+    /** GET [url], or POST [body] to it when there is one. */
+    private suspend fun batchHttp(url: String, key: String, body: String? = null, post: Boolean = body != null): Pair<Int, String> {
+        val builder = Request.Builder()
+            .url(url)
+            .header("x-api-key", key)
+            .header("anthropic-version", CLAUDE_API_VERSION)
+            .header("Accept", "application/json")
+        if (post) {
+            builder.post(if (body != null) body.toRequestBody(JSON_MEDIA) else ByteArray(0).toRequestBody(null))
+        }
+        return batchClient.newCall(builder.build()).awaitResponse()
+    }
+
+    private fun batchHttpFailure(code: Int, text: String, key: String): ClaudeFailure = when {
+        code == 401 || code == 403 -> {
+            rejectedClaudeKey = key
+            claudeKeyRejected.value = true
+            ClaudeFailure.KEY_REJECTED
+        }
+        code == 400 && text.contains("credit balance", ignoreCase = true) -> {
+            rejectedClaudeKey = key
+            claudeKeyRejected.value = true
+            ClaudeFailure.NO_CREDIT
+        }
+        code == 429 -> ClaudeFailure.RATE_LIMIT
+        code == 529 -> ClaudeFailure.OVERLOADED
+        code >= 500 -> ClaudeFailure.SERVER_ERROR
+        code in 400..499 -> ClaudeFailure.BAD_REQUEST
+        else -> ClaudeFailure.ERROR
+    }
+
+    /** The batch's id, or why it was not taken. */
+    class AheadSubmitted(val batchId: String?, val failure: ClaudeFailure?, val detail: String?)
+
+    /** Sends [requests] — custom id and Messages API body, from [aheadRequest] — as one batch. */
+    suspend fun submitAhead(requests: List<Pair<String, JsonObject>>, model: String): AheadSubmitted {
+        val key = cleanClaudeKey()
+        val started = System.nanoTime()
+        suspend fun done(failure: ClaudeFailure?, id: String? = null, httpCode: Int? = null, detail: String? = null, sent: Boolean = true): AheadSubmitted {
+            ClaudeDiagnostics.record(
+                ClaudeDiagnostics.Entry(
+                    at = System.currentTimeMillis(),
+                    purpose = ClaudeDiagnostics.PURPOSE_BATCH,
+                    model = model,
+                    failure = failure?.name,
+                    httpCode = httpCode,
+                    elapsedMs = if (sent) (System.nanoTime() - started) / 1_000_000L else 0L,
+                    detail = detail ?: "batch sent: ${requests.size} requests",
+                ),
+            )
+            return AheadSubmitted(id, failure, detail)
+        }
+        if (requests.isEmpty()) return AheadSubmitted(null, ClaudeFailure.ERROR, "nothing to send")
+        if (key.isEmpty()) return AheadSubmitted(null, ClaudeFailure.KEY_REJECTED, null)
+        if (key == rejectedClaudeKey) {
+            return done(ClaudeFailure.KEY_REJECTED, detail = "not sent: this key was refused earlier", sent = false)
+        }
+        if (claudeOverBudget()) {
+            return done(ClaudeFailure.BUDGET, detail = "not sent: this month's limit is reached", sent = false)
+        }
+        val body = buildJsonObject {
+            putJsonArray("requests") {
+                requests.forEach { (id, params) ->
+                    add(buildJsonObject {
+                        put("custom_id", id)
+                        put("params", params)
+                    })
+                }
+            }
+        }.toString()
+        val (code, text) = try {
+            batchHttp(BATCH_ENDPOINT, key, body)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: IOException) {
+            val failure = if (error is java.io.InterruptedIOException) ClaudeFailure.TIMEOUT else ClaudeFailure.NETWORK
+            return done(failure, detail = "${error::class.java.simpleName}: ${error.message}")
+        }
+        if (code !in 200..299) return done(batchHttpFailure(code, text, key), httpCode = code, detail = apiErrorMessage(text))
+        val id = runCatching { json.parseToJsonElement(text).jsonObject["id"]?.jsonPrimitive?.contentOrNull }.getOrNull()
+            ?: return done(ClaudeFailure.BAD_ANSWER, httpCode = code, detail = "no batch id in the answer")
+        return done(null, id = id, httpCode = code)
+    }
+
+    /** Where a batch stands. [gone]: the API no longer knows it. */
+    class AheadStatus(
+        val ended: Boolean,
+        val gone: Boolean,
+        val processing: Int = 0,
+        val succeeded: Int = 0,
+        val errored: Int = 0,
+        val canceled: Int = 0,
+        val expired: Int = 0,
+        val resultsUrl: String? = null,
+    )
+
+    /** Null when it could not be asked just now — offline, a server error — and is worth asking again. */
+    suspend fun aheadStatus(batchId: String): AheadStatus? {
+        val key = cleanClaudeKey()
+        if (key.isEmpty()) return null
+        val (code, text) = try {
+            batchHttp("$BATCH_ENDPOINT/$batchId", key)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: IOException) {
+            return null
+        }
+        if (code == 404) return AheadStatus(ended = true, gone = true)
+        if (code !in 200..299) {
+            batchHttpFailure(code, text, key)
+            return null
+        }
+        return runCatching {
+            val root = json.parseToJsonElement(text).jsonObject
+            val counts = root["request_counts"] as? JsonObject
+            fun count(name: String) = counts?.get(name)?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 0
+            AheadStatus(
+                ended = root["processing_status"]?.jsonPrimitive?.contentOrNull == "ended",
+                gone = false,
+                processing = count("processing"),
+                succeeded = count("succeeded"),
+                errored = count("errored"),
+                canceled = count("canceled"),
+                expired = count("expired"),
+                resultsUrl = (root["results_url"] as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull,
+            )
+        }.getOrNull()
+    }
+
+    /** Asks for a batch still being worked on to be stopped; what was already answered is still billed. */
+    suspend fun cancelAhead(batchId: String): Boolean {
+        val key = cleanClaudeKey()
+        if (key.isEmpty()) return false
+        return try {
+            batchHttp("$BATCH_ENDPOINT/$batchId/cancel", key, post = true).first in 200..299
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: IOException) {
+            false
+        }
+    }
+
+    /** How one song's request in a batch came out; [failure] null when its answer was filed. */
+    class AheadOutcome(
+        val customId: String,
+        val failure: ClaudeFailure?,
+        val detail: String?,
+        val inputTokens: Long = 0,
+        val outputTokens: Long = 0,
+    )
+
+    /**
+     * Reads an ended batch's results and files every usable answer in the kept
+     * store, where the player finds it as it would its own. Null when the
+     * results could not be fetched just now; an item with no outcome in the
+     * list had no line in the results.
+     */
+    suspend fun collectAhead(batchId: String, resultsUrl: String?, items: List<AheadItem>): List<AheadOutcome>? {
+        val key = cleanClaudeKey()
+        if (key.isEmpty()) return null
+        // The key goes nowhere but the API's own host, whatever the answer named.
+        val url = resultsUrl?.takeIf { it.startsWith("https://api.anthropic.com/") } ?: "$BATCH_ENDPOINT/$batchId/results"
+        val (code, text) = try {
+            batchHttp(url, key)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: IOException) {
+            return null
+        }
+        if (code !in 200..299) {
+            batchHttpFailure(code, text, key)
+            return null
+        }
+        val byId = items.associateBy { it.customId }
+        val outcomes = ArrayList<AheadOutcome>(items.size)
+        for (line in text.lineSequence()) {
+            if (line.isBlank()) continue
+            val row = runCatching { json.parseToJsonElement(line).jsonObject }.getOrNull() ?: continue
+            val id = (row["custom_id"] as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull ?: continue
+            val item = byId[id] ?: continue
+            val result = row["result"] as? JsonObject
+            outcomes += when ((result?.get("type") as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull) {
+                "succeeded" -> try {
+                    fileAhead(item, result?.get("message")?.toString().orEmpty())
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    AheadOutcome(id, ClaudeFailure.BAD_ANSWER, error.toString())
+                }
+                "errored" -> {
+                    val detail = apiErrorMessage(result?.get("error")?.toString().orEmpty())
+                    val failure = if (detail.contains("invalid_request")) ClaudeFailure.BAD_REQUEST else ClaudeFailure.SERVER_ERROR
+                    AheadOutcome(id, failure, detail)
+                }
+                "expired" -> AheadOutcome(id, ClaudeFailure.TIMEOUT, "expired before it was answered")
+                "canceled" -> AheadOutcome(id, ClaudeFailure.ERROR, "canceled")
+                else -> AheadOutcome(id, ClaudeFailure.BAD_ANSWER, "no result in the line")
+            }
+        }
+        val filed = outcomes.count { it.failure == null }
+        val declined = outcomes.count { it.failure == ClaudeFailure.REFUSAL }
+        ClaudeDiagnostics.record(
+            ClaudeDiagnostics.Entry(
+                at = System.currentTimeMillis(),
+                purpose = ClaudeDiagnostics.PURPOSE_BATCH,
+                model = items.firstOrNull()?.model ?: claudeModel,
+                httpCode = code,
+                linesAsked = items.size,
+                linesGot = filed,
+                inputTokens = outcomes.sumOf { it.inputTokens },
+                outputTokens = outcomes.sumOf { it.outputTokens },
+                detail = "batch ended: $filed filed, $declined declined, ${outcomes.size - filed - declined} failed",
+            ),
+        )
+        return outcomes
+    }
+
+    /** One succeeded request's [message], read as [askClaude] reads an answer and filed under the item's keys. */
+    private suspend fun fileAhead(item: AheadItem, message: String): AheadOutcome {
+        val meta = responseMeta(message)
+        recordUsage(item.model + BATCH_MODEL_SUFFIX, message)
+        fun out(failure: ClaudeFailure?, detail: String? = null) =
+            AheadOutcome(item.customId, failure, detail, meta.inputTokens ?: 0L, meta.outputTokens ?: 0L)
+        when (meta.stopReason) {
+            "refusal" -> return out(ClaudeFailure.REFUSAL, meta.refusalCategory)
+            "max_tokens" -> return out(ClaudeFailure.CUT_OFF)
+        }
+        val answer = claudeText(message) ?: return out(ClaudeFailure.BAD_ANSWER, "no text block in the answer")
+        val parsed = try {
+            parseTranslation(answer, item.sources, item.keyed)
+        } catch (error: Exception) {
+            Parsed<BatchAnswer>(null, ClaudeFailure.BAD_ANSWER, detail = error.toString())
+        }
+        val value = parsed.value?.takeIf { parsed.failure == null }
+            ?: return out(parsed.failure ?: ClaudeFailure.BAD_ANSWER, parsed.detail)
+        if (value.translations.size != item.sources.size) {
+            return out(ClaudeFailure.LINE_MISMATCH, "${value.translations.size}/${item.sources.size}")
+        }
+        val texts = value.translations.mapIndexed { index, text -> text.ifBlank { item.sources[index] } }
+        val entry = CachedTranslation(
+            sourceLanguage = value.sourceLanguage,
+            targetLanguage = item.target,
+            texts = texts,
+            engine = ENGINE_CLAUDE,
+        )
+        writeCache(item.cacheKey, entry, keep = true)
+        // The lines and their answers side by side, for [fromAhead].
+        writeCache(item.aheadKey, entry.copy(texts = item.sources + texts), keep = true)
+        return out(null)
+    }
+
 
     // ---- What a song means ---------------------------------------------------
 

@@ -50,6 +50,9 @@ object KoAlerts {
 
     /** The log of playlists and albums translated ahead. */
     val aheadLog = MutableStateFlow(false)
+
+    /** A release waiting on the "translate ahead" dialog's answer. */
+    val aheadAsk = MutableStateFlow<AheadAsk?>(null)
 }
 
 /** The monthly limits offered, in dollars; 0 is no limit. */

@@ -1,11 +1,21 @@
 package com.music.bitchord.ui.components
 
+import android.content.Context
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Icon
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -21,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -28,8 +39,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.R
+import com.music.bitchord.data.lyrics.ClaudeDiagnostics
 import com.music.bitchord.data.lyrics.ClaudeFailure
 import com.music.bitchord.data.lyrics.LyricsTranslation
+import com.music.bitchord.data.model.Song
+import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.download.TranslateAhead
 import com.music.bitchord.ui.player.claudeFailureLabel
 import com.music.bitchord.ui.screens.claudeModeLabelRes
@@ -46,6 +60,11 @@ import java.util.Locale
  */
 @Composable
 fun TranslateAheadAlerts(hazeState: HazeState) {
+    val ask by KoAlerts.aheadAsk.collectAsStateWithLifecycle()
+    ask?.let { pending ->
+        BackHandler { KoAlerts.aheadAsk.value = null }
+        TranslateAheadAskAlert(hazeState = hazeState, ask = pending, onDismiss = { KoAlerts.aheadAsk.value = null })
+    }
     val showLog by KoAlerts.aheadLog.collectAsStateWithLifecycle()
     if (showLog) {
         var opened by remember { mutableStateOf<String?>(null) }
@@ -62,6 +81,188 @@ fun TranslateAheadAlerts(hazeState: HazeState) {
                 jobs = jobs,
                 onOpen = { opened = it },
                 onDismiss = { KoAlerts.aheadLog.value = false },
+            )
+        }
+    }
+}
+
+/** What "Translate lyrics ahead" was chosen on: the release's name and its tracks. */
+class AheadAsk(val title: String, val songs: List<Song>)
+
+/** Typical tokens of one song's translation, until this device has figures of its own. */
+private const val TYPICAL_INPUT_TOKENS = 2_500L
+private const val TYPICAL_OUTPUT_TOKENS = 3_000L
+
+/**
+ * What translating [songs] songs ahead would cost at the batch rate, in
+ * dollars: from what this device's own translations have taken per song where
+ * the log has a few, otherwise from a typical song. An estimate, and on the
+ * high side — songs already translated or without lyrics are not sent.
+ */
+private fun aheadEstimateUsd(songs: Int, model: String, reading: Boolean): Double {
+    val past = ClaudeDiagnostics.entries.value.filter {
+        it.purpose == ClaudeDiagnostics.PURPOSE_TRANSLATE && !it.failed && it.inputTokens != null && it.outputTokens != null
+    }
+    val input = if (past.size >= 3) past.sumOf { it.inputTokens ?: 0L } / past.size else TYPICAL_INPUT_TOKENS
+    val output = if (past.size >= 3) past.sumOf { it.outputTokens ?: 0L } / past.size else TYPICAL_OUTPUT_TOKENS
+    val (inPrice, outPrice) = AppSettings.claudePricePerMillion(model + LyricsTranslation.BATCH_MODEL_SUFFIX)
+    val perSong = input * inPrice / 1_000_000.0 + output * outPrice / 1_000_000.0
+    return perSong * songs * (if (reading) 2 else 1)
+}
+
+/** What is left of this month's limit, in dollars; null when no limit is set. */
+private fun remainingCapUsd(): Double? {
+    val cap = AppSettings.claudeMonthlyCap.value
+    return if (cap > 0.0) (cap - AppSettings.claudeSpentThisMonth()).coerceAtLeast(0.0) else null
+}
+
+/**
+ * The menu's "Translate lyrics ahead": the dialog, or — once "don't show this
+ * again" has been ticked — the batch itself, with the choices made last time.
+ */
+fun requestTranslateAhead(context: Context, title: String, songs: List<Song>) {
+    if (songs.isEmpty()) return
+    if (AppSettings.translateAheadIntro.value) {
+        KoAlerts.aheadAsk.value = AheadAsk(title, songs)
+        return
+    }
+    val model = AppSettings.translateAheadModel.value
+    val reading = AppSettings.translateAheadReading.value
+    val estimate = aheadEstimateUsd(songs.size, model, reading)
+    val remaining = remainingCapUsd()
+    if (remaining != null && estimate > remaining) {
+        Toast.makeText(
+            context,
+            context.getString(R.string.translate_ahead_over_cap, usd(estimate), usd(remaining)),
+            Toast.LENGTH_LONG,
+        ).show()
+        return
+    }
+    TranslateAhead.start(title, songs, model, reading)
+    Toast.makeText(context, context.getString(R.string.translate_ahead_started, title), Toast.LENGTH_LONG).show()
+}
+
+/**
+ * What a batch is, what it costs with each model, and the two things to
+ * decide: which model, and whether the pronunciation comes too.
+ */
+@Composable
+private fun TranslateAheadAskAlert(hazeState: HazeState, ask: AheadAsk, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    var model by remember { mutableStateOf(AppSettings.translateAheadModel.value) }
+    var reading by remember { mutableStateOf(AppSettings.translateAheadReading.value) }
+    var dontShow by remember { mutableStateOf(false) }
+    val count = remember(ask) { ask.songs.distinctBy { it.videoId }.size }
+    val language = remember {
+        val tag = com.music.bitchord.download.DownloadTranslations.targetLanguage(context)
+        Locale.forLanguageTag(tag.replace('_', '-')).getDisplayName(Locale.getDefault()).ifBlank { tag }
+    }
+    val style = listOf(
+        language,
+        stringResource(claudeSpeechLabelRes(LyricsTranslation.translationSpeech)),
+        stringResource(claudeModeLabelRes(LyricsTranslation.translationMode)),
+    ).joinToString(" · ")
+    val haikuUsd = aheadEstimateUsd(count, LyricsTranslation.CLAUDE_HAIKU, reading)
+    val sonnetUsd = aheadEstimateUsd(count, LyricsTranslation.CLAUDE_SONNET, reading)
+    val estimate = if (model == LyricsTranslation.CLAUDE_SONNET) sonnetUsd else haikuUsd
+    val remaining = remainingCapUsd()
+    val overCap = remaining != null && estimate > remaining
+    val message = listOfNotNull(
+        stringResource(R.string.translate_ahead_description),
+        stringResource(R.string.translate_ahead_scope, count, style),
+        stringResource(R.string.translate_ahead_over_cap, usd(estimate), usd(remaining ?: 0.0)).takeIf { overCap },
+    ).joinToString("\n\n")
+    AlertScaffold(hazeState = hazeState, onDismiss = onDismiss) {
+        AlertHeading(title = stringResource(R.string.translate_ahead), message = message)
+        AlertRule()
+        AheadOptionRow(
+            label = stringResource(R.string.claude_model_haiku),
+            detail = stringResource(R.string.translate_ahead_model_haiku_detail, usd(haikuUsd)),
+            checked = model == LyricsTranslation.CLAUDE_HAIKU,
+            checkbox = false,
+            onClick = { model = LyricsTranslation.CLAUDE_HAIKU },
+        )
+        AlertRule()
+        AheadOptionRow(
+            label = stringResource(R.string.claude_model_sonnet),
+            detail = stringResource(R.string.translate_ahead_model_sonnet_detail, usd(sonnetUsd)),
+            checked = model == LyricsTranslation.CLAUDE_SONNET,
+            checkbox = false,
+            onClick = { model = LyricsTranslation.CLAUDE_SONNET },
+        )
+        AlertRule()
+        AheadOptionRow(
+            label = stringResource(R.string.translate_ahead_reading),
+            detail = stringResource(R.string.translate_ahead_reading_detail),
+            checked = reading,
+            checkbox = true,
+            onClick = { reading = !reading },
+        )
+        AlertRule()
+        AheadOptionRow(
+            label = stringResource(R.string.translate_ahead_dont_show),
+            detail = stringResource(R.string.translate_ahead_dont_show_detail),
+            checked = dontShow,
+            checkbox = true,
+            onClick = { dontShow = !dontShow },
+        )
+        AlertRule()
+        AlertAction(
+            label = stringResource(R.string.translate_ahead_send),
+            emphasised = true,
+            enabled = !overCap,
+            onClick = {
+                AppSettings.setTranslateAheadChoice(model, reading)
+                if (dontShow) AppSettings.setTranslateAheadIntro(false)
+                TranslateAhead.start(ask.title, ask.songs, model, reading)
+                Toast.makeText(context, context.getString(R.string.translate_ahead_started, ask.title), Toast.LENGTH_LONG).show()
+                onDismiss()
+            },
+        )
+        AlertRule()
+        AlertAction(label = stringResource(R.string.cancel), emphasised = false, onClick = onDismiss)
+    }
+}
+
+/** A row that is one of a few choices (a tick at the end when chosen) or a setting of its own (a checkbox in front). */
+@Composable
+private fun AheadOptionRow(label: String, detail: String?, checked: Boolean, checkbox: Boolean, onClick: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(if (pressed) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.09f) else Color.Transparent)
+            .clickable(indication = null, interactionSource = interactionSource, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (checkbox) {
+            // Null: the row is the control, as it is for the choices above it.
+            Checkbox(checked = checked, onCheckedChange = null)
+            Spacer(Modifier.width(12.dp))
+        }
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            if (detail != null) {
+                Text(
+                    text = detail,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp, lineHeight = 15.sp),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                )
+            }
+        }
+        if (!checkbox && checked) {
+            Spacer(Modifier.width(10.dp))
+            Icon(
+                imageVector = Icons.Rounded.Check,
+                contentDescription = stringResource(R.string.selected),
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(19.dp),
             )
         }
     }

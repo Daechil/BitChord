@@ -113,6 +113,12 @@ fun BrowseActionsMenu(
     onOpen: (() -> Unit)? = null,
     onDownloadAll: (() -> Unit)? = null,
     /**
+     * Sends the release's lyrics to be translated ahead in one batch — see
+     * [com.music.bitchord.download.TranslateAhead]. Null where there is nothing
+     * to send for, or Claude is not set up.
+     */
+    onTranslateAhead: (() -> Unit)? = null,
+    /**
      * Shares the release's own YouTube Music link — the album/playlist
      * counterpart to a track's own Share tile in [SongActionsMenu]. Null for
      * anything with no such link to share: an artist card, or a page built
@@ -224,6 +230,9 @@ fun BrowseActionsMenu(
                     },
                     onClick = download,
                 )
+            }
+            onTranslateAhead?.let {
+                ActionRow(SfIcons.AutoAwesome, stringResource(R.string.translate_ahead), onClick = it)
             }
             onOpen?.let {
                 ActionRow(

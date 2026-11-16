@@ -5158,6 +5158,9 @@ private fun BitChordApp(
                             },
                     )
                 }.takeIf { downloadable },
+                onTranslateAhead = act { songs ->
+                    com.music.bitchord.ui.components.requestTranslateAhead(context, target.title, songs)
+                }.takeIf { downloadable && com.music.bitchord.download.TranslateAhead.available() },
                 // The same link a share off YouTube Music's own overflow
                 // gives — built from the browse id rather than fetched,
                 // since nothing about it depends on the tracks or the

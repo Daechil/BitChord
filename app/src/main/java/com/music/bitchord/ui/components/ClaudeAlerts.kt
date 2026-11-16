@@ -51,6 +51,9 @@ object KoAlerts {
     /** The log of playlists and albums translated ahead. */
     val aheadLog = MutableStateFlow(false)
 
+    /** Which of the floating bar's choices is open: "size", "opacity" or "show"; null for none. */
+    val floatingChoice = MutableStateFlow<String?>(null)
+
     /** A release waiting on the "translate ahead" dialog's answer. */
     val aheadAsk = MutableStateFlow<AheadAsk?>(null)
 }
@@ -85,6 +88,7 @@ fun ClaudeAlerts(
     onDismissLog: () -> Unit = {},
 ) {
     TranslateAheadAlerts(hazeState)
+    FloatingLyricsAlerts(hazeState)
     val showCap by KoAlerts.monthlyCap.collectAsStateWithLifecycle()
     if (showCap) {
         BackHandler { KoAlerts.monthlyCap.value = false }
@@ -252,6 +256,81 @@ fun ClaudeAlerts(
             onDismiss = { onDismissUsage() },
         )
     }
+}
+
+/** The floating bar's text size, background and contents, opened from its rows in Settings. */
+@Composable
+private fun FloatingLyricsAlerts(hazeState: HazeState) {
+    val choice by KoAlerts.floatingChoice.collectAsStateWithLifecycle()
+    val close = { KoAlerts.floatingChoice.value = null }
+    if (choice != null) BackHandler { close() }
+    when (choice) {
+        "size" -> {
+            val selected by AppSettings.floatingLyricsSize.collectAsStateWithLifecycle()
+            val options = listOf(AppSettings.FLOATING_SMALL, AppSettings.FLOATING_MEDIUM, AppSettings.FLOATING_LARGE)
+            val labels = options.associateWith { stringResource(floatingSizeLabelRes(it)) }
+            ChoiceAlert(
+                hazeState = hazeState,
+                title = stringResource(R.string.floating_lyrics_size),
+                message = null,
+                options = options,
+                selected = selected,
+                label = { labels[it].orEmpty() },
+                onSelect = {
+                    AppSettings.setFloatingLyricsSize(it)
+                    close()
+                },
+                onDismiss = close,
+            )
+        }
+        "opacity" -> {
+            val selected by AppSettings.floatingLyricsOpacity.collectAsStateWithLifecycle()
+            val options = listOf(40, 60, 85, 100)
+            ChoiceAlert(
+                hazeState = hazeState,
+                title = stringResource(R.string.floating_lyrics_opacity),
+                message = stringResource(R.string.floating_lyrics_opacity_description),
+                options = options,
+                selected = options.minByOrNull { kotlin.math.abs(it - selected) } ?: 85,
+                label = { "$it%" },
+                onSelect = {
+                    AppSettings.setFloatingLyricsOpacity(it)
+                    close()
+                },
+                onDismiss = close,
+            )
+        }
+        "show" -> {
+            val selected by AppSettings.floatingLyricsShow.collectAsStateWithLifecycle()
+            val options = listOf(AppSettings.FLOATING_BOTH, AppSettings.FLOATING_ORIGINAL, AppSettings.FLOATING_TRANSLATION)
+            val labels = options.associateWith { stringResource(floatingShowLabelRes(it)) }
+            ChoiceAlert(
+                hazeState = hazeState,
+                title = stringResource(R.string.floating_lyrics_show),
+                message = stringResource(R.string.floating_lyrics_show_description),
+                options = options,
+                selected = selected,
+                label = { labels[it].orEmpty() },
+                onSelect = {
+                    AppSettings.setFloatingLyricsShow(it)
+                    close()
+                },
+                onDismiss = close,
+            )
+        }
+    }
+}
+
+fun floatingSizeLabelRes(size: String): Int = when (size) {
+    AppSettings.FLOATING_SMALL -> R.string.floating_lyrics_size_small
+    AppSettings.FLOATING_LARGE -> R.string.floating_lyrics_size_large
+    else -> R.string.floating_lyrics_size_medium
+}
+
+fun floatingShowLabelRes(show: String): Int = when (show) {
+    AppSettings.FLOATING_ORIGINAL -> R.string.floating_lyrics_show_original
+    AppSettings.FLOATING_TRANSLATION -> R.string.floating_lyrics_show_translation
+    else -> R.string.floating_lyrics_show_both
 }
 
 /**

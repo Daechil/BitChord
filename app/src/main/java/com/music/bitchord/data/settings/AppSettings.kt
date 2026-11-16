@@ -561,6 +561,22 @@ object AppSettings {
     /** The floating bar lets touches through and cannot be moved. */
     val floatingLyricsLocked = MutableStateFlow(false)
 
+    /** The floating bar's text size: [FLOATING_SMALL], [FLOATING_MEDIUM] or [FLOATING_LARGE]. */
+    val floatingLyricsSize = MutableStateFlow(FLOATING_MEDIUM)
+
+    /** How solid the floating bar's background is, in percent. */
+    val floatingLyricsOpacity = MutableStateFlow(85)
+
+    /** What the floating bar shows: [FLOATING_BOTH], [FLOATING_ORIGINAL] or [FLOATING_TRANSLATION]. */
+    val floatingLyricsShow = MutableStateFlow(FLOATING_BOTH)
+
+    const val FLOATING_SMALL = "small"
+    const val FLOATING_MEDIUM = "medium"
+    const val FLOATING_LARGE = "large"
+    const val FLOATING_BOTH = "both"
+    const val FLOATING_ORIGINAL = "original"
+    const val FLOATING_TRANSLATION = "translation"
+
     /** Whether "Translate lyrics ahead" explains itself and asks before sending; off, it sends with the last choices. */
     val translateAheadIntro = MutableStateFlow(true)
 
@@ -1160,6 +1176,9 @@ object AppSettings {
         claudeReading.value = prefs.getBoolean(KEY_CLAUDE_READING, true)
         floatingLyrics.value = prefs.getBoolean(KEY_FLOATING_LYRICS, false)
         floatingLyricsLocked.value = prefs.getBoolean(KEY_FLOATING_LYRICS_LOCKED, false)
+        floatingLyricsSize.value = prefs.getString(KEY_FLOATING_LYRICS_SIZE, null) ?: FLOATING_MEDIUM
+        floatingLyricsOpacity.value = prefs.getInt(KEY_FLOATING_LYRICS_OPACITY, 85)
+        floatingLyricsShow.value = prefs.getString(KEY_FLOATING_LYRICS_SHOW, null) ?: FLOATING_BOTH
         translateAheadIntro.value = prefs.getBoolean(KEY_TRANSLATE_AHEAD_INTRO, true)
         translateAheadModel.value = prefs.getString(KEY_TRANSLATE_AHEAD_MODEL, null)
             ?: com.music.bitchord.data.lyrics.LyricsTranslation.CLAUDE_HAIKU
@@ -1753,6 +1772,21 @@ object AppSettings {
     fun setFloatingLyricsLocked(value: Boolean) {
         floatingLyricsLocked.value = value
         prefs.edit().putBoolean(KEY_FLOATING_LYRICS_LOCKED, value).apply()
+    }
+
+    fun setFloatingLyricsSize(value: String) {
+        floatingLyricsSize.value = value
+        prefs.edit().putString(KEY_FLOATING_LYRICS_SIZE, value).apply()
+    }
+
+    fun setFloatingLyricsOpacity(value: Int) {
+        floatingLyricsOpacity.value = value
+        prefs.edit().putInt(KEY_FLOATING_LYRICS_OPACITY, value).apply()
+    }
+
+    fun setFloatingLyricsShow(value: String) {
+        floatingLyricsShow.value = value
+        prefs.edit().putString(KEY_FLOATING_LYRICS_SHOW, value).apply()
     }
 
     fun setTranslateAheadIntro(value: Boolean) {
@@ -2593,6 +2627,9 @@ object AppSettings {
     private const val KEY_FLOATING_LYRICS = "ko_floating_lyrics"
     private const val KEY_FLOATING_LYRICS_LOCKED = "ko_floating_lyrics_locked"
     private const val KEY_TRANSLATE_AHEAD_INTRO = "ko_translate_ahead_intro"
+    private const val KEY_FLOATING_LYRICS_SIZE = "ko_floating_lyrics_size"
+    private const val KEY_FLOATING_LYRICS_OPACITY = "ko_floating_lyrics_opacity"
+    private const val KEY_FLOATING_LYRICS_SHOW = "ko_floating_lyrics_show"
     private const val KEY_TRANSLATE_AHEAD_MODEL = "ko_translate_ahead_model"
     private const val KEY_TRANSLATE_AHEAD_READING = "ko_translate_ahead_reading"
     private const val KEY_CLAUDE_USAGE = "claude_usage"

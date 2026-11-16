@@ -94,6 +94,7 @@ object FloatingLyrics {
     private var subView: TextView? = null
     private var params: WindowManager.LayoutParams? = null
     private var appliedLock: Boolean? = null
+    private var appliedLook: String? = null
 
     private var trackId: String? = null
     private var lines: List<LyricLine> = emptyList()
@@ -144,6 +145,7 @@ object FloatingLyrics {
         }
         if (root == null && !addView(context)) return
         applyLock(context)
+        applyLook(context)
 
         val index = lines.indexOfLast { it.timeMs <= positionMs }
         if (translated == null && System.currentTimeMillis() - lastTranslationCheck > TRANSLATION_RECHECK_MS) {
@@ -152,8 +154,12 @@ object FloatingLyrics {
         if (index == shownIndex) return
         shownIndex = index
         val line = lines.getOrNull(index)?.takeIf { !it.isGap && it.text.isNotBlank() }
-        lineView?.text = line?.text ?: "♪"
-        val sub = line?.let { translated?.getOrNull(index)?.text }?.takeIf { it.isNotBlank() && it != line.text }
+        val translation = line?.let { translated?.getOrNull(index)?.text }?.takeIf { it.isNotBlank() && it != line.text }
+        val show = AppSettings.floatingLyricsShow.value
+        // Translation only: a song with none yet still shows its own words rather than nothing.
+        val main = if (show == AppSettings.FLOATING_TRANSLATION && translation != null) translation else line?.text
+        val sub = translation.takeIf { show == AppSettings.FLOATING_BOTH }
+        lineView?.text = main ?: "♪"
         subView?.text = sub.orEmpty()
         subView?.visibility = if (sub == null) View.GONE else View.VISIBLE
     }
@@ -298,6 +304,7 @@ object FloatingLyrics {
             subView = sub
             params = layout
             appliedLock = null
+            appliedLook = null
             shownIndex = Int.MIN_VALUE
             true
         }.getOrElse {
@@ -321,6 +328,29 @@ object FloatingLyrics {
         layout.alpha = if (locked) PASS_THROUGH_ALPHA else 1f
         runCatching { window.updateViewLayout(view, layout) }
         appliedLock = locked
+    }
+
+    /** Text size, background and what is shown, as Settings has them now; applied when one changes. */
+    private fun applyLook(context: Context) {
+        val size = AppSettings.floatingLyricsSize.value
+        val opacity = AppSettings.floatingLyricsOpacity.value.coerceIn(10, 100)
+        val look = "$size/$opacity/${AppSettings.floatingLyricsShow.value}"
+        if (look == appliedLook) return
+        val view = root ?: return
+        val scale = when (size) {
+            AppSettings.FLOATING_SMALL -> 0.82f
+            AppSettings.FLOATING_LARGE -> 1.25f
+            else -> 1f
+        }
+        lineView?.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f * scale)
+        subView?.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f * scale)
+        view.background = GradientDrawable().apply {
+            cornerRadius = 18 * context.resources.displayMetrics.density
+            setColor(((opacity * 255 / 100) shl 24) or 0x121212)
+        }
+        appliedLook = look
+        // The line on show is drawn again, in case what is shown changed.
+        shownIndex = Int.MIN_VALUE
     }
 
     /** The long press: away until the app has been opened again, and say so. */
@@ -347,5 +377,6 @@ object FloatingLyrics {
         subView = null
         params = null
         appliedLock = null
+        appliedLook = null
     }
 }

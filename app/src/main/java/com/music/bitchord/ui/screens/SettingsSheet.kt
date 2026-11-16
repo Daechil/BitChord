@@ -302,6 +302,9 @@ fun SettingsScreen(
     val claudeLog by com.music.bitchord.data.lyrics.ClaudeDiagnostics.entries.collectAsStateWithLifecycle()
     val aheadJobs by com.music.bitchord.download.TranslateAhead.jobs.collectAsStateWithLifecycle()
     val aheadIntro by AppSettings.translateAheadIntro.collectAsStateWithLifecycle()
+    val floatingSize by AppSettings.floatingLyricsSize.collectAsStateWithLifecycle()
+    val floatingOpacity by AppSettings.floatingLyricsOpacity.collectAsStateWithLifecycle()
+    val floatingShow by AppSettings.floatingLyricsShow.collectAsStateWithLifecycle()
     val claudeKeyRejected by com.music.bitchord.data.lyrics.LyricsTranslation.claudeKeyRejected
         .collectAsStateWithLifecycle()
     val theme by AppSettings.themeMode.collectAsStateWithLifecycle()
@@ -445,6 +448,49 @@ fun SettingsScreen(
                     context.getString(R.string.import_failed, it.message ?: context.getString(R.string.unknown_error))
                 },
             )
+        }
+    }
+    // The Claude answers on this device, as one zip — see LyricsTranslation.backUpTranslations.
+    val translationsBackUpPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip"),
+    ) { target ->
+        if (target == null) return@rememberLauncherForActivityResult
+        backupScope.launch {
+            val count = runCatching {
+                context.contentResolver.openOutputStream(target)?.use {
+                    com.music.bitchord.data.lyrics.LyricsTranslation.backUpTranslations(it)
+                }
+            }.getOrNull()
+            Toast.makeText(
+                context,
+                if (count == null) {
+                    context.getString(R.string.translations_back_up_failed)
+                } else {
+                    context.getString(R.string.translations_back_up_done, count)
+                },
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+    }
+    val translationsRestorePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { source ->
+        if (source == null) return@rememberLauncherForActivityResult
+        backupScope.launch {
+            val restored = runCatching {
+                context.contentResolver.openInputStream(source)?.use {
+                    com.music.bitchord.data.lyrics.LyricsTranslation.restoreTranslations(it)
+                }
+            }.getOrNull()
+            Toast.makeText(
+                context,
+                if (restored == null) {
+                    context.getString(R.string.translations_restore_failed)
+                } else {
+                    context.getString(R.string.translations_restore_done, restored.added, restored.skipped)
+                },
+                Toast.LENGTH_LONG,
+            ).show()
         }
     }
     var showListenBrainzTokenDialog by remember { mutableStateOf(false) }
@@ -897,6 +943,36 @@ fun SettingsScreen(
                         onClick = { AppSettings.setFloatingLyricsLocked(!floatingLyricsLocked) },
                     )
                 }
+                val floatingSizeTitle = stringResource(R.string.floating_lyrics_size)
+                row(floatingSizeTitle, "lyrics", "floating", "size", "font", "플로팅", "글자", "크기") {
+                    SettingsRow(
+                        icon = SfIcons.Translate,
+                        title = floatingSizeTitle,
+                        subtitle = stringResource(com.music.bitchord.ui.components.floatingSizeLabelRes(floatingSize)),
+                        trailing = { Chevron() },
+                        onClick = { com.music.bitchord.ui.components.KoAlerts.floatingChoice.value = "size" },
+                    )
+                }
+                val floatingOpacityTitle = stringResource(R.string.floating_lyrics_opacity)
+                row(floatingOpacityTitle, "lyrics", "floating", "opacity", "background", "플로팅", "투명", "배경") {
+                    SettingsRow(
+                        icon = SfIcons.Translate,
+                        title = floatingOpacityTitle,
+                        subtitle = "$floatingOpacity%",
+                        trailing = { Chevron() },
+                        onClick = { com.music.bitchord.ui.components.KoAlerts.floatingChoice.value = "opacity" },
+                    )
+                }
+                val floatingShowTitle = stringResource(R.string.floating_lyrics_show)
+                row(floatingShowTitle, "lyrics", "floating", "translation", "original", "플로팅", "번역", "원문") {
+                    SettingsRow(
+                        icon = SfIcons.Translate,
+                        title = floatingShowTitle,
+                        subtitle = stringResource(com.music.bitchord.ui.components.floatingShowLabelRes(floatingShow)),
+                        trailing = { Chevron() },
+                        onClick = { com.music.bitchord.ui.components.KoAlerts.floatingChoice.value = "show" },
+                    )
+                }
             }
             val lockScreenLyricsTitle = stringResource(R.string.lock_screen_lyrics)
             row(lockScreenLyricsTitle, "lyrics", "lock screen", "lockscreen", "잠금", "가사") {
@@ -949,6 +1025,28 @@ fun SettingsScreen(
                         )
                     },
                     onClick = { AppSettings.setKeepDownloadTranslations(!keepDownloadTranslations) },
+                )
+            }
+            val backUpTranslationsTitle = stringResource(R.string.translations_back_up)
+            row(backUpTranslationsTitle, "backup", "export", "translate", "claude", "백업", "내보내기", "번역") {
+                SettingsRow(
+                    icon = SfIcons.Upload,
+                    title = backUpTranslationsTitle,
+                    subtitle = stringResource(R.string.translations_back_up_subtitle),
+                    trailing = { Chevron() },
+                    onClick = { translationsBackUpPicker.launch("bitchord-ko-translations.zip") },
+                )
+            }
+            val restoreTranslationsTitle = stringResource(R.string.translations_restore)
+            row(restoreTranslationsTitle, "backup", "import", "restore", "translate", "claude", "복원", "불러오기", "번역") {
+                SettingsRow(
+                    icon = SfIcons.Download,
+                    title = restoreTranslationsTitle,
+                    subtitle = stringResource(R.string.translations_restore_subtitle),
+                    trailing = { Chevron() },
+                    onClick = {
+                        translationsRestorePicker.launch(arrayOf("application/zip", "application/octet-stream", "*/*"))
+                    },
                 )
             }
         }

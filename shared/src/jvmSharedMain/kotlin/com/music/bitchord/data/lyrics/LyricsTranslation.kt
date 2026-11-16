@@ -1951,6 +1951,130 @@ object LyricsTranslation {
     }
 
 
+    // ---- Taking the paid-for answers to another phone ------------------------
+
+    private const val BACKUP_MARKER = "bitchord-ko-translations"
+    private val BACKUP_ENTRY = Regex("^(kept|cache|meaning)/([0-9a-f]{64}\\.json(?:\\.gz)?)$")
+    private const val MAX_BACKUP_ENTRY_BYTES = 4 * 1024 * 1024
+
+    /** How a backup went back in: answers [added], and ones [skipped] — already here, or not readable. */
+    class Restored(val added: Int, val skipped: Int)
+
+    /** At most [limit] bytes of [input]; null when there are more. */
+    private fun readLimited(input: java.io.InputStream, limit: Int): ByteArray? {
+        val buffer = java.io.ByteArrayOutputStream()
+        val chunk = ByteArray(16 * 1024)
+        while (true) {
+            val read = input.read(chunk)
+            if (read < 0) break
+            buffer.write(chunk, 0, read)
+            if (buffer.size() > limit) return null
+        }
+        return buffer.toByteArray()
+    }
+
+    private fun readTranslationFile(file: File): CachedTranslation? = runCatching {
+        GZIPInputStream(FileInputStream(file)).bufferedReader().use { json.decodeFromString<CachedTranslation>(it.readText()) }
+    }.getOrNull()
+
+    /**
+     * Writes every Claude answer on this device to [output] as one zip: the
+     * kept store, Claude's translations in the cache (Google's cost nothing and
+     * are left out) and the song explanations. No key and no settings — only
+     * the answers, under names that are hashes. Returns how many went in.
+     */
+    suspend fun backUpTranslations(output: java.io.OutputStream): Int = withContext(Dispatchers.IO) {
+        diskMutex.withLock {
+            var count = 0
+            java.util.zip.ZipOutputStream(output).use { zip ->
+                zip.putNextEntry(java.util.zip.ZipEntry(BACKUP_MARKER))
+                zip.write("1".toByteArray())
+                zip.closeEntry()
+                fun add(folder: String, file: File) {
+                    zip.putNextEntry(java.util.zip.ZipEntry("$folder/${file.name}"))
+                    FileInputStream(file).use { it.copyTo(zip) }
+                    zip.closeEntry()
+                    count++
+                }
+                val kept = keepDir?.let { File(it, KEPT_DIRECTORY) }
+                    ?.listFiles { file -> file.name.endsWith(".json.gz") }
+                    .orEmpty()
+                kept.forEach { add("kept", it) }
+                val keptNames = kept.mapTo(HashSet()) { it.name }
+                cacheDir?.let { File(it, CACHE_DIRECTORY) }
+                    ?.listFiles { file -> file.name.endsWith(".json.gz") }
+                    .orEmpty()
+                    .forEach { file ->
+                        if (file.name !in keptNames && readTranslationFile(file)?.engine == ENGINE_CLAUDE) add("cache", file)
+                    }
+                (keepDir ?: cacheDir)?.let { File(it, MEANING_DIRECTORY) }
+                    ?.listFiles { file -> file.name.endsWith(".json") }
+                    .orEmpty()
+                    .forEach { add("meaning", it) }
+            }
+            count
+        }
+    }
+
+    /**
+     * Reads a zip from [backUpTranslations] back in. Everything goes to the
+     * kept store, which nothing clears. An answer already on this device is
+     * left as it is; a file that is not one of ours is passed over. Null when
+     * [input] is not such a backup at all.
+     */
+    suspend fun restoreTranslations(input: java.io.InputStream): Restored? = withContext(Dispatchers.IO) {
+        diskMutex.withLock {
+            val root = keepDir ?: cacheDir ?: return@withLock null
+            var added = 0
+            var skipped = 0
+            var marked = false
+            java.util.zip.ZipInputStream(input).use { zip ->
+                while (true) {
+                    val entry = zip.nextEntry ?: break
+                    if (entry.name == BACKUP_MARKER) {
+                        marked = true
+                        continue
+                    }
+                    // Only names of the shape this app writes: nothing in a zip
+                    // from elsewhere gets to choose where it lands.
+                    val match = BACKUP_ENTRY.matchEntire(entry.name)
+                    if (entry.isDirectory || match == null) continue
+                    val folder = match.groupValues[1]
+                    val name = match.groupValues[2]
+                    val meaning = folder == "meaning"
+                    if (meaning == name.endsWith(".gz")) continue
+                    val bytes = readLimited(zip, MAX_BACKUP_ENTRY_BYTES)
+                    val directory = File(root, if (meaning) MEANING_DIRECTORY else KEPT_DIRECTORY)
+                    val destination = File(directory, name)
+                    val inCache = !meaning && cacheDir?.let { File(File(it, CACHE_DIRECTORY), name).isFile } == true
+                    val valid = bytes != null && !destination.isFile && !inCache && runCatching {
+                        if (meaning) {
+                            json.parseToJsonElement(String(bytes, Charsets.UTF_8)).jsonObject.isNotEmpty()
+                        } else {
+                            val text = GZIPInputStream(java.io.ByteArrayInputStream(bytes)).use { readLimited(it, MAX_BACKUP_ENTRY_BYTES * 4) }
+                            text != null && json.decodeFromString<CachedTranslation>(String(text, Charsets.UTF_8)).version == CACHE_VERSION
+                        }
+                    }.getOrDefault(false)
+                    if (!valid || bytes == null) {
+                        skipped++
+                        continue
+                    }
+                    val written = runCatching {
+                        if (!directory.exists()) directory.mkdirs()
+                        val temporary = File(directory, "$name.tmp")
+                        temporary.writeBytes(bytes)
+                        if (!temporary.renameTo(destination)) {
+                            temporary.copyTo(destination, overwrite = true)
+                            temporary.delete()
+                        }
+                    }.isSuccess
+                    if (written) added++ else skipped++
+                }
+            }
+            if (!marked && added == 0 && skipped == 0) null else Restored(added, skipped)
+        }
+    }
+
     // ---- What a song means ---------------------------------------------------
 
     @Serializable

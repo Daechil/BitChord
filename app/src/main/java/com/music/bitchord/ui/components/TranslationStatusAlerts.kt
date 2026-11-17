@@ -1,5 +1,6 @@
 package com.music.bitchord.ui.components
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,6 +13,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -26,15 +29,18 @@ import com.music.bitchord.R
 import com.music.bitchord.data.lyrics.LyricsTranslation
 import com.music.bitchord.data.lyrics.LyricsTranslation.StoredAnswer
 import com.music.bitchord.data.model.Song
+import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.download.TranslateAhead
 import com.music.bitchord.download.TranslationStatus
 import com.music.bitchord.ui.icons.SfIcons
 import com.music.bitchord.ui.screens.claudeModeLabelRes
 import com.music.bitchord.ui.screens.claudeSpeechLabelRes
+import com.music.bitchord.ui.screens.megabytes
 import dev.chrisbanes.haze.HazeState
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 /** Rows shown at most in a long list; the search narrows the rest. */
 private const val MAX_LISTED = 200
@@ -323,18 +329,71 @@ private fun ReleaseStatusAlert(hazeState: HazeState, release: AheadAsk, onDismis
     }
 }
 
-/** Every song with something stored, searchable, with what it all takes up. */
+/**
+ * Every song with something stored, searchable; what it all takes up, by
+ * kind and by place; and the cache's clearing and the kept store's limit.
+ */
 @Composable
 private fun StorageAlert(hazeState: HazeState, onOpen: (Song) -> Unit, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var answers by remember { mutableStateOf<List<StoredAnswer>?>(null) }
-    var use by remember { mutableStateOf<LyricsTranslation.StorageUse?>(null) }
+    var breakdown by remember { mutableStateOf<LyricsTranslation.StorageBreakdown?>(null) }
     var query by remember { mutableStateOf("") }
-    LaunchedEffect(Unit) {
+    var reload by remember { mutableIntStateOf(0) }
+    var confirmingClear by remember { mutableStateOf(false) }
+    var pickingLimit by remember { mutableStateOf(false) }
+    LaunchedEffect(reload) {
         answers = LyricsTranslation.storedAnswers()
-        use = LyricsTranslation.storageUse()
+        breakdown = LyricsTranslation.storageBreakdown()
     }
+    val keptLimitMb by AppSettings.keptStoreLimitMb.collectAsStateWithLifecycle()
     val words = statusWords()
     val all = answers
+    val clearedText = stringResource(R.string.translation_storage_cleared)
+
+    if (pickingLimit) {
+        val options = listOf(100, 200, 500)
+        ChoiceAlert(
+            hazeState = hazeState,
+            title = stringResource(R.string.translation_storage_limit),
+            message = stringResource(R.string.translation_storage_limit_description),
+            options = options,
+            selected = options.minByOrNull { kotlin.math.abs(it - keptLimitMb) } ?: 100,
+            label = { "$it MB" },
+            onSelect = {
+                AppSettings.setKeptStoreLimitMb(it)
+                pickingLimit = false
+            },
+            onDismiss = { pickingLimit = false },
+        )
+        return
+    }
+    if (confirmingClear) {
+        ConfirmationAlert(
+            hazeState = hazeState,
+            title = stringResource(R.string.translation_storage_clear_all),
+            description = stringResource(
+                if (AppSettings.keepClaudeTranslations.value) {
+                    R.string.translation_storage_clear_all_confirm
+                } else {
+                    R.string.translation_storage_clear_all_confirm_claude
+                },
+            ),
+            confirmLabel = stringResource(R.string.translation_storage_clear_all),
+            onConfirm = {
+                confirmingClear = false
+                scope.launch {
+                    val cleared = LyricsTranslation.clearCache(googleOnly = false)
+                    Toast.makeText(context, clearedText.format(cleared.files, megabytes(cleared.bytes)), Toast.LENGTH_SHORT).show()
+                    reload++
+                }
+            },
+            onDismiss = { confirmingClear = false },
+        )
+        return
+    }
+
     // One row per song, newest first: the answers of a song together.
     val songs = remember(all) {
         all.orEmpty().groupBy { it.trackId }.values.sortedByDescending { group -> group.maxOf { it.at } }
@@ -353,18 +412,32 @@ private fun StorageAlert(hazeState: HazeState, onOpen: (Song) -> Unit, onDismiss
             }
         }
     }
-    fun mb(bytes: Long) = String.format(Locale.US, "%.1f MB", bytes / 1_048_576.0)
-    val summary = when {
-        all == null -> stringResource(R.string.translation_status_loading)
-        else -> stringResource(
-            R.string.translation_storage_summary,
-            songs.size,
-            songs.count { group -> group.any { it.byClaude && it.kind == LyricsTranslation.KIND_TRANSLATION } },
-            songs.count { group -> group.any { !it.byClaude } },
-            mb(use?.keptBytes ?: 0L),
-            mb(use?.cacheBytes ?: 0L),
-            mb(use?.meaningBytes ?: 0L),
-        ) + "\n" + stringResource(R.string.translation_status_note)
+    val parts = breakdown
+    val cacheLimit = LyricsTranslation.CACHE_LIMIT_BYTES
+    val summary = if (all == null || parts == null) {
+        stringResource(R.string.translation_status_loading)
+    } else {
+        listOfNotNull(
+            stringResource(
+                R.string.translation_storage_places,
+                megabytes(parts.keptBytes),
+                keptLimitMb,
+                megabytes(parts.cacheBytes),
+                cacheLimit / (1024 * 1024),
+            ),
+            stringResource(
+                R.string.translation_storage_kinds,
+                parts.claude.songs, megabytes(parts.claude.bytes),
+                parts.google.songs, megabytes(parts.google.bytes),
+                parts.reading.songs, megabytes(parts.reading.bytes),
+                parts.meaning.songs, megabytes(parts.meaning.bytes),
+            ),
+            stringResource(R.string.translation_storage_other, parts.other.songs, megabytes(parts.other.bytes))
+                .takeIf { parts.other.songs > 0 },
+            stringResource(R.string.translation_storage_cache_full).takeIf { parts.cacheBytes * 10 >= cacheLimit * 8 },
+            stringResource(R.string.translation_storage_kept_full)
+                .takeIf { parts.keptBytes * 10 >= keptLimitMb * 1024L * 1024L * 8 },
+        ).joinToString("\n")
     }
     val unnamed = stringResource(R.string.translation_storage_unnamed)
     AlertScaffold(hazeState = hazeState, onDismiss = onDismiss) {
@@ -381,7 +454,7 @@ private fun StorageAlert(hazeState: HazeState, onOpen: (Song) -> Unit, onDismiss
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 300.dp)
+                    .heightIn(max = 260.dp)
                     .verticalScroll(rememberScrollState()),
             ) {
                 shown.take(MAX_LISTED).forEach { group ->
@@ -414,6 +487,31 @@ private fun StorageAlert(hazeState: HazeState, onOpen: (Song) -> Unit, onDismiss
                 }
             }
         }
+        AlertRule()
+        AlertAction(
+            label = stringResource(R.string.translation_storage_clear_google),
+            emphasised = false,
+            onClick = {
+                scope.launch {
+                    val cleared = LyricsTranslation.clearCache(googleOnly = true)
+                    Toast.makeText(context, clearedText.format(cleared.files, megabytes(cleared.bytes)), Toast.LENGTH_SHORT).show()
+                    reload++
+                }
+            },
+        )
+        AlertRule()
+        AlertAction(
+            label = stringResource(R.string.translation_storage_clear_all),
+            emphasised = false,
+            destructive = true,
+            onClick = { confirmingClear = true },
+        )
+        AlertRule()
+        AlertAction(
+            label = stringResource(R.string.translation_storage_limit_row, keptLimitMb),
+            emphasised = false,
+            onClick = { pickingLimit = true },
+        )
         AlertRule()
         AlertAction(label = stringResource(R.string.close), emphasised = false, onClick = onDismiss)
     }

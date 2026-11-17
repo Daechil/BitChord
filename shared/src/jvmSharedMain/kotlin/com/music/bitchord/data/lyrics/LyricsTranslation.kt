@@ -116,6 +116,10 @@ object LyricsTranslation {
         @Synchronized fun put(key: String, value: CachedTranslation) {
             entries[key] = value
         }
+
+        @Synchronized fun clear() {
+            entries.clear()
+        }
     }
 
     /**
@@ -140,6 +144,23 @@ object LyricsTranslation {
      */
     private const val KEPT_DIRECTORY = "lyrics_translation_kept_v1"
     private const val MAX_KEPT_BYTES = 100L * 1024L * 1024L
+
+    /** The cache's size limit, for Settings to show beside what it holds. */
+    const val CACHE_LIMIT_BYTES = MAX_CACHE_BYTES
+
+    /** The kept store's size limit, which Settings can raise; past it the least recently used go. */
+    @Volatile
+    var keptLimitBytes: Long = MAX_KEPT_BYTES
+
+    /**
+     * Every Claude answer — translation or pronunciation — goes to the kept
+     * store, not only a downloaded song's: each one was paid for, and the
+     * cache's limit would otherwise drop the oldest of them.
+     */
+    @Volatile
+    var keepClaudeAlways: Boolean = true
+
+    private fun keepClaude(trackId: String): Boolean = keepClaudeAlways || keepTranslationFor(trackId)
 
     /** Whether a track's translation goes to the kept store — downloaded, and the setting on. */
     @Volatile
@@ -533,7 +554,7 @@ object LyricsTranslation {
         if (cached != null && cached.version == CACHE_VERSION && cached.texts.size == slots.size &&
             repeatedAcrossLines(cached.texts, slots.map { it.text }) == null
         ) {
-            if (keepTranslationFor(trackId) && !isKept(cacheKey)) writeCache(cacheKey, cached, keep = true)
+            if (keepClaude(trackId) && !isKept(cacheKey)) writeCache(cacheKey, cached, keep = true)
             val keptNow = isKept(cacheKey)
             noteStored(
                 cacheKey, trackId, KIND_TRANSLATION, cached, target,
@@ -569,7 +590,7 @@ object LyricsTranslation {
             sonnetStandIn = standIn,
         )
         memory.put(cacheKey, entry)
-        val keepClaude = keepTranslationFor(trackId)
+        val keepClaude = keepClaude(trackId)
         writeCache(cacheKey, entry, keep = keepClaude)
         noteStored(
             cacheKey, trackId, KIND_TRANSLATION, entry, target,
@@ -1477,7 +1498,10 @@ object LyricsTranslation {
                         temporary.copyTo(destination, overwrite = true)
                         temporary.delete()
                     }
-                    trimCache(directory, if (kept) MAX_KEPT_BYTES else MAX_CACHE_BYTES)
+                    trimCache(directory, if (kept) keptLimitBytes else MAX_CACHE_BYTES)
+                    // Moved to the kept store: the cache's copy is only space now.
+                    if (kept) cacheDir?.let { File(File(it, CACHE_DIRECTORY), "$key.json.gz") }?.takeIf { it.isFile }?.delete()
+                    Unit
                 }.onFailure { temporary.delete() }
             }
         }
@@ -1521,7 +1545,7 @@ object LyricsTranslation {
         if (cached != null && cached.version == CACHE_VERSION && cached.texts.size == slots.size &&
             repeatedAcrossLines(cached.texts, slots.map { it.text }) == null
         ) {
-            if (keepTranslationFor(trackId) && !isKept(cacheKey)) writeCache(cacheKey, cached, keep = true)
+            if (keepClaude(trackId) && !isKept(cacheKey)) writeCache(cacheKey, cached, keep = true)
             noteStored(cacheKey, trackId, KIND_READING, cached, target, model = null, kept = isKept(cacheKey), via = null)
             return RomanizationResult.Romanized(rebuild(lines, slots, cached.texts), cached.sourceLanguage, fromCache = true)
         }
@@ -1546,7 +1570,7 @@ object LyricsTranslation {
             engine = ENGINE_CLAUDE,
         )
         memory.put(cacheKey, entry)
-        val keepReading = keepTranslationFor(trackId)
+        val keepReading = keepClaude(trackId)
         writeCache(cacheKey, entry, keep = keepReading)
         noteStored(cacheKey, trackId, KIND_READING, entry, target, model = readingModel, kept = keepReading && keepDir != null, via = VIA_PLAYER)
         return RomanizationResult.Romanized(rebuild(lines, slots, entry.texts), entry.sourceLanguage, fromCache = false)
@@ -2185,6 +2209,133 @@ object LyricsTranslation {
             if (changed) saveIndex()
             result
         }
+
+    /**
+     * Moves every Claude answer in the cache to the kept store: copied,
+     * read back, and only then removed from the cache, so a run cut short
+     * loses nothing and the next one carries on. Returns how many moved.
+     */
+    suspend fun moveClaudeToKept(): Int = withContext(Dispatchers.IO) {
+        val from = cacheDir?.let { File(it, CACHE_DIRECTORY) } ?: return@withContext 0
+        val to = keepDir?.let { File(it, KEPT_DIRECTORY) } ?: return@withContext 0
+        val files = from.listFiles { file -> file.name.endsWith(".json.gz") }.orEmpty()
+        var moved = 0
+        val keys = ArrayList<String>()
+        for (file in files) {
+            val value = readTranslationFile(file) ?: continue
+            if (value.engine != ENGINE_CLAUDE) continue
+            val key = file.name.removeSuffix(".json.gz")
+            diskMutex.withLock {
+                runCatching {
+                    if (!to.exists()) to.mkdirs()
+                    val destination = File(to, file.name)
+                    if (!destination.isFile) {
+                        val temporary = File(to, "$key.tmp")
+                        file.copyTo(temporary, overwrite = true)
+                        if (readTranslationFile(temporary) == null) {
+                            temporary.delete()
+                            return@runCatching
+                        }
+                        if (!temporary.renameTo(destination)) {
+                            temporary.copyTo(destination, overwrite = true)
+                            temporary.delete()
+                        }
+                    }
+                    if (destination.isFile) {
+                        file.delete()
+                        keys += key
+                        moved++
+                    }
+                    Unit
+                }
+            }
+        }
+        if (keys.isNotEmpty()) {
+            withIndex { map ->
+                keys.forEach { key -> map[key]?.let { map[key] = it.copy(kept = true) } }
+                saveIndex()
+            }
+        }
+        moved
+    }
+
+    /** What clearing the cache took away. */
+    class Cleared(val files: Int, val bytes: Long)
+
+    /**
+     * Empties the cache — of Google's translations only when [googleOnly],
+     * which are free to ask for again; of everything in it otherwise. The kept
+     * store and the songs' explanations are never touched.
+     */
+    suspend fun clearCache(googleOnly: Boolean): Cleared = withContext(Dispatchers.IO) {
+        val directory = cacheDir?.let { File(it, CACHE_DIRECTORY) } ?: return@withContext Cleared(0, 0)
+        var files = 0
+        var bytes = 0L
+        diskMutex.withLock {
+            directory.listFiles { file -> file.name.endsWith(".json.gz") }.orEmpty().forEach { file ->
+                if (googleOnly && readTranslationFile(file)?.engine != ENGINE_GOOGLE) return@forEach
+                val size = file.length()
+                if (file.delete()) {
+                    files++
+                    bytes += size
+                }
+            }
+        }
+        memory.clear()
+        // The index drops the answers that went the next time it is read.
+        Cleared(files, bytes)
+    }
+
+    /** One kind of stored answer: how many songs have one, and the space they take. */
+    class StorageSlice(val songs: Int, val bytes: Long)
+
+    /**
+     * The stored answers by kind, and by where they are. [other] holds what
+     * the index cannot place yet: answers from before it, which are noted when
+     * read again, and the line-by-line copies kept of answers translated ahead.
+     */
+    class StorageBreakdown(
+        val claude: StorageSlice,
+        val google: StorageSlice,
+        val reading: StorageSlice,
+        val meaning: StorageSlice,
+        val other: StorageSlice,
+        val keptBytes: Long,
+        val cacheBytes: Long,
+    )
+
+    suspend fun storageBreakdown(): StorageBreakdown {
+        val answers = checked { map -> map.values.toList() }
+        return withContext(Dispatchers.IO) {
+            val sizes = HashMap<String, Long>()
+            fun list(directory: File?, suffix: String) =
+                directory?.listFiles { file -> file.name.endsWith(suffix) }.orEmpty()
+            val kept = list(keepDir?.let { File(it, KEPT_DIRECTORY) }, ".json.gz")
+            val cache = list(cacheDir?.let { File(it, CACHE_DIRECTORY) }, ".json.gz")
+            val meanings = list((keepDir ?: cacheDir)?.let { File(it, MEANING_DIRECTORY) }, ".json")
+            (kept + cache).forEach { sizes[it.name.removeSuffix(".json.gz")] = it.length() }
+            meanings.forEach { sizes["m:" + it.name.removeSuffix(".json")] = it.length() }
+            fun slice(of: List<StoredAnswer>, meaning: Boolean = false): StorageSlice = StorageSlice(
+                songs = of.map { it.trackId }.toSet().size,
+                bytes = of.sumOf { sizes[if (meaning) "m:" + it.key else it.key] ?: 0L },
+            )
+            val claude = answers.filter { it.kind == KIND_TRANSLATION && it.byClaude }
+            val google = answers.filter { it.kind == KIND_TRANSLATION && !it.byClaude }
+            val reading = answers.filter { it.kind == KIND_READING }
+            val meaning = answers.filter { it.kind == KIND_MEANING }
+            val placed = answers.map { if (it.kind == KIND_MEANING) "m:" + it.key else it.key }.toSet()
+            val otherFiles = sizes.filterKeys { it !in placed }
+            StorageBreakdown(
+                claude = slice(claude),
+                google = slice(google),
+                reading = slice(reading),
+                meaning = slice(meaning, meaning = true),
+                other = StorageSlice(songs = otherFiles.size, bytes = otherFiles.values.sum()),
+                keptBytes = kept.sumOf { it.length() },
+                cacheBytes = cache.sumOf { it.length() },
+            )
+        }
+    }
 
     /** Every stored answer this device knows of, newest first. */
     suspend fun storedAnswers(): List<StoredAnswer> =

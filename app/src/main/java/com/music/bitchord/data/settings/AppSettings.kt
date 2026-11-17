@@ -612,6 +612,54 @@ object AppSettings {
         }
     }
 
+    /**
+     * The months before this one, newest first, at most [USAGE_MONTHS_KEPT].
+     * A month carried over from before this was kept has only its total.
+     */
+    val claudeUsageHistory = MutableStateFlow<List<MonthUsage>>(emptyList())
+
+    const val USAGE_MONTHS_KEPT = 11
+
+    data class MonthUsage(
+        val month: String,
+        val inputByModel: Map<String, Long> = emptyMap(),
+        val outputByModel: Map<String, Long> = emptyMap(),
+        /** A month known only by its total. */
+        val usdOnly: Double? = null,
+    ) {
+        private fun cost(model: String): Double {
+            val (inPrice, outPrice) = claudePricePerMillion(model)
+            return (inputByModel[model] ?: 0L) * inPrice / 1_000_000.0 + (outputByModel[model] ?: 0L) * outPrice / 1_000_000.0
+        }
+
+        private val models: Set<String> get() = inputByModel.keys + outputByModel.keys
+
+        fun usd(): Double = usdOnly ?: models.sumOf(::cost)
+
+        /** What went through a batch, at half price. */
+        fun batchUsd(): Double = models.filter { it.endsWith(com.music.bitchord.data.lyrics.LyricsTranslation.BATCH_MODEL_SUFFIX) }.sumOf(::cost)
+
+        /** Sonnet's share of the month's cost, 0..1. */
+        fun sonnetShare(): Double {
+            val total = usd()
+            if (total <= 0.0 || usdOnly != null) return 0.0
+            return models.filter { it.removeSuffix(com.music.bitchord.data.lyrics.LyricsTranslation.BATCH_MODEL_SUFFIX) == com.music.bitchord.data.lyrics.LyricsTranslation.CLAUDE_SONNET }.sumOf(::cost) / total
+        }
+    }
+
+    /** This month and the ones before it, newest first. */
+    fun claudeMonths(): List<MonthUsage> {
+        val usage = claudeUsage.value
+        val now = MonthUsage(usage.month, usage.inputByModel, usage.outputByModel)
+        return listOf(now) + claudeUsageHistory.value
+    }
+
+    /** "Keep every Claude answer" — see [com.music.bitchord.data.lyrics.LyricsTranslation.keepClaudeAlways]. */
+    val keepClaudeTranslations = MutableStateFlow(true)
+
+    /** The kept store's limit, in megabytes. */
+    val keptStoreLimitMb = MutableStateFlow(100)
+
     /** Dollars per million input and output tokens, by model; the newest Haiku's rates for anything unknown. */
     fun claudePricePerMillion(model: String): Pair<Double, Double> {
         // Tokens that went through a batch are billed at half the list price.
@@ -1170,6 +1218,11 @@ object AppSettings {
         com.music.bitchord.data.lyrics.LyricsTranslation.translationSpeech = claudeSpeech.value
         com.music.bitchord.data.lyrics.LyricsTranslation.translationMode = claudeMode.value
         claudeUsage.value = readClaudeUsage()
+        claudeUsageHistory.value = readUsageHistory()
+        keepClaudeTranslations.value = prefs.getBoolean(KEY_KEEP_CLAUDE_TRANSLATIONS, true)
+        keptStoreLimitMb.value = prefs.getInt(KEY_KEPT_STORE_LIMIT_MB, 100)
+        com.music.bitchord.data.lyrics.LyricsTranslation.keepClaudeAlways = keepClaudeTranslations.value
+        com.music.bitchord.data.lyrics.LyricsTranslation.keptLimitBytes = keptStoreLimitMb.value * 1024L * 1024L
         com.music.bitchord.data.lyrics.LyricsTranslation.usageSink = ::recordClaudeUsage
         claudeMonthlyCap.value = prefs.getFloat(KEY_CLAUDE_MONTHLY_CAP, 0f).toDouble()
         claudeSonnetStandIn.value = prefs.getBoolean(KEY_CLAUDE_SONNET_STAND_IN, true)
@@ -1811,6 +1864,12 @@ object AppSettings {
         val month = currentMonth()
         if (usage.month != month) {
             // A new month: this month's figure becomes last month's, tallies start over.
+            if (!usage.isEmpty) {
+                val past = MonthUsage(usage.month, usage.inputByModel, usage.outputByModel)
+                val history = (listOf(past) + claudeUsageHistory.value.filter { it.month != usage.month }).take(USAGE_MONTHS_KEPT)
+                claudeUsageHistory.value = history
+                prefs.edit().putString(KEY_CLAUDE_USAGE_HISTORY, writeUsageHistory(history)).apply()
+            }
             usage = ClaudeUsage(month = month, previousMonthUsd = usage.estimatedUsd().takeIf { !usage.isEmpty })
         }
         usage = usage.copy(
@@ -1821,11 +1880,63 @@ object AppSettings {
         prefs.edit().putString(KEY_CLAUDE_USAGE, writeClaudeUsage(usage)).apply()
     }
 
+    /** Clears this month's tallies, and — when [everything] — the months before it as well. */
     @Synchronized
-    fun resetClaudeUsage() {
-        val usage = ClaudeUsage(previousMonthUsd = claudeUsage.value.previousMonthUsd)
+    fun resetClaudeUsage(everything: Boolean = false) {
+        val usage = ClaudeUsage(previousMonthUsd = if (everything) null else claudeUsage.value.previousMonthUsd)
         claudeUsage.value = usage
-        prefs.edit().putString(KEY_CLAUDE_USAGE, writeClaudeUsage(usage)).apply()
+        val edit = prefs.edit().putString(KEY_CLAUDE_USAGE, writeClaudeUsage(usage))
+        if (everything) {
+            claudeUsageHistory.value = emptyList()
+            edit.putString(KEY_CLAUDE_USAGE_HISTORY, "")
+        }
+        edit.apply()
+    }
+
+    /** One month a line: "2026-10|<total, for a month known only by it>|model=in,out;…". */
+    private fun writeUsageHistory(history: List<MonthUsage>): String = history.joinToString("\n") { month ->
+        month.month + "|" + month.usdOnly?.toString().orEmpty() + "|" +
+            month.inputByModel.keys.union(month.outputByModel.keys).joinToString(";") { model ->
+                "$model=${month.inputByModel[model] ?: 0L},${month.outputByModel[model] ?: 0L}"
+            }
+    }
+
+    private fun readUsageHistory(): List<MonthUsage> {
+        val raw = prefs.getString(KEY_CLAUDE_USAGE_HISTORY, null)
+        if (raw == null) {
+            // Before months were kept, only last month's total was: it starts the history.
+            val usage = claudeUsage.value
+            val previous = usage.previousMonthUsd ?: return emptyList()
+            val month = runCatching { java.time.YearMonth.parse(usage.month).minusMonths(1).toString() }.getOrNull()
+                ?: return emptyList()
+            return listOf(MonthUsage(month, usdOnly = previous))
+        }
+        return raw.split('\n').filter { it.isNotBlank() }.mapNotNull { line ->
+            runCatching {
+                val (month, total, models) = line.split('|', limit = 3)
+                val inputs = mutableMapOf<String, Long>()
+                val outputs = mutableMapOf<String, Long>()
+                models.split(';').filter { it.isNotBlank() }.forEach { part ->
+                    val (model, counts) = part.split('=', limit = 2)
+                    val (input, output) = counts.split(',', limit = 2)
+                    inputs[model] = input.toLong()
+                    outputs[model] = output.toLong()
+                }
+                MonthUsage(month, inputs, outputs, total.toDoubleOrNull())
+            }.getOrNull()
+        }.take(USAGE_MONTHS_KEPT)
+    }
+
+    fun setKeepClaudeTranslations(value: Boolean) {
+        keepClaudeTranslations.value = value
+        prefs.edit().putBoolean(KEY_KEEP_CLAUDE_TRANSLATIONS, value).apply()
+        com.music.bitchord.data.lyrics.LyricsTranslation.keepClaudeAlways = value
+    }
+
+    fun setKeptStoreLimitMb(value: Int) {
+        keptStoreLimitMb.value = value
+        prefs.edit().putInt(KEY_KEPT_STORE_LIMIT_MB, value).apply()
+        com.music.bitchord.data.lyrics.LyricsTranslation.keptLimitBytes = value * 1024L * 1024L
     }
 
     /** "2026-11|0.0123|claude-haiku-5-5=1200,340;claude-sonnet-5-5=0,0" */
@@ -2633,6 +2744,9 @@ object AppSettings {
     private const val KEY_TRANSLATE_AHEAD_MODEL = "ko_translate_ahead_model"
     private const val KEY_TRANSLATE_AHEAD_READING = "ko_translate_ahead_reading"
     private const val KEY_CLAUDE_USAGE = "claude_usage"
+    private const val KEY_CLAUDE_USAGE_HISTORY = "ko_claude_usage_history"
+    private const val KEY_KEEP_CLAUDE_TRANSLATIONS = "ko_keep_claude_translations"
+    private const val KEY_KEPT_STORE_LIMIT_MB = "ko_kept_store_limit_mb"
     private const val KEY_ANIMATED_CANVAS = "animated_canvas"
     private const val KEY_CANVAS_OVER_CELLULAR = "canvas_over_cellular"
     private const val KEY_SPOTIFY_CANVAS_AUTO_HIDE = "spotify_canvas_auto_hide"

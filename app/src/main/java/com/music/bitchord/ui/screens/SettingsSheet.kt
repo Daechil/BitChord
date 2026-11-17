@@ -302,6 +302,14 @@ fun SettingsScreen(
     val claudeLog by com.music.bitchord.data.lyrics.ClaudeDiagnostics.entries.collectAsStateWithLifecycle()
     val aheadJobs by com.music.bitchord.download.TranslateAhead.jobs.collectAsStateWithLifecycle()
     val aheadIntro by AppSettings.translateAheadIntro.collectAsStateWithLifecycle()
+    val keepClaudeTranslations by AppSettings.keepClaudeTranslations.collectAsStateWithLifecycle()
+    val keptLimitMb by AppSettings.keptStoreLimitMb.collectAsStateWithLifecycle()
+    val storageOpen by com.music.bitchord.ui.components.KoAlerts.storage.collectAsStateWithLifecycle()
+    var storageUse by remember { mutableStateOf<com.music.bitchord.data.lyrics.LyricsTranslation.StorageUse?>(null) }
+    // Measured again each time the storage page closes, since it can clear things.
+    LaunchedEffect(storageOpen) {
+        if (!storageOpen) storageUse = com.music.bitchord.data.lyrics.LyricsTranslation.storageUse()
+    }
     val floatingSize by AppSettings.floatingLyricsSize.collectAsStateWithLifecycle()
     val floatingOpacity by AppSettings.floatingLyricsOpacity.collectAsStateWithLifecycle()
     val floatingShow by AppSettings.floatingLyricsShow.collectAsStateWithLifecycle()
@@ -840,12 +848,35 @@ fun SettingsScreen(
                         onClick = onClaudeLog,
                     )
                 }
+                val keepClaudeTitle = stringResource(R.string.keep_claude_translations)
+                row(keepClaudeTitle, "claude", "keep", "cache", "saved", "보관", "캐시", "번역") {
+                    SettingsRow(
+                        icon = SfIcons.AutoAwesome,
+                        title = keepClaudeTitle,
+                        subtitle = stringResource(R.string.keep_claude_translations_subtitle),
+                        trailing = {
+                            IosSwitch(
+                                checked = keepClaudeTranslations,
+                                onCheckedChange = AppSettings::setKeepClaudeTranslations,
+                            )
+                        },
+                        onClick = { AppSettings.setKeepClaudeTranslations(!keepClaudeTranslations) },
+                    )
+                }
                 val storageTitle = stringResource(R.string.translation_storage)
                 row(storageTitle, "claude", "translation", "cache", "storage", "saved", "번역", "캐시", "저장소", "보관") {
                     SettingsRow(
                         icon = SfIcons.AutoAwesome,
                         title = storageTitle,
-                        subtitle = stringResource(R.string.translation_storage_subtitle),
+                        subtitle = storageUse?.let { use ->
+                            stringResource(
+                                R.string.translation_storage_use,
+                                megabytes(use.keptBytes),
+                                keptLimitMb,
+                                megabytes(use.cacheBytes),
+                                com.music.bitchord.data.lyrics.LyricsTranslation.CACHE_LIMIT_BYTES / (1024 * 1024),
+                            )
+                        } ?: stringResource(R.string.translation_storage_subtitle),
                         trailing = { Chevron() },
                         onClick = { com.music.bitchord.ui.components.KoAlerts.storage.value = true },
                     )
@@ -3549,6 +3580,9 @@ internal fun claudeModeLabelRes(mode: String): Int = when (mode) {
     com.music.bitchord.data.lyrics.LyricsTranslation.MODE_LITERAL -> R.string.claude_mode_literal
     else -> R.string.claude_mode_natural
 }
+
+/** "12.4" — megabytes, one decimal. */
+internal fun megabytes(bytes: Long): String = String.format(Locale.US, "%.1f", bytes / 1_048_576.0)
 
 /** 1234 -> "1.2K", 2_500_000 -> "2.5M". */
 internal fun compactTokens(count: Long): String = when {

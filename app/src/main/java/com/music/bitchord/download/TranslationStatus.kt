@@ -1,6 +1,12 @@
 package com.music.bitchord.download
 
 import android.content.Context
+import com.music.bitchord.data.settings.AppSettings
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.launch
 import com.music.bitchord.data.lyrics.LyricsTranslation
 import com.music.bitchord.data.lyrics.LyricsTranslation.StoredAnswer
 import java.util.Locale
@@ -20,6 +26,18 @@ object TranslationStatus {
         if (this.context != null) return
         this.context = context.applicationContext
         LyricsTranslation.trackLabel = ::labelOf
+        // Claude's answers already in the cache go to the kept store as the
+        // setting comes on: at first start with it on, and whenever it is
+        // switched on again. Each pass leaves nothing half-moved.
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        scope.launch {
+            if (AppSettings.keepClaudeTranslations.value) runCatching { LyricsTranslation.moveClaudeToKept() }
+        }
+        scope.launch {
+            AppSettings.keepClaudeTranslations.drop(1).collect { on ->
+                if (on) runCatching { LyricsTranslation.moveClaudeToKept() }
+            }
+        }
     }
 
     /** A song's name, from wherever the app has seen it: playing, a menu, a download, a job. */

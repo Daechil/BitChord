@@ -226,6 +226,7 @@ fun ClaudeAlerts(
     if (showUsage) {
         BackHandler { onDismissUsage() }
         val usage by AppSettings.claudeUsage.collectAsStateWithLifecycle()
+        val history by AppSettings.claudeUsageHistory.collectAsStateWithLifecycle()
         val totalLine = stringResource(
             R.string.claude_usage_subtitle,
             com.music.bitchord.ui.screens.compactTokens(usage.inputTokens),
@@ -234,10 +235,10 @@ fun ClaudeAlerts(
         )
         val haikuLabel = stringResource(R.string.claude_model_haiku)
         val sonnetLabel = stringResource(R.string.claude_model_sonnet)
-        val previousLine = usage.previousMonthUsd?.let {
-            stringResource(R.string.claude_usage_previous, String.format(java.util.Locale.US, "%.2f", it))
-        }
         val noteLine = stringResource(R.string.claude_usage_note)
+        val monthsTitle = stringResource(R.string.claude_usage_months)
+        val totalOnly = stringResource(R.string.claude_usage_month_total_only)
+        val monthFormat = stringResource(R.string.claude_usage_month_line)
         val lines = buildList {
             add(totalLine)
             usage.inputByModel.keys.union(usage.outputByModel.keys).sorted().forEach { model ->
@@ -251,20 +252,66 @@ fun ClaudeAlerts(
                         com.music.bitchord.ui.screens.compactTokens(usage.outputByModel[model] ?: 0L),
                 )
             }
-            previousLine?.let { add(it) }
+            add("")
+            add(monthsTitle)
+            // This month and up to eleven before it, newest first.
+            (listOf(AppSettings.MonthUsage(usage.month, usage.inputByModel, usage.outputByModel)) + history).forEach { month ->
+                val total = month.usd()
+                add(
+                    if (month.usdOnly != null) {
+                        totalOnly.format(month.month, String.format(java.util.Locale.US, "%.2f", total))
+                    } else {
+                        val batch = month.batchUsd()
+                        monthFormat.format(
+                            month.month,
+                            String.format(java.util.Locale.US, "%.2f", total),
+                            String.format(java.util.Locale.US, "%.2f", total - batch),
+                            String.format(java.util.Locale.US, "%.2f", batch),
+                            (month.sonnetShare() * 100).toInt(),
+                        )
+                    },
+                )
+            }
+            add("")
             add(noteLine)
         }
-        ConfirmationAlert(
-            hazeState = hazeState,
-            title = stringResource(R.string.claude_usage),
-            description = lines.joinToString("\n"),
-            confirmLabel = stringResource(R.string.claude_usage_reset),
-            onConfirm = {
-                AppSettings.resetClaudeUsage()
-                onDismissUsage()
-            },
-            onDismiss = { onDismissUsage() },
-        )
+        AlertScaffold(hazeState = hazeState, onDismiss = onDismissUsage) {
+            AlertHeading(title = stringResource(R.string.claude_usage), message = null)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 360.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+            ) {
+                Text(
+                    text = lines.joinToString("\n"),
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, lineHeight = 17.sp),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            AlertRule()
+            AlertAction(
+                label = stringResource(R.string.claude_usage_reset_month),
+                emphasised = false,
+                onClick = {
+                    AppSettings.resetClaudeUsage(everything = false)
+                    onDismissUsage()
+                },
+            )
+            AlertRule()
+            AlertAction(
+                label = stringResource(R.string.claude_usage_reset_all),
+                emphasised = false,
+                destructive = true,
+                onClick = {
+                    AppSettings.resetClaudeUsage(everything = true)
+                    onDismissUsage()
+                },
+            )
+            AlertRule()
+            AlertAction(label = stringResource(R.string.close), emphasised = false, onClick = onDismissUsage)
+        }
     }
 }
 

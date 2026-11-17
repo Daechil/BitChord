@@ -634,16 +634,16 @@ object AppSettings {
 
         private val models: Set<String> get() = inputByModel.keys + outputByModel.keys
 
-        fun usd(): Double = usdOnly ?: models.sumOf(::cost)
+        fun usd(): Double = usdOnly ?: models.sumOf { cost(it) }
 
         /** What went through a batch, at half price. */
-        fun batchUsd(): Double = models.filter { it.endsWith(com.music.bitchord.data.lyrics.LyricsTranslation.BATCH_MODEL_SUFFIX) }.sumOf(::cost)
+        fun batchUsd(): Double = models.filter { it.endsWith(com.music.bitchord.data.lyrics.LyricsTranslation.BATCH_MODEL_SUFFIX) }.sumOf { cost(it) }
 
         /** Sonnet's share of the month's cost, 0..1. */
         fun sonnetShare(): Double {
             val total = usd()
             if (total <= 0.0 || usdOnly != null) return 0.0
-            return models.filter { it.removeSuffix(com.music.bitchord.data.lyrics.LyricsTranslation.BATCH_MODEL_SUFFIX) == com.music.bitchord.data.lyrics.LyricsTranslation.CLAUDE_SONNET }.sumOf(::cost) / total
+            return models.filter { it.removeSuffix(com.music.bitchord.data.lyrics.LyricsTranslation.BATCH_MODEL_SUFFIX) == com.music.bitchord.data.lyrics.LyricsTranslation.CLAUDE_SONNET }.sumOf { cost(it) } / total
         }
     }
 

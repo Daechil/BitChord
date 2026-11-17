@@ -2309,7 +2309,7 @@ object LyricsTranslation {
         return withContext(Dispatchers.IO) {
             val sizes = HashMap<String, Long>()
             fun list(directory: File?, suffix: String) =
-                directory?.listFiles { file -> file.name.endsWith(suffix) }.orEmpty()
+                directory?.listFiles { file -> file.name.endsWith(suffix) }?.toList().orEmpty()
             val kept = list(keepDir?.let { File(it, KEPT_DIRECTORY) }, ".json.gz")
             val cache = list(cacheDir?.let { File(it, CACHE_DIRECTORY) }, ".json.gz")
             val meanings = list((keepDir ?: cacheDir)?.let { File(it, MEANING_DIRECTORY) }, ".json")

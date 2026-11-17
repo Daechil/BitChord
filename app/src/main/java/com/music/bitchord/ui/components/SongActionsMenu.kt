@@ -169,6 +169,8 @@ fun SongActionsMenu(
      * except the player, where "this track" means something.
      */
     onCopyLog: (() -> Unit)? = null,
+    /** Opens this song's stored translations; null hides the row. */
+    onTranslationStatus: (() -> Unit)? = null,
     /** Opens the timing control offered only by the main player's menu. */
     onLyricsOffset: (() -> Unit)? = null,
     /**
@@ -373,6 +375,9 @@ fun SongActionsMenu(
         }
         ActionRow(SfIcons.Info, stringResource(R.string.song_info), accent = palette.accent) {
             showingSongInfo = true
+        }
+        if (song.videoId.isNotBlank()) {
+            onTranslationStatus?.let { TranslationStatusRow(song, palette.accent, it) }
         }
 
         // The player's own: about the track playing right now rather than

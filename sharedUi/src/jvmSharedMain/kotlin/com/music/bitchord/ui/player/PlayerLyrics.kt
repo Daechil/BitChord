@@ -509,6 +509,10 @@ internal sealed interface LyricsTranslationUiState {
         val claudeFailure: com.music.bitchord.data.lyrics.ClaudeFailure? = null,
         /** Sonnet's translation, asked because Haiku declined. */
         val sonnetStandIn: Boolean = false,
+        /** Read from storage rather than translated just now. */
+        val fromCache: Boolean = false,
+        /** Stored in the kept store rather than the cache. */
+        val kept: Boolean = false,
     ) : LyricsTranslationUiState
     data object SameLanguage : LyricsTranslationUiState
 }
@@ -3190,7 +3194,7 @@ internal fun rememberLyricsTranslation(
                 )
             ) {
                 is LyricsTranslationResult.Translated -> {
-                    translationState = LyricsTranslationUiState.Ready(result.lines, result.byClaude, result.claudeFellBack, result.claudeFailure, result.sonnetStandIn)
+                    translationState = LyricsTranslationUiState.Ready(result.lines, result.byClaude, result.claudeFellBack, result.claudeFailure, result.sonnetStandIn, result.fromCache, result.kept)
                     lyricsDisplayMode = LyricsDisplayMode.Translated
                     translationTransition++
                     haptics.play(Haptic.ToggleOn)
@@ -3291,6 +3295,15 @@ internal fun rememberLyricsTranslation(
     // Worked out once for both layouts — the portrait player puts it over its
     // half-player, the landscape one under its lyric column — so the two can
     // never disagree about what it says.
+    // Where the translation on show came from: storage that nothing clears,
+    // the cache, or a request just now — so a paid-for answer is told from a new one.
+    val readyTranslation = translationState as? LyricsTranslationUiState.Ready
+    val storedSuffix = when {
+        readyTranslation == null -> ""
+        !readyTranslation.fromCache -> " · " + stringResource(Res.string.lyrics_translation_fresh)
+        readyTranslation.kept -> " · " + stringResource(Res.string.lyrics_translation_kept)
+        else -> " · " + stringResource(Res.string.lyrics_translation_cached)
+    }
     val status = when {
         translationState is LyricsTranslationUiState.Loading ->
             stringResource(Res.string.translating_lyrics_to, translationLanguageName)
@@ -3299,9 +3312,9 @@ internal fun rememberLyricsTranslation(
         // Named only when Claude wrote it: Google Translate is the default the
         // line has always meant, and naming it too would be noise.
         showingTranslation && (translationState as? LyricsTranslationUiState.Ready)?.sonnetStandIn == true ->
-            stringResource(Res.string.lyrics_translated_claude_sonnet, translationLanguageName)
+            stringResource(Res.string.lyrics_translated_claude_sonnet, translationLanguageName) + storedSuffix
         showingTranslation && (translationState as? LyricsTranslationUiState.Ready)?.byClaude == true ->
-            stringResource(Res.string.lyrics_translated_claude, translationLanguageName)
+            stringResource(Res.string.lyrics_translated_claude, translationLanguageName) + storedSuffix
         // Claude was on and did not answer: say so, so a flat translation is
         // understood as Google's stand-in rather than Claude's work.
         showingTranslation && (translationState as? LyricsTranslationUiState.Ready)?.claudeFellBack == true ->
@@ -3309,9 +3322,9 @@ internal fun rememberLyricsTranslation(
                 Res.string.lyrics_translated_google_fallback,
                 translationLanguageName,
                 claudeFailureLabel((translationState as? LyricsTranslationUiState.Ready)?.claudeFailure),
-            )
+            ) + storedSuffix
         showingTranslation ->
-            stringResource(Res.string.lyrics_translated_to, translationLanguageName)
+            stringResource(Res.string.lyrics_translated_to, translationLanguageName) + storedSuffix
         showingRomanization && (romanizationState as? LyricsTranslationUiState.Ready)?.byClaude == true ->
             stringResource(Res.string.lyrics_reading_claude)
         showingRomanization ->

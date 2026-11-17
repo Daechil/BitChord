@@ -71,7 +71,13 @@ object DownloadTranslations {
         // it offline, so they are the ones whose translation it will look for.
         val lines = EmbeddedLyrics.forUri(context, job.uri) ?: return
         if (lines.none { it.text.isNotBlank() }) return
-        val result = LyricsTranslation.translate(job.song.videoId, lines, targetLanguage(context))
+        com.music.bitchord.download.TranslationStatus.remember(job.song.videoId, job.song.title, job.song.artist)
+        val result = LyricsTranslation.translate(
+            job.song.videoId,
+            lines,
+            targetLanguage(context),
+            via = LyricsTranslation.VIA_DOWNLOAD,
+        )
         Log.d(TAG, "${job.song.videoId}: ${result::class.simpleName}")
     }
 

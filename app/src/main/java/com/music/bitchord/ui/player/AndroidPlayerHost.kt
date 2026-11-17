@@ -198,6 +198,8 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
                 claudeFellBack = result.claudeFellBack,
                 claudeFailure = result.claudeFailure,
                 sonnetStandIn = result.sonnetStandIn,
+                fromCache = result.fromCache,
+                kept = result.kept,
             )
             is LyricsTranslation.Result.SameLanguage -> LyricsTranslationResult.SameLanguage(result.language)
             LyricsTranslation.Result.Unavailable -> LyricsTranslationResult.Unavailable

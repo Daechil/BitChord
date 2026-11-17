@@ -840,6 +840,16 @@ fun SettingsScreen(
                         onClick = onClaudeLog,
                     )
                 }
+                val storageTitle = stringResource(R.string.translation_storage)
+                row(storageTitle, "claude", "translation", "cache", "storage", "saved", "번역", "캐시", "저장소", "보관") {
+                    SettingsRow(
+                        icon = SfIcons.AutoAwesome,
+                        title = storageTitle,
+                        subtitle = stringResource(R.string.translation_storage_subtitle),
+                        trailing = { Chevron() },
+                        onClick = { com.music.bitchord.ui.components.KoAlerts.storage.value = true },
+                    )
+                }
                 val aheadLogTitle = stringResource(R.string.translate_ahead_log)
                 row(aheadLogTitle, "claude", "batch", "translate", "ahead", "playlist", "log", "미리", "번역", "기록", "재생목록") {
                     SettingsRow(

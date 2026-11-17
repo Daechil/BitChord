@@ -54,6 +54,15 @@ object KoAlerts {
     /** Which of the floating bar's choices is open: "size", "opacity" or "show"; null for none. */
     val floatingChoice = MutableStateFlow<String?>(null)
 
+    /** A song whose stored translations are on show. */
+    val songStatus = MutableStateFlow<com.music.bitchord.data.model.Song?>(null)
+
+    /** A playlist or album whose songs' translation status is on show. */
+    val releaseStatus = MutableStateFlow<AheadAsk?>(null)
+
+    /** Settings' translation storage page. */
+    val storage = MutableStateFlow(false)
+
     /** A release waiting on the "translate ahead" dialog's answer. */
     val aheadAsk = MutableStateFlow<AheadAsk?>(null)
 }
@@ -88,6 +97,7 @@ fun ClaudeAlerts(
     onDismissLog: () -> Unit = {},
 ) {
     TranslateAheadAlerts(hazeState)
+    TranslationStatusAlerts(hazeState)
     FloatingLyricsAlerts(hazeState)
     val showCap by KoAlerts.monthlyCap.collectAsStateWithLifecycle()
     if (showCap) {

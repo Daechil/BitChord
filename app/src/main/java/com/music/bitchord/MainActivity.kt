@@ -4459,6 +4459,10 @@ private fun BitChordApp(
             SongActionsMenu(
                 song = song,
                 signedIn = signedIn,
+                onTranslationStatus = {
+                    songActions = null
+                    com.music.bitchord.ui.components.KoAlerts.songStatus.value = song
+                },
                 likeStatus = likeStatusOf(song),
                 onPlayNext = { playNext(song); songActions = null },
                 onAddToQueue = { addToQueue(song); songActions = null },
@@ -5157,6 +5161,10 @@ private fun BitChordApp(
                                 )
                             },
                     )
+                }.takeIf { downloadable },
+                onTranslationStatus = act { songs ->
+                    com.music.bitchord.ui.components.KoAlerts.releaseStatus.value =
+                        com.music.bitchord.ui.components.AheadAsk(target.title, songs)
                 }.takeIf { downloadable },
                 onTranslateAhead = act { songs ->
                     com.music.bitchord.ui.components.requestTranslateAhead(context, target.title, songs)

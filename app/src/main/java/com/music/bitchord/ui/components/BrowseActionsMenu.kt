@@ -118,6 +118,8 @@ fun BrowseActionsMenu(
      * to send for, or Claude is not set up.
      */
     onTranslateAhead: (() -> Unit)? = null,
+    /** Lists the release's songs with where each one's translation stands. */
+    onTranslationStatus: (() -> Unit)? = null,
     /**
      * Shares the release's own YouTube Music link — the album/playlist
      * counterpart to a track's own Share tile in [SongActionsMenu]. Null for
@@ -230,6 +232,9 @@ fun BrowseActionsMenu(
                     },
                     onClick = download,
                 )
+            }
+            onTranslationStatus?.let {
+                ActionRow(SfIcons.Translate, stringResource(R.string.translation_status_view), onClick = it)
             }
             onTranslateAhead?.let {
                 ActionRow(SfIcons.AutoAwesome, stringResource(R.string.translate_ahead), onClick = it)

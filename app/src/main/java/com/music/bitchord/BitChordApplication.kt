@@ -103,6 +103,7 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory, Configu
         LyricsTranslation.keepDir = filesDir
         com.music.bitchord.download.DownloadTranslations.init(this)
         com.music.bitchord.download.TranslateAhead.init(this)
+        com.music.bitchord.download.TranslationStatus.init(this)
         // Read off the main thread; the Settings row shows it once it is in.
         CoroutineScope(Dispatchers.IO).launch { com.music.bitchord.data.lyrics.ClaudeDiagnostics.load() }
         // PlaybackService shares this process, so seeding the cookie here means

@@ -68,6 +68,8 @@ object LyricsTranslation {
             val claudeFailure: ClaudeFailure? = null,
             /** Haiku declined the song and Sonnet translated it instead. */
             val sonnetStandIn: Boolean = false,
+            /** From the kept store, which nothing clears, rather than the cache; only means anything [fromCache]. */
+            val kept: Boolean = false,
         ) : Result
 
         data class SameLanguage(val language: String) : Result
@@ -193,6 +195,8 @@ object LyricsTranslation {
          * themselves, such as the lock screen.
          */
         cacheOnly: Boolean = false,
+        /** Where the request came from, for [storedAnswers]: [VIA_PLAYER] or [VIA_DOWNLOAD]. */
+        via: String = VIA_PLAYER,
     ): Result {
         // Sent as given rather than reduced to a base language: zh-CN and
         // zh-TW are the same language in two scripts, and canonicalising either
@@ -213,7 +217,7 @@ object LyricsTranslation {
         var claudeFailure: ClaudeFailure? = null
         if (claudeTried) {
             val attempt = try {
-                claudeEntry(trackId, slots, target, fresh, cacheOnly)
+                claudeEntry(trackId, slots, target, fresh, cacheOnly, via)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
@@ -242,6 +246,7 @@ object LyricsTranslation {
                         fromCache = fromCache,
                         engine = Engine.CLAUDE,
                         sonnetStandIn = entry.sonnetStandIn,
+                        kept = attempt.kept,
                     )
                 }
             }
@@ -253,6 +258,8 @@ object LyricsTranslation {
         }
         if (cached != null && cached.version == CACHE_VERSION && cached.texts.size == slots.size) {
             if (keepTranslationFor(trackId) && !isKept(cacheKey)) writeCache(cacheKey, cached, keep = true)
+            val keptNow = isKept(cacheKey)
+            noteStored(cacheKey, trackId, KIND_TRANSLATION, cached, target, model = null, kept = keptNow, via = null)
             return if (sameLanguage(cached.sourceLanguage, target)) {
                 Result.SameLanguage(cached.sourceLanguage)
             } else {
@@ -262,6 +269,7 @@ object LyricsTranslation {
                     fromCache = true,
                     claudeFellBack = claudeTried,
                     claudeFailure = claudeFailure,
+                    kept = keptNow,
                 )
             }
         }
@@ -316,7 +324,9 @@ object LyricsTranslation {
             engine = ENGINE_GOOGLE,
         )
         memory.put(cacheKey, entry)
-        writeCache(cacheKey, entry, keep = keepTranslationFor(trackId))
+        val keepGoogle = keepTranslationFor(trackId)
+        writeCache(cacheKey, entry, keep = keepGoogle)
+        noteStored(cacheKey, trackId, KIND_TRANSLATION, entry, target, model = null, kept = keepGoogle && keepDir != null, via = via)
 
         return if (sameLanguage(source, target)) {
             Result.SameLanguage(source)
@@ -511,6 +521,7 @@ object LyricsTranslation {
         target: String,
         fresh: Boolean,
         cacheOnly: Boolean = false,
+        via: String = VIA_PLAYER,
     ): ClaudeAttempt {
         // The style is part of the key: a song read in 반말 and the same song
         // read in 존댓말 are two answers, and switching between them must not
@@ -523,14 +534,20 @@ object LyricsTranslation {
             repeatedAcrossLines(cached.texts, slots.map { it.text }) == null
         ) {
             if (keepTranslationFor(trackId) && !isKept(cacheKey)) writeCache(cacheKey, cached, keep = true)
-            return ClaudeAttempt(cached.copy(engine = ENGINE_CLAUDE), fromCache = true, failure = null)
+            val keptNow = isKept(cacheKey)
+            noteStored(
+                cacheKey, trackId, KIND_TRANSLATION, cached, target,
+                model = if (cached.sonnetStandIn) CLAUDE_SONNET else null, kept = keptNow, via = null, styled = true,
+            )
+            return ClaudeAttempt(cached.copy(engine = ENGINE_CLAUDE), fromCache = true, failure = null, kept = keptNow)
         }
         if (!fresh) {
             val prefix = "claude\u0000$translationSpeech\u0000$translationMode\u0000$trackId"
             fromAhead(trackId, prefix, target, slots, report = !cacheOnly)?.let { ahead ->
                 memory.put(cacheKey, ahead)
                 writeCache(cacheKey, ahead, keep = true)
-                return ClaudeAttempt(ahead, fromCache = true, failure = null)
+                noteStored(cacheKey, trackId, KIND_TRANSLATION, ahead, target, model = null, kept = keepDir != null, via = VIA_AHEAD, styled = true)
+                return ClaudeAttempt(ahead, fromCache = true, failure = null, kept = keepDir != null)
             }
         }
         if (cacheOnly) return ClaudeAttempt(null, fromCache = false, failure = null)
@@ -552,7 +569,12 @@ object LyricsTranslation {
             sonnetStandIn = standIn,
         )
         memory.put(cacheKey, entry)
-        writeCache(cacheKey, entry, keep = keepTranslationFor(trackId))
+        val keepClaude = keepTranslationFor(trackId)
+        writeCache(cacheKey, entry, keep = keepClaude)
+        noteStored(
+            cacheKey, trackId, KIND_TRANSLATION, entry, target,
+            model = if (standIn) CLAUDE_SONNET else model, kept = keepClaude && keepDir != null, via = via, styled = true,
+        )
         return ClaudeAttempt(entry, fromCache = false, failure = null)
     }
 
@@ -561,6 +583,8 @@ object LyricsTranslation {
         val entry: CachedTranslation?,
         val fromCache: Boolean,
         val failure: ClaudeFailure?,
+        /** Read from the kept store rather than the cache. */
+        val kept: Boolean = false,
     )
 
     private fun translationInstruction(target: String, count: Int, keyed: Boolean): String {
@@ -1498,17 +1522,21 @@ object LyricsTranslation {
             repeatedAcrossLines(cached.texts, slots.map { it.text }) == null
         ) {
             if (keepTranslationFor(trackId) && !isKept(cacheKey)) writeCache(cacheKey, cached, keep = true)
+            noteStored(cacheKey, trackId, KIND_READING, cached, target, model = null, kept = isKept(cacheKey), via = null)
             return RomanizationResult.Romanized(rebuild(lines, slots, cached.texts), cached.sourceLanguage, fromCache = true)
         }
         fromAhead(trackId, "reading\u0000$trackId", target, slots, report = true)?.let { ahead ->
             memory.put(cacheKey, ahead)
             writeCache(cacheKey, ahead, keep = true)
+            noteStored(cacheKey, trackId, KIND_READING, ahead, target, model = null, kept = keepDir != null, via = VIA_AHEAD)
             return RomanizationResult.Romanized(rebuild(lines, slots, ahead.texts), ahead.sourceLanguage, fromCache = true)
         }
         val model = claudeModel
         var reply = requestClaudeTranslation(slots, target, model, reading = true)
+        var readingModel = model
         if (reply.failure == ClaudeFailure.REFUSAL && model == CLAUDE_HAIKU && sonnetStandInEnabled) {
             reply = requestClaudeTranslation(slots, target, CLAUDE_SONNET, reading = true)
+            readingModel = CLAUDE_SONNET
         }
         val answer = reply.value ?: return null
         val entry = CachedTranslation(
@@ -1518,7 +1546,9 @@ object LyricsTranslation {
             engine = ENGINE_CLAUDE,
         )
         memory.put(cacheKey, entry)
-        writeCache(cacheKey, entry, keep = keepTranslationFor(trackId))
+        val keepReading = keepTranslationFor(trackId)
+        writeCache(cacheKey, entry, keep = keepReading)
+        noteStored(cacheKey, trackId, KIND_READING, entry, target, model = readingModel, kept = keepReading && keepDir != null, via = VIA_PLAYER)
         return RomanizationResult.Romanized(rebuild(lines, slots, entry.texts), entry.sourceLanguage, fromCache = false)
     }
 
@@ -1588,6 +1618,9 @@ object LyricsTranslation {
         val keyed: Boolean,
         /** The lines as sent. Kept on the device until the answer is filed, never logged. */
         val sources: List<String>,
+        /** The style a translation was asked in, for [storedAnswers]; empty for a pronunciation. */
+        val speech: String = "",
+        val mode: String = "",
     )
 
     enum class AheadSkip { NOTHING_TO_TRANSLATE, ALREADY_TRANSLATED, SAME_LANGUAGE }
@@ -1648,6 +1681,8 @@ object LyricsTranslation {
             model = model,
             keyed = keyed,
             sources = slots.map { it.text },
+            speech = if (reading) "" else translationSpeech,
+            mode = if (reading) "" else translationMode,
         )
         return AheadRequest(item, params, null)
     }
@@ -1946,15 +1981,239 @@ object LyricsTranslation {
             engine = ENGINE_CLAUDE,
         )
         writeCache(item.cacheKey, entry, keep = true)
+        noteStored(
+            item.cacheKey, item.trackId, if (item.reading) KIND_READING else KIND_TRANSLATION, entry, item.target,
+            model = item.model, kept = keepDir != null, via = VIA_AHEAD,
+            speech = item.speech.ifBlank { null }, mode = item.mode.ifBlank { null },
+        )
         // The lines and their answers side by side, for [fromAhead].
         writeCache(item.aheadKey, entry.copy(texts = item.sources + texts), keep = true)
         return out(null)
     }
 
 
+    // ---- What is stored, song by song ---------------------------------------
+    //
+    // The stored answers are named by a hash of the song, its lines and the
+    // style, which no screen can turn back into a song. So every answer
+    // written or found is also noted here, under its song: what it is, who
+    // wrote it, in which style, and whether it is in the kept store or the
+    // cache. No lyrics are noted.
+
+    const val KIND_TRANSLATION = "translation"
+    const val KIND_READING = "reading"
+    const val KIND_MEANING = "meaning"
+    const val VIA_PLAYER = "player"
+    const val VIA_AHEAD = "ahead"
+    const val VIA_DOWNLOAD = "download"
+    const val VIA_RESTORE = "restore"
+
+    /** One stored answer: a translation, a pronunciation or a song's explanation. */
+    @Serializable
+    data class StoredAnswer(
+        val key: String,
+        val trackId: String,
+        /** [KIND_TRANSLATION], [KIND_READING] or [KIND_MEANING]. */
+        val kind: String,
+        /** "claude" or "google". */
+        val engine: String,
+        /** The Claude model that wrote it, where known. */
+        val model: String? = null,
+        val target: String,
+        /** A Claude translation's register and closeness; null for anything else. */
+        val speech: String? = null,
+        val mode: String? = null,
+        /** In the kept store, which nothing clears; otherwise in the cache, which space can clear. */
+        val kept: Boolean = false,
+        /** The lyrics were already in [target]: there is nothing to show. */
+        val sameLanguage: Boolean = false,
+        /** [VIA_PLAYER], [VIA_AHEAD], [VIA_DOWNLOAD] or [VIA_RESTORE]; null when noted only on being read again. */
+        val via: String? = null,
+        val at: Long = 0,
+        val title: String? = null,
+        val artist: String? = null,
+    ) {
+        val byClaude: Boolean get() = engine == ENGINE_CLAUDE
+    }
+
+    /** Names a song by its id, for answers noted where only the id is known. Set by the app. */
+    @Volatile
+    var trackLabel: ((String) -> Pair<String, String>?)? = null
+
+    private const val INDEX_FILE = "lyrics_translation_index_v1.json"
+    private val indexSerializer = kotlinx.serialization.builtins.ListSerializer(StoredAnswer.serializer())
+    private val indexMutex = Mutex()
+    private val index = LinkedHashMap<String, StoredAnswer>()
+    private var indexLoaded = false
+
+    private fun indexFile(): File? = (keepDir ?: cacheDir)?.let { File(it, INDEX_FILE) }
+
+    private suspend fun <T> withIndex(block: (MutableMap<String, StoredAnswer>) -> T): T =
+        withContext(Dispatchers.IO) {
+            indexMutex.withLock {
+                if (!indexLoaded) {
+                    indexLoaded = true
+                    runCatching {
+                        indexFile()?.takeIf { it.isFile }?.readText()
+                            ?.let { json.decodeFromString(indexSerializer, it) }
+                            ?.forEach { index[it.key] = it }
+                    }
+                }
+                block(index)
+            }
+        }
+
+    /** Called holding [indexMutex]. */
+    private fun saveIndex() {
+        val file = indexFile() ?: return
+        runCatching {
+            file.parentFile?.mkdirs()
+            val temporary = File(file.parentFile, "$INDEX_FILE.tmp")
+            temporary.writeText(json.encodeToString(indexSerializer, index.values.toList()))
+            if (!temporary.renameTo(file)) {
+                temporary.copyTo(file, overwrite = true)
+                temporary.delete()
+            }
+        }
+    }
+
+    /** Notes [value], stored under [key], as [trackId]'s; writes only when something changed. */
+    private suspend fun noteStored(
+        key: String,
+        trackId: String,
+        kind: String,
+        value: CachedTranslation,
+        target: String,
+        model: String?,
+        kept: Boolean,
+        via: String?,
+        /** A Claude translation: the style in force now is the one it was asked in. */
+        styled: Boolean = false,
+        speech: String? = if (styled) translationSpeech else null,
+        mode: String? = if (styled) translationMode else null,
+    ) {
+        val label = trackLabel?.invoke(trackId)
+        runCatching {
+            withIndex { map ->
+                val old = map[key]
+                val next = StoredAnswer(
+                    key = key,
+                    trackId = trackId,
+                    kind = kind,
+                    engine = value.engine,
+                    model = model ?: old?.model,
+                    target = target,
+                    speech = speech ?: old?.speech,
+                    mode = mode ?: old?.mode,
+                    kept = kept,
+                    sameLanguage = sameLanguage(value.sourceLanguage, target),
+                    via = old?.via ?: via,
+                    at = old?.at ?: System.currentTimeMillis(),
+                    title = label?.first ?: old?.title,
+                    artist = label?.second ?: old?.artist,
+                )
+                if (next != old) {
+                    map[key] = next
+                    saveIndex()
+                }
+            }
+        }
+    }
+
+    private suspend fun noteMeaning(key: String, trackId: String, target: String, title: String, artist: String, model: String?, via: String?) {
+        runCatching {
+            withIndex { map ->
+                val old = map[key]
+                val next = StoredAnswer(
+                    key = key,
+                    trackId = trackId,
+                    kind = KIND_MEANING,
+                    engine = ENGINE_CLAUDE,
+                    model = model ?: old?.model,
+                    target = target,
+                    kept = true,
+                    via = old?.via ?: via,
+                    at = old?.at ?: System.currentTimeMillis(),
+                    title = title.ifBlank { old?.title.orEmpty() }.ifBlank { null },
+                    artist = artist.ifBlank { old?.artist.orEmpty() }.ifBlank { null },
+                )
+                if (next != old) {
+                    map[key] = next
+                    saveIndex()
+                }
+            }
+        }
+    }
+
+    /** Where [answer] is on disk, or null once it is gone — cleared from the cache, say. */
+    private fun storedFile(answer: StoredAnswer): File? {
+        if (answer.kind == KIND_MEANING) {
+            return (keepDir ?: cacheDir)?.let { File(File(it, MEANING_DIRECTORY), "${answer.key}.json") }?.takeIf { it.isFile }
+        }
+        return keptFile(answer.key)?.takeIf { it.isFile }
+            ?: cacheDir?.let { File(File(it, CACHE_DIRECTORY), "${answer.key}.json.gz") }?.takeIf { it.isFile }
+    }
+
+    /**
+     * [answers] as they stand on disk: gone ones dropped from the index,
+     * moved ones (cache to kept store) corrected, and names filled in where
+     * the app now knows them.
+     */
+    private suspend fun checked(answers: (Map<String, StoredAnswer>) -> List<StoredAnswer>): List<StoredAnswer> =
+        withIndex { map ->
+            var changed = false
+            val result = ArrayList<StoredAnswer>()
+            for (answer in answers(map)) {
+                if (storedFile(answer) == null) {
+                    map.remove(answer.key)
+                    changed = true
+                    continue
+                }
+                val kept = answer.kind == KIND_MEANING || keptFile(answer.key)?.isFile == true
+                val label = if (answer.title == null) trackLabel?.invoke(answer.trackId) else null
+                val fixed = answer.copy(
+                    kept = kept,
+                    title = answer.title ?: label?.first,
+                    artist = answer.artist ?: label?.second,
+                )
+                if (fixed != answer) {
+                    map[answer.key] = fixed
+                    changed = true
+                }
+                result += fixed
+            }
+            if (changed) saveIndex()
+            result
+        }
+
+    /** Every stored answer this device knows of, newest first. */
+    suspend fun storedAnswers(): List<StoredAnswer> =
+        checked { map -> map.values.toList() }.sortedByDescending { it.at }
+
+    /** The stored answers of each of [trackIds]; a song with none is left out. */
+    suspend fun storedFor(trackIds: Collection<String>): Map<String, List<StoredAnswer>> {
+        val wanted = trackIds.toHashSet()
+        return checked { map -> map.values.filter { it.trackId in wanted } }.groupBy { it.trackId }
+    }
+
+    /** Bytes used by the kept store, the cache's translations, and the songs' explanations. */
+    class StorageUse(val keptBytes: Long, val cacheBytes: Long, val meaningBytes: Long)
+
+    suspend fun storageUse(): StorageUse = withContext(Dispatchers.IO) {
+        fun size(directory: File?): Long = directory?.listFiles()?.sumOf { it.length() } ?: 0L
+        StorageUse(
+            keptBytes = size(keepDir?.let { File(it, KEPT_DIRECTORY) }),
+            cacheBytes = size(cacheDir?.let { File(it, CACHE_DIRECTORY) }),
+            meaningBytes = size((keepDir ?: cacheDir)?.let { File(it, MEANING_DIRECTORY) }),
+        )
+    }
+
+
     // ---- Taking the paid-for answers to another phone ------------------------
 
     private const val BACKUP_MARKER = "bitchord-ko-translations"
+    private const val BACKUP_INDEX = "index.json"
+    private val BACKUP_KEY = Regex("^[0-9a-f]{64}$")
     private val BACKUP_ENTRY = Regex("^(kept|cache|meaning)/([0-9a-f]{64}\\.json(?:\\.gz)?)$")
     private const val MAX_BACKUP_ENTRY_BYTES = 4 * 1024 * 1024
 
@@ -2012,6 +2271,11 @@ object LyricsTranslation {
                     ?.listFiles { file -> file.name.endsWith(".json") }
                     .orEmpty()
                     .forEach { add("meaning", it) }
+                // What each answer is, so the other phone can say which song it belongs to.
+                val listing = withIndex { map -> json.encodeToString(indexSerializer, map.values.toList()) }
+                zip.putNextEntry(java.util.zip.ZipEntry(BACKUP_INDEX))
+                zip.write(listing.toByteArray(Charsets.UTF_8))
+                zip.closeEntry()
             }
             count
         }
@@ -2029,11 +2293,18 @@ object LyricsTranslation {
             var added = 0
             var skipped = 0
             var marked = false
+            var listing: List<StoredAnswer> = emptyList()
             java.util.zip.ZipInputStream(input).use { zip ->
                 while (true) {
                     val entry = zip.nextEntry ?: break
                     if (entry.name == BACKUP_MARKER) {
                         marked = true
+                        continue
+                    }
+                    if (entry.name == BACKUP_INDEX) {
+                        listing = readLimited(zip, MAX_BACKUP_ENTRY_BYTES * 4)
+                            ?.let { runCatching { json.decodeFromString(indexSerializer, String(it, Charsets.UTF_8)) }.getOrNull() }
+                            .orEmpty()
                         continue
                     }
                     // Only names of the shape this app writes: nothing in a zip
@@ -2072,7 +2343,28 @@ object LyricsTranslation {
                     if (written) added++ else skipped++
                 }
             }
-            if (!marked && added == 0 && skipped == 0) null else Restored(added, skipped)
+            if (!marked && added == 0 && skipped == 0) {
+                null
+            } else {
+                // Only answers that are now on this device, and only where this device has no word of its own.
+                val known = listing.filter { BACKUP_KEY.matches(it.key) }
+                if (known.isNotEmpty()) {
+                    withIndex { map ->
+                        var changed = false
+                        known.forEach { answer ->
+                            if (answer.key !in map && storedFile(answer) != null) {
+                                map[answer.key] = answer.copy(
+                                    kept = answer.kind == KIND_MEANING || keptFile(answer.key)?.isFile == true,
+                                    via = VIA_RESTORE,
+                                )
+                                changed = true
+                            }
+                        }
+                        if (changed) saveIndex()
+                    }
+                }
+                Restored(added, skipped)
+            }
         }
     }
 
@@ -2129,6 +2421,7 @@ object LyricsTranslation {
             ?.let { text -> runCatching { json.decodeFromString<SongMeaning>(text) }.getOrNull() }
             ?.let {
                 meanings.put(key, it)
+                noteMeaning(key, trackId, target, title, artist, model = null, via = null)
                 return MeaningResult.Ready(it)
             }
         if (!claudeKeyUsable) return MeaningResult.NoKey
@@ -2166,6 +2459,7 @@ object LyricsTranslation {
         }
         meanings.put(key, answer)
         writeStored(MEANING_DIRECTORY, key, json.encodeToString(answer), MAX_MEANING_BYTES)
+        noteMeaning(key, trackId, target, title, artist, model = claudeModel, via = VIA_PLAYER)
         return MeaningResult.Ready(answer)
     }
 

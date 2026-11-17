@@ -96,6 +96,9 @@
     <string name="lyrics_translated_to">%1$s 번역 완료</string>
     <string name="lyrics_translated_claude">%1$s 번역 · Claude</string>
     <string name="lyrics_translated_claude_sonnet">%1$s 번역 · Claude Sonnet (Haiku 거절)</string>
+    <string name="lyrics_translation_fresh">방금 번역</string>
+    <string name="lyrics_translation_kept">보관함에서</string>
+    <string name="lyrics_translation_cached">캐시에서</string>
     <string name="lyrics_reading_claude">발음 · Claude</string>
     <string name="claude_fail_budget">월 한도 도달</string>
     <string name="lyrics_translated_google_fallback">%1$s 번역 · Google 번역 (Claude: %2$s)</string>

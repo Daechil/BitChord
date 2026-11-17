@@ -383,6 +383,10 @@ sealed interface LyricsTranslationResult {
         val claudeFailure: com.music.bitchord.data.lyrics.ClaudeFailure? = null,
         /** Haiku declined and Sonnet translated it; the status line names Sonnet. */
         val sonnetStandIn: Boolean = false,
+        /** A stored translation rather than one asked for just now; the status line says which. */
+        val fromCache: Boolean = false,
+        /** Stored in the kept store, which nothing clears, rather than the cache. */
+        val kept: Boolean = false,
     ) : LyricsTranslationResult
     data class SameLanguage(val language: String) : LyricsTranslationResult
     data object Unavailable : LyricsTranslationResult

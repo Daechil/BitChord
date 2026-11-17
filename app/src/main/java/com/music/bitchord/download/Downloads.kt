@@ -116,6 +116,8 @@ object Downloads {
 
     private val _savedMetadata = MutableStateFlow<Map<String, SavedSongMetadata>>(emptyMap())
 
+    internal fun savedMetadataSnapshot(): Map<String, SavedSongMetadata> = _savedMetadata.value
+
     private val _collections = MutableStateFlow<Map<String, SavedCollection>>(emptyMap())
 
     /**
@@ -1619,6 +1621,10 @@ object Downloads {
 }
 
 @kotlinx.serialization.Serializable
+/** A downloaded track's title and artist, for naming its stored translations. */
+internal fun Downloads.labelOf(videoId: String): Pair<String, String>? =
+    savedMetadataSnapshot()[videoId]?.let { it.title to it.artist }
+
 internal data class SavedSongMetadata(
     val videoId: String,
     val title: String,

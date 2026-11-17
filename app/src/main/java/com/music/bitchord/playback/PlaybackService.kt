@@ -7966,6 +7966,8 @@ class PlaybackService : MediaLibraryService() {
             stopLyricsTicker()
             return
         }
+        // So a translation stored while this plays can be listed under its name.
+        com.music.bitchord.download.TranslationStatus.remember(currentSong.videoId, currentSong.title, currentSong.artist)
 
         if (!AppSettings.syncedLyrics.value) {
             serviceLyrics = null

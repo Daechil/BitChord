@@ -1620,11 +1620,11 @@ object Downloads {
     private const val KEY_SAVED = "downloaded_tracks"
 }
 
-@kotlinx.serialization.Serializable
 /** A downloaded track's title and artist, for naming its stored translations. */
 internal fun Downloads.labelOf(videoId: String): Pair<String, String>? =
     savedMetadataSnapshot()[videoId]?.let { it.title to it.artist }
 
+@kotlinx.serialization.Serializable
 internal data class SavedSongMetadata(
     val videoId: String,
     val title: String,

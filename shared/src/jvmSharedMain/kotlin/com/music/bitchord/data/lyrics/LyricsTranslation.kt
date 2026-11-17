@@ -1691,11 +1691,12 @@ object LyricsTranslation {
 
     private val batchClient by lazy {
         Http.client.newBuilder()
-            // A few hundred songs go up in one body and come back in one.
-            .callTimeout(180, TimeUnit.SECONDS)
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(120, TimeUnit.SECONDS)
-            .writeTimeout(120, TimeUnit.SECONDS)
+            // A batch of a few dozen songs goes up in one body and comes back in
+            // one; a slow mobile connection gets plenty of time for either.
+            .callTimeout(300, TimeUnit.SECONDS)
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(180, TimeUnit.SECONDS)
+            .writeTimeout(180, TimeUnit.SECONDS)
             .build()
     }
 

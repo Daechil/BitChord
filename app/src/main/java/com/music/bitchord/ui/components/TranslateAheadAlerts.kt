@@ -271,8 +271,16 @@ private fun AheadOptionRow(label: String, detail: String?, checked: Boolean, che
 /** "Finding lyrics 12/40", "Waiting for Claude", "Done" — where a job stands. */
 @Composable
 private fun stateLabel(job: TranslateAhead.Job): String = when (job.state) {
-    TranslateAhead.State.PREPARING -> stringResource(R.string.translate_ahead_state_preparing, job.prepared, job.tracks.size)
-    TranslateAhead.State.WAITING -> stringResource(R.string.translate_ahead_state_waiting)
+    TranslateAhead.State.PREPARING -> if (job.chunksSent > 0) {
+        stringResource(R.string.translate_ahead_state_preparing_sent, job.prepared, job.tracks.size, job.chunksSent)
+    } else {
+        stringResource(R.string.translate_ahead_state_preparing, job.prepared, job.tracks.size)
+    }
+    TranslateAhead.State.WAITING -> if (job.chunksSent > 1) {
+        stringResource(R.string.translate_ahead_state_waiting_chunks, job.chunksOver, job.chunksSent)
+    } else {
+        stringResource(R.string.translate_ahead_state_waiting)
+    }
     TranslateAhead.State.CANCELING -> stringResource(R.string.translate_ahead_state_canceling)
     TranslateAhead.State.DONE -> stringResource(R.string.translate_ahead_state_done)
     TranslateAhead.State.EXPIRED -> stringResource(R.string.translate_ahead_state_expired)

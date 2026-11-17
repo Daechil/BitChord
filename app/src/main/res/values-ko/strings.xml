@@ -499,6 +499,8 @@
     <string name="translate_ahead_intro_setting_subtitle">보내기 전에 설명과 모델 선택 창을 표시합니다</string>
     <string name="translate_ahead_state_preparing">가사 찾는 중 %1$d/%2$d</string>
     <string name="translate_ahead_state_waiting">결과 대기 중</string>
+    <string name="translate_ahead_state_preparing_sent">가사 찾는 중 %1$d/%2$d · 묶음 %3$d개 보냄</string>
+    <string name="translate_ahead_state_waiting_chunks">결과 대기 중 · 묶음 %2$d개 중 %1$d개 완료</string>
     <string name="translate_ahead_state_canceling">취소하는 중</string>
     <string name="translate_ahead_state_done">완료</string>
     <string name="translate_ahead_state_failed">실패</string>

@@ -74,6 +74,14 @@ object TranslateAhead {
     private const val NOTIFICATION_BASE = 0x7A0000
     private const val LYRICS_TIMEOUT_MS = 25_000L
 
+    /**
+     * Songs per batch. A batch goes up as soon as this many songs needing an
+     * answer are found, so a long playlist is sent in parts while its lyrics
+     * are still being looked for, and a search cut short loses at most one
+     * part's worth of looking.
+     */
+    private const val CHUNK_SONGS = 20
+
     /** Anthropic keeps a batch's results this long after it was made. */
     private const val RESULTS_KEPT_MS = 29L * 24L * 60L * 60L * 1000L
 
@@ -116,6 +124,22 @@ object TranslateAhead {
         val detail: String? = null,
         /** Played since with lyrics the answer did not cover, and translated again then. */
         val lyricsChanged: Boolean = false,
+        /** The [Chunk] its requests went up in; null until they have. */
+        val chunk: Int? = null,
+    )
+
+    /** One batch of a job: up to [CHUNK_SONGS] songs' requests. */
+    @Serializable
+    data class Chunk(
+        val index: Int,
+        val batchId: String? = null,
+        /** [State.WAITING], [State.DONE], [State.FAILED] or [State.EXPIRED]. */
+        val state: String = State.WAITING,
+        val requests: Int = 0,
+        val inputTokens: Long = 0,
+        val outputTokens: Long = 0,
+        /** A [ClaudeFailure] name, for a batch that was not taken or could not be read. */
+        val error: String? = null,
     )
 
     @Serializable
@@ -130,7 +154,9 @@ object TranslateAhead {
         val speech: String = "",
         val mode: String = "",
         val state: String = State.PREPARING,
+        /** The single batch of a job from before jobs were sent in parts; see [migrated]. */
         val batchId: String? = null,
+        val chunks: List<Chunk> = emptyList(),
         val tracks: List<Track> = emptyList(),
         /** How many tracks' lyrics have been looked for, while [State.PREPARING]. */
         val prepared: Int = 0,
@@ -146,6 +172,10 @@ object TranslateAhead {
             get() = state == State.PREPARING || state == State.WAITING || state == State.CANCELING
 
         fun count(status: String): Int = tracks.count { it.status == status }
+
+        /** Batches sent, and how many of them are over. */
+        val chunksSent: Int get() = chunks.count { it.batchId != null }
+        val chunksOver: Int get() = chunks.count { it.batchId != null && it.state != State.WAITING }
 
         /** What the batch cost, at half the list price. */
         fun costUsd(): Double {
@@ -175,7 +205,7 @@ object TranslateAhead {
         LyricsTranslation.aheadMismatch = ::lyricsChanged
         scope.launch {
             // Merged rather than set: a job may have been started before the file was read.
-            val stored = readJobs(app)
+            val stored = readJobs(app).map(::migrated)
             update(save = false) { current -> current + stored.filter { old -> current.none { it.id == old.id } } }
             loaded.complete(Unit)
             if (_jobs.value.any { it.active }) work(app)
@@ -265,15 +295,17 @@ object TranslateAhead {
     fun cancel(jobId: String) {
         val app = context ?: return
         val job = _jobs.value.firstOrNull { it.id == jobId } ?: return
-        when (job.state) {
-            State.PREPARING -> edit(jobId) { it.copy(state = State.CANCELED, finishedAt = System.currentTimeMillis()) }
-            State.WAITING -> {
-                edit(jobId) { it.copy(state = State.CANCELING) }
-                scope.launch {
-                    job.batchId?.let { LyricsTranslation.cancelAhead(it) }
-                    work(app)
-                }
-            }
+        if (job.state != State.PREPARING && job.state != State.WAITING) return
+        val out = job.chunks.filter { it.state == State.WAITING && it.batchId != null }
+        if (out.isEmpty()) {
+            edit(jobId) { it.copy(state = State.CANCELED, finishedAt = System.currentTimeMillis()) }
+            return
+        }
+        // Batches already sent are asked to stop; what they answered before that is still filed.
+        edit(jobId) { it.copy(state = State.CANCELING) }
+        scope.launch {
+            out.forEach { chunk -> chunk.batchId?.let { LyricsTranslation.cancelAhead(it) } }
+            work(app)
         }
     }
 
@@ -282,7 +314,12 @@ object TranslateAhead {
         val app = context ?: return
         val gone = _jobs.value.filterNot { it.active }
         update { list -> list.filter { it.active } }
-        scope.launch { gone.forEach { itemsFile(app, it.id).delete() } }
+        scope.launch {
+            gone.forEach { job ->
+                itemsFile(app, job.id).delete()
+                job.chunks.forEach { itemsFile(app, job.id, it.index).delete() }
+            }
+        }
     }
 
     // ---- The work -----------------------------------------------------------
@@ -352,69 +389,155 @@ object TranslateAhead {
     private fun stillPreparing(jobId: String): Boolean =
         _jobs.value.firstOrNull { it.id == jobId }?.state == State.PREPARING
 
-    private suspend fun prepare(app: Context, job: Job) {
+    /** Requests built for songs not yet sent: what one [Chunk] is made of. */
+    private class Pending {
         val requests = ArrayList<Pair<String, JsonObject>>()
         val items = ArrayList<LyricsTranslation.AheadItem>()
+        val videoIds = LinkedHashSet<String>()
+    }
+
+    /**
+     * Looks for each song's lyrics and sends a batch every [CHUNK_SONGS] songs
+     * that need one. Picks up where an earlier pass stopped: songs already
+     * looked at keep their outcome, songs already sent stay sent, and only
+     * songs whose requests were built but never sent are looked at again.
+     */
+    private suspend fun prepare(app: Context, job: Job) {
         val saved = Downloads.saved.value
-        // Started over each time: a search the app was closed during left nothing behind but the track list.
         edit(job.id) { current ->
-            current.copy(prepared = 0, tracks = current.tracks.map { it.copy(status = TrackStatus.PENDING, readingStatus = null) })
+            current.copy(
+                tracks = current.tracks.map { track ->
+                    val unsent = track.chunk == null &&
+                        (track.status == TrackStatus.SENT || track.readingStatus == TrackStatus.SENT)
+                    if (unsent) track.copy(status = TrackStatus.PENDING, readingStatus = null) else track
+                },
+            )
         }
-        job.tracks.forEachIndexed { index, track ->
+        val pending = Pending()
+        var stopped: ClaudeFailure? = null
+        for ((index, track) in job.tracks.withIndex()) {
             if (!stillPreparing(job.id)) return
+            val current = _jobs.value.firstOrNull { it.id == job.id }?.tracks?.getOrNull(index) ?: continue
+            if (current.status != TrackStatus.PENDING) continue
             val lines = lyricsFor(app, track, saved[track.videoId])
             var status = TrackStatus.NO_LYRICS
             var readingStatus: String? = if (job.reading) TrackStatus.NO_LYRICS else null
             if (lines != null && lines.any { it.text.isNotBlank() }) {
                 val translation = LyricsTranslation.aheadRequest("t$index", track.videoId, lines, job.target, job.model, reading = false)
                 status = statusOf(translation)
-                translation.item?.let { item ->
-                    items += item
-                    requests += item.customId to (translation.params ?: return@let)
-                }
+                pending.add(translation, track.videoId)
                 if (job.reading) {
                     val reading = LyricsTranslation.aheadRequest("r$index", track.videoId, lines, job.target, job.model, reading = true)
                     readingStatus = statusOf(reading)
-                    reading.item?.let { item ->
-                        items += item
-                        requests += item.customId to (reading.params ?: return@let)
-                    }
+                    pending.add(reading, track.videoId)
                 }
             }
-            edit(job.id, save = index % 10 == 9) { current ->
-                current.copy(
-                    prepared = index + 1,
-                    tracks = current.tracks.map {
-                        if (it.videoId == track.videoId) it.copy(status = status, readingStatus = readingStatus) else it
+            edit(job.id, save = index % 5 == 4) { now ->
+                now.copy(
+                    prepared = now.tracks.count { it.status != TrackStatus.PENDING } + 1,
+                    tracks = now.tracks.mapIndexed { i, it ->
+                        if (i == index) it.copy(status = status, readingStatus = readingStatus) else it
+                    },
+                )
+            }
+            if (pending.videoIds.size >= CHUNK_SONGS) {
+                stopped = sendChunk(app, job, pending)
+                pending.clear()
+                if (stopped != null) break
+            }
+        }
+        if (!stillPreparing(job.id)) return
+        if (stopped == null && pending.videoIds.isNotEmpty()) {
+            stopped = sendChunk(app, job, pending)
+        }
+        val fatal = stopped
+        if (fatal != null) {
+            // The key was refused, there is no credit, or the monthly limit is reached:
+            // nothing more would be taken, so what is left is marked as not sent.
+            edit(job.id) { now ->
+                now.copy(
+                    error = fatal.name,
+                    tracks = now.tracks.map { track ->
+                        if (track.status == TrackStatus.PENDING) track.copy(status = TrackStatus.FAILED, detail = fatal.name) else track
                     },
                 )
             }
         }
-        if (!stillPreparing(job.id)) return
-        if (requests.isEmpty()) {
-            // Nothing needed asking: every song was translated already, or had no lyrics.
-            finish(app, job.id, State.DONE)
-            return
+        val after = _jobs.value.firstOrNull { it.id == job.id } ?: return
+        if (after.chunks.any { it.state == State.WAITING }) {
+            edit(job.id) { it.copy(state = State.WAITING) }
+        } else {
+            // Nothing out: every song was answered already, had no lyrics, or could not be sent.
+            finishJob(app, job.id)
         }
-        val sent = LyricsTranslation.submitAhead(requests, job.model)
+    }
+
+    private fun Pending.add(request: LyricsTranslation.AheadRequest, videoId: String) {
+        val item = request.item ?: return
+        val params = request.params ?: return
+        items += item
+        requests += item.customId to params
+        videoIds += videoId
+    }
+
+    private fun Pending.clear() {
+        requests.clear()
+        items.clear()
+        videoIds.clear()
+    }
+
+    /**
+     * Sends [pending] as the job's next batch and records it. Returns the
+     * failure when nothing more could be sent either — a refused key, no
+     * credit, the monthly limit — and null otherwise, a batch that failed for
+     * a passing reason included: its songs are marked failed and the rest go on.
+     */
+    private suspend fun sendChunk(app: Context, job: Job, pending: Pending): ClaudeFailure? {
+        val index = (_jobs.value.firstOrNull { it.id == job.id }?.chunks?.maxOfOrNull { it.index } ?: -1) + 1
+        val songs = pending.videoIds.toSet()
+        val sent = LyricsTranslation.submitAhead(pending.requests.toList(), job.model)
         val batchId = sent.batchId
         if (batchId == null) {
-            finish(app, job.id, State.FAILED, error = (sent.failure ?: ClaudeFailure.ERROR).name) { track ->
-                track.copy(
-                    status = if (track.status == TrackStatus.SENT) TrackStatus.FAILED else track.status,
-                    readingStatus = if (track.readingStatus == TrackStatus.SENT) TrackStatus.FAILED else track.readingStatus,
+            val failure = sent.failure ?: ClaudeFailure.ERROR
+            edit(job.id) { now ->
+                now.copy(
+                    chunks = now.chunks + Chunk(index = index, state = State.FAILED, requests = pending.requests.size, error = failure.name),
+                    tracks = now.tracks.map { track ->
+                        if (track.videoId in songs && track.chunk == null) {
+                            track.copy(
+                                chunk = index,
+                                status = if (track.status == TrackStatus.SENT) TrackStatus.FAILED else track.status,
+                                readingStatus = if (track.readingStatus == TrackStatus.SENT) TrackStatus.FAILED else track.readingStatus,
+                                detail = failure.name,
+                            )
+                        } else {
+                            track
+                        }
+                    },
                 )
             }
-            return
+            val fatal = failure == ClaudeFailure.KEY_REJECTED || failure == ClaudeFailure.NO_CREDIT || failure == ClaudeFailure.BUDGET
+            return if (fatal) failure else null
         }
+        // The lines each answer belongs to, for when it comes back; written before the batch is recorded,
+        // so a recorded batch always has them.
         withContext(Dispatchers.IO) {
             runCatching {
-                val file = itemsFile(app, job.id)
+                val file = itemsFile(app, job.id, index)
                 file.parentFile?.mkdirs()
-                file.writeText(json.encodeToString(itemsSerializer, items))
+                file.writeText(json.encodeToString(itemsSerializer, pending.items.toList()))
             }
         }
-        edit(job.id) { it.copy(state = State.WAITING, batchId = batchId, requests = requests.size) }
+        edit(job.id) { now ->
+            now.copy(
+                chunks = now.chunks + Chunk(index = index, batchId = batchId, requests = pending.requests.size),
+                requests = now.requests + pending.requests.size,
+                tracks = now.tracks.map { track ->
+                    if (track.videoId in songs && track.chunk == null) track.copy(chunk = index) else track
+                },
+            )
+        }
+        return null
     }
 
     private fun statusOf(request: LyricsTranslation.AheadRequest): String = when (request.skip) {
@@ -452,23 +575,47 @@ object TranslateAhead {
         }
     }
 
+    /** Asks about each of [job]'s batches still out, files what has come back, and closes the job once none is left. */
     private suspend fun collect(app: Context, job: Job) {
-        val batchId = job.batchId ?: return
+        for (chunk in job.chunks) {
+            if (chunk.state != State.WAITING) continue
+            try {
+                collectChunk(app, job, chunk)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Log.d(TAG, "could not collect ${job.id}/${chunk.index}: $error")
+            }
+        }
+        val now = _jobs.value.firstOrNull { it.id == job.id } ?: return
+        // Still being prepared: more batches may yet go up, and [prepare] closes it.
+        if (now.state == State.PREPARING) return
+        if (now.chunks.none { it.state == State.WAITING }) finishJob(app, job.id)
+    }
+
+    private suspend fun collectChunk(app: Context, job: Job, chunk: Chunk) {
+        val batchId = chunk.batchId ?: return
         val status = LyricsTranslation.aheadStatus(batchId) ?: return
         val tooOld = System.currentTimeMillis() - job.createdAt > RESULTS_KEPT_MS
+        fun close(state: String, error: String? = null, track: (Track) -> Track) = edit(job.id) { now ->
+            now.copy(
+                chunks = now.chunks.map { if (it.index == chunk.index) it.copy(state = state, error = error) else it },
+                tracks = now.tracks.map { if (it.chunk == chunk.index) track(it) else it },
+            )
+        }
         if (status.gone || (status.ended && tooOld && status.resultsUrl == null)) {
             // Its results are no longer kept. What it cost was still billed.
-            itemsFile(app, job.id).delete()
-            finish(app, job.id, State.EXPIRED) { it.unanswered(ClaudeFailure.TIMEOUT.name) }
+            itemsFile(app, job.id, chunk.index).delete()
+            close(State.EXPIRED) { it.unanswered(ClaudeFailure.TIMEOUT.name) }
             return
         }
         if (!status.ended) return
         val items = withContext(Dispatchers.IO) {
-            runCatching { json.decodeFromString(itemsSerializer, itemsFile(app, job.id).readText()) }.getOrNull()
+            runCatching { json.decodeFromString(itemsSerializer, itemsFile(app, job.id, chunk.index).readText()) }.getOrNull()
         }
         if (items == null) {
             // The lines each answer belongs to are gone, so none can be filed.
-            finish(app, job.id, State.FAILED, error = ClaudeFailure.ERROR.name) { it.unanswered(ClaudeFailure.ERROR.name) }
+            close(State.FAILED, ClaudeFailure.ERROR.name) { it.unanswered(ClaudeFailure.ERROR.name) }
             return
         }
         val outcomes = LyricsTranslation.collectAhead(batchId, status.resultsUrl, items) ?: return
@@ -482,14 +629,17 @@ object TranslateAhead {
                 else -> TrackStatus.FAILED to outcome.failure?.name
             }
         }
-        val canceled = job.state == State.CANCELING
-        edit(job.id) { current ->
-            current.copy(
-                state = if (canceled) State.CANCELED else State.DONE,
-                finishedAt = System.currentTimeMillis(),
-                inputTokens = outcomes.sumOf { it.inputTokens },
-                outputTokens = outcomes.sumOf { it.outputTokens },
-                tracks = current.tracks.mapIndexed { index, track ->
+        val input = outcomes.sumOf { it.inputTokens }
+        val output = outcomes.sumOf { it.outputTokens }
+        edit(job.id) { now ->
+            now.copy(
+                inputTokens = now.inputTokens + input,
+                outputTokens = now.outputTokens + output,
+                chunks = now.chunks.map {
+                    if (it.index == chunk.index) it.copy(state = State.DONE, inputTokens = input, outputTokens = output) else it
+                },
+                tracks = now.tracks.mapIndexed { index, track ->
+                    if (track.chunk != chunk.index) return@mapIndexed track
                     val translation = result("t$index", track.status == TrackStatus.SENT)
                     val reading = result("r$index", track.readingStatus == TrackStatus.SENT)
                     track.copy(
@@ -500,8 +650,25 @@ object TranslateAhead {
                 },
             )
         }
-        itemsFile(app, job.id).delete()
-        notifyDone(app, job.id)
+        itemsFile(app, job.id, chunk.index).delete()
+    }
+
+    /**
+     * Closes a job none of whose batches is out any more: canceled when it was
+     * being canceled, done when any batch came back, otherwise expired or
+     * failed — and says so, once.
+     */
+    private fun finishJob(app: Context, jobId: String) {
+        val job = _jobs.value.firstOrNull { it.id == jobId } ?: return
+        val state = when {
+            job.state == State.CANCELING -> State.CANCELED
+            job.chunks.isEmpty() && job.error == null -> State.DONE
+            job.chunks.any { it.state == State.DONE } -> State.DONE
+            job.chunks.any { it.state == State.EXPIRED } -> State.EXPIRED
+            else -> State.FAILED
+        }
+        val error = job.error ?: job.chunks.firstNotNullOfOrNull { it.error }?.takeIf { state == State.FAILED }
+        finish(app, jobId, state, error = error)
     }
 
     private fun Track.unanswered(detail: String): Track = copy(
@@ -547,6 +714,41 @@ object TranslateAhead {
     private fun directory(app: Context) = File(app.filesDir, DIRECTORY)
 
     private fun itemsFile(app: Context, jobId: String) = File(directory(app), "items_$jobId.json")
+
+    private fun itemsFile(app: Context, jobId: String, chunk: Int) = File(directory(app), "items_${jobId}_$chunk.json")
+
+    /**
+     * A job saved before jobs went up in parts, as one that did: its one
+     * batch becomes chunk 0, and its items file is renamed to match.
+     */
+    private fun migrated(job: Job): Job {
+        if (job.chunks.isNotEmpty()) return job
+        val app = context ?: return job
+        val batchId = job.batchId ?: return job
+        runCatching {
+            val old = itemsFile(app, job.id)
+            if (old.isFile) old.renameTo(itemsFile(app, job.id, 0))
+        }
+        val waiting = job.state == State.WAITING || job.state == State.CANCELING
+        return job.copy(
+            batchId = null,
+            chunks = listOf(
+                Chunk(
+                    index = 0,
+                    batchId = batchId,
+                    state = if (waiting) State.WAITING else State.DONE,
+                    requests = job.requests,
+                    inputTokens = job.inputTokens,
+                    outputTokens = job.outputTokens,
+                ),
+            ),
+            tracks = job.tracks.map {
+                val sent = it.status == TrackStatus.SENT || it.readingStatus == TrackStatus.SENT ||
+                    it.status == TrackStatus.TRANSLATED || it.status == TrackStatus.DECLINED || it.status == TrackStatus.FAILED
+                if (sent) it.copy(chunk = 0) else it
+            },
+        )
+    }
 
     private suspend fun readJobs(app: Context): List<Job> = withContext(Dispatchers.IO) {
         runCatching { json.decodeFromString(jobsSerializer, File(directory(app), JOBS_FILE).readText()) }

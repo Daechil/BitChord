@@ -538,6 +538,8 @@
     <string name="translate_ahead_intro_setting_subtitle">Explain the batch and offer the model choice each time</string>
     <string name="translate_ahead_state_preparing">Finding lyrics %1$d/%2$d</string>
     <string name="translate_ahead_state_waiting">Waiting for results</string>
+    <string name="translate_ahead_state_preparing_sent">Finding lyrics %1$d/%2$d · %3$d batches sent</string>
+    <string name="translate_ahead_state_waiting_chunks">Waiting for results · %1$d of %2$d batches done</string>
     <string name="translate_ahead_state_canceling">Canceling</string>
     <string name="translate_ahead_state_done">Done</string>
     <string name="translate_ahead_state_failed">Failed</string>

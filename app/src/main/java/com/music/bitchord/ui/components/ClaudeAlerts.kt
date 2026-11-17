@@ -60,6 +60,9 @@ object KoAlerts {
     /** A playlist or album whose songs' translation status is on show. */
     val releaseStatus = MutableStateFlow<AheadAsk?>(null)
 
+    /** The watched playlists' check interval choice. */
+    val watchInterval = MutableStateFlow(false)
+
     /** Settings' translation storage page. */
     val storage = MutableStateFlow(false)
 
@@ -99,6 +102,28 @@ fun ClaudeAlerts(
     TranslateAheadAlerts(hazeState)
     TranslationStatusAlerts(hazeState)
     FloatingLyricsAlerts(hazeState)
+    val showWatchInterval by KoAlerts.watchInterval.collectAsStateWithLifecycle()
+    if (showWatchInterval) {
+        BackHandler { KoAlerts.watchInterval.value = false }
+        val context = LocalContext.current
+        val selected by AppSettings.aheadWatchHours.collectAsStateWithLifecycle()
+        val options = listOf(6, 12, 24, 48, 72)
+        val hoursLabel = stringResource(R.string.translate_ahead_watch_hours)
+        ChoiceAlert(
+            hazeState = hazeState,
+            title = stringResource(R.string.translate_ahead_watch_interval),
+            message = stringResource(R.string.translate_ahead_watch_interval_description),
+            options = options,
+            selected = options.minByOrNull { kotlin.math.abs(it - selected) } ?: 24,
+            label = { hoursLabel.format(it) },
+            onSelect = {
+                AppSettings.setAheadWatchHours(it)
+                com.music.bitchord.download.TranslateAhead.scheduleWatching(context.applicationContext, replace = true)
+                KoAlerts.watchInterval.value = false
+            },
+            onDismiss = { KoAlerts.watchInterval.value = false },
+        )
+    }
     val showCap by KoAlerts.monthlyCap.collectAsStateWithLifecycle()
     if (showCap) {
         BackHandler { KoAlerts.monthlyCap.value = false }

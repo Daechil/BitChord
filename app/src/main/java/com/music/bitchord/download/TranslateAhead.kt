@@ -70,6 +70,8 @@ object TranslateAhead {
     private const val MAX_JOBS = 30
     private const val ONE_OFF_WORK = "translate_ahead_now"
     private const val PERIODIC_WORK = "translate_ahead_poll"
+    private const val WATCH_WORK = "translate_ahead_watch"
+    private const val WATCHES_FILE = "watches.json"
     private const val CHANNEL_ID = "translate_ahead"
     private const val NOTIFICATION_BASE = 0x7A0000
     private const val LYRICS_TIMEOUT_MS = 25_000L
@@ -204,6 +206,10 @@ object TranslateAhead {
         this.context = app
         LyricsTranslation.aheadMismatch = ::lyricsChanged
         scope.launch {
+            _watches.value = readWatches(app)
+            scheduleWatching(app, replace = false)
+        }
+        scope.launch {
             // Merged rather than set: a job may have been started before the file was read.
             val stored = readJobs(app).map(::migrated)
             update(save = false) { current -> current + stored.filter { old -> current.none { it.id == old.id } } }
@@ -220,9 +226,9 @@ object TranslateAhead {
     /** Whether [songs] can be asked for at all: Claude set up, and something in the list to ask about. */
     fun available(): Boolean = AppSettings.claudeTranslation.value && LyricsTranslation.claudeKeyUsable
 
-    /** Starts a job for [songs]; its progress and outcome are in [jobs] from here on. */
-    fun start(title: String, songs: List<Song>, model: String, reading: Boolean) {
-        val app = context ?: return
+    /** Starts a job for [songs]; its progress and outcome are in [jobs] from here on. False when it could not start. */
+    fun start(title: String, songs: List<Song>, model: String, reading: Boolean): Boolean {
+        val app = context ?: return false
         val tracks = songs.distinctBy { it.videoId }.map { song ->
             Track(
                 videoId = song.videoId,
@@ -232,7 +238,7 @@ object TranslateAhead {
                 durationMs = song.durationMillis(),
             )
         }
-        if (tracks.isEmpty()) return
+        if (tracks.isEmpty()) return false
         val now = System.currentTimeMillis()
         val job = Job(
             id = now.toString(36),
@@ -247,6 +253,7 @@ object TranslateAhead {
         )
         update { listOf(job) + it }
         kick(app)
+        return true
     }
 
     /**
@@ -318,6 +325,140 @@ object TranslateAhead {
             gone.forEach { job ->
                 itemsFile(app, job.id).delete()
                 job.chunks.forEach { itemsFile(app, job.id, it.index).delete() }
+            }
+        }
+    }
+
+    // ---- Playlists watched for new songs ------------------------------------
+
+    /**
+     * A playlist translated ahead whose new songs are sent too, as they turn
+     * up: looked at every [AppSettings.aheadWatchHours] hours.
+     */
+    @Serializable
+    data class Watch(
+        val browseId: String,
+        val title: String,
+        val model: String,
+        val reading: Boolean,
+        /** Every song the playlist held when last looked at; only others are sent. */
+        val known: List<String> = emptyList(),
+        val lastChecked: Long = 0,
+        /** Songs sent from it so far. */
+        val sent: Int = 0,
+    )
+
+    private val watchesSerializer = ListSerializer(Watch.serializer())
+    private val _watches = MutableStateFlow<List<Watch>>(emptyList())
+    val watches: StateFlow<List<Watch>> = _watches.asStateFlow()
+    private val watching = Mutex()
+
+    /** Starts watching [browseId]; the [songs] it holds now count as known. */
+    fun watch(browseId: String, title: String, songs: List<Song>, model: String, reading: Boolean) {
+        val app = context ?: return
+        val known = songs.map { it.videoId }
+        val existing = _watches.value.firstOrNull { it.browseId == browseId }
+        val next = Watch(
+            browseId = browseId,
+            title = title,
+            model = model,
+            reading = reading,
+            known = (existing?.known.orEmpty() + known).distinct(),
+            lastChecked = System.currentTimeMillis(),
+            sent = existing?.sent ?: 0,
+        )
+        setWatches(app, listOf(next) + _watches.value.filter { it.browseId != browseId })
+        scheduleWatching(app, replace = false)
+    }
+
+    fun unwatch(browseId: String) {
+        val app = context ?: return
+        setWatches(app, _watches.value.filter { it.browseId != browseId })
+        scheduleWatching(app, replace = false)
+    }
+
+    fun isWatched(browseId: String?): Boolean = browseId != null && _watches.value.any { it.browseId == browseId }
+
+    /** Looks at every watched playlist due a look, and sends its new songs ahead. */
+    internal suspend fun checkWatches(app: Context) {
+        if (!watching.tryLock()) return
+        try {
+            val hours = AppSettings.aheadWatchHours.value.coerceAtLeast(1)
+            // A little early still counts: the worker's own timing drifts.
+            val due = System.currentTimeMillis() - hours * 3_600_000L * 9 / 10
+            for (watch in _watches.value) {
+                if (watch.lastChecked > due) continue
+                if (!available()) break
+                val browseId = if (watch.browseId.startsWith("VL")) watch.browseId else "VL${watch.browseId}"
+                val listing = try {
+                    PlaylistSync.readWholePlaylist(
+                        first = { com.music.bitchord.data.YtMusicRepository.browseSongs(browseId) },
+                        more = { com.music.bitchord.data.YtMusicRepository.moreSongs(it) },
+                    )
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    Log.d(TAG, "could not read ${watch.title}: $error")
+                    continue
+                }
+                // A playlist that could not be read in full is tried again next time.
+                if (!listing.complete) continue
+                val known = watch.known.toHashSet()
+                val fresh = listing.songs.filter { it.videoId !in known }
+                if (fresh.isNotEmpty()) {
+                    fresh.forEach { TranslationStatus.remember(it.videoId, it.title, it.artist) }
+                    start(app.getString(R.string.translate_ahead_watch_job, watch.title), fresh, watch.model, watch.reading)
+                }
+                val updated = watch.copy(
+                    known = (watch.known + fresh.map { it.videoId }).distinct(),
+                    lastChecked = System.currentTimeMillis(),
+                    sent = watch.sent + fresh.size,
+                )
+                setWatches(app, _watches.value.map { if (it.browseId == watch.browseId) updated else it })
+            }
+        } finally {
+            watching.unlock()
+        }
+    }
+
+    /** Runs the watch every [AppSettings.aheadWatchHours] while anything is watched; [replace] after the interval changed. */
+    fun scheduleWatching(app: Context, replace: Boolean) {
+        runCatching {
+            val manager = WorkManager.getInstance(app)
+            if (_watches.value.isEmpty()) {
+                manager.cancelUniqueWork(WATCH_WORK)
+                return
+            }
+            val hours = AppSettings.aheadWatchHours.value.coerceAtLeast(1).toLong()
+            val request = PeriodicWorkRequestBuilder<TranslateAheadWatchWorker>(hours, TimeUnit.HOURS)
+                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                .build()
+            manager.enqueueUniquePeriodicWork(
+                WATCH_WORK,
+                if (replace) ExistingPeriodicWorkPolicy.UPDATE else ExistingPeriodicWorkPolicy.KEEP,
+                request,
+            )
+        }
+    }
+
+    private suspend fun readWatches(app: Context): List<Watch> = withContext(Dispatchers.IO) {
+        runCatching { json.decodeFromString(watchesSerializer, File(directory(app), WATCHES_FILE).readText()) }
+            .getOrDefault(emptyList())
+    }
+
+    private fun setWatches(app: Context, list: List<Watch>) {
+        synchronized(lock) {
+            _watches.value = list
+            runCatching {
+                val folder = directory(app)
+                folder.mkdirs()
+                val temporary = File(folder, "$WATCHES_FILE.tmp")
+                temporary.writeText(json.encodeToString(watchesSerializer, list))
+                val destination = File(folder, WATCHES_FILE)
+                if (!temporary.renameTo(destination)) {
+                    temporary.copyTo(destination, overwrite = true)
+                    temporary.delete()
+                }
             }
         }
     }
@@ -833,6 +974,15 @@ class TranslateAheadWorker(context: Context, params: WorkerParameters) : Corouti
     override suspend fun doWork(): Result {
         TranslateAhead.init(applicationContext)
         TranslateAhead.work(applicationContext)
+        return Result.success()
+    }
+}
+
+/** The watch of [TranslateAhead]: looks at watched playlists for new songs. */
+class TranslateAheadWatchWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result {
+        TranslateAhead.init(applicationContext)
+        TranslateAhead.checkWatches(applicationContext)
         return Result.success()
     }
 }

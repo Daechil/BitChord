@@ -654,6 +654,12 @@ object AppSettings {
         return listOf(now) + claudeUsageHistory.value
     }
 
+    /** Downloaded songs' translations go up in batches, at half price, rather than at once. */
+    val downloadTranslationsBatch = MutableStateFlow(false)
+
+    /** How often, in hours, watched playlists are looked at for new songs. */
+    val aheadWatchHours = MutableStateFlow(24)
+
     /** "Keep every Claude answer" — see [com.music.bitchord.data.lyrics.LyricsTranslation.keepClaudeAlways]. */
     val keepClaudeTranslations = MutableStateFlow(true)
 
@@ -1221,6 +1227,8 @@ object AppSettings {
         claudeUsageHistory.value = readUsageHistory()
         keepClaudeTranslations.value = prefs.getBoolean(KEY_KEEP_CLAUDE_TRANSLATIONS, true)
         keptStoreLimitMb.value = prefs.getInt(KEY_KEPT_STORE_LIMIT_MB, 100)
+        downloadTranslationsBatch.value = prefs.getBoolean(KEY_DOWNLOAD_TRANSLATIONS_BATCH, false)
+        aheadWatchHours.value = prefs.getInt(KEY_AHEAD_WATCH_HOURS, 24)
         com.music.bitchord.data.lyrics.LyricsTranslation.keepClaudeAlways = keepClaudeTranslations.value
         com.music.bitchord.data.lyrics.LyricsTranslation.keptLimitBytes = keptStoreLimitMb.value * 1024L * 1024L
         com.music.bitchord.data.lyrics.LyricsTranslation.usageSink = ::recordClaudeUsage
@@ -1931,6 +1939,16 @@ object AppSettings {
         keepClaudeTranslations.value = value
         prefs.edit().putBoolean(KEY_KEEP_CLAUDE_TRANSLATIONS, value).apply()
         com.music.bitchord.data.lyrics.LyricsTranslation.keepClaudeAlways = value
+    }
+
+    fun setDownloadTranslationsBatch(value: Boolean) {
+        downloadTranslationsBatch.value = value
+        prefs.edit().putBoolean(KEY_DOWNLOAD_TRANSLATIONS_BATCH, value).apply()
+    }
+
+    fun setAheadWatchHours(value: Int) {
+        aheadWatchHours.value = value
+        prefs.edit().putInt(KEY_AHEAD_WATCH_HOURS, value).apply()
     }
 
     fun setKeptStoreLimitMb(value: Int) {
@@ -2747,6 +2765,8 @@ object AppSettings {
     private const val KEY_CLAUDE_USAGE_HISTORY = "ko_claude_usage_history"
     private const val KEY_KEEP_CLAUDE_TRANSLATIONS = "ko_keep_claude_translations"
     private const val KEY_KEPT_STORE_LIMIT_MB = "ko_kept_store_limit_mb"
+    private const val KEY_DOWNLOAD_TRANSLATIONS_BATCH = "ko_download_translations_batch"
+    private const val KEY_AHEAD_WATCH_HOURS = "ko_ahead_watch_hours"
     private const val KEY_ANIMATED_CANVAS = "animated_canvas"
     private const val KEY_CANVAS_OVER_CELLULAR = "canvas_over_cellular"
     private const val KEY_SPOTIFY_CANVAS_AUTO_HIDE = "spotify_canvas_auto_hide"

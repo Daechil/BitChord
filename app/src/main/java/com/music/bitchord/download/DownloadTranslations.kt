@@ -47,6 +47,12 @@ object DownloadTranslations {
         LyricsTranslation.keepTranslationFor = { trackId ->
             AppSettings.keepDownloadTranslations.value && Downloads.saved.value.containsKey(trackId)
         }
+        // Songs gathered before the app last closed go up now.
+        gatherScope.launch {
+            // After the rest of the app has started: the job reads downloads and settings.
+            kotlinx.coroutines.delay(30_000L)
+            if (readWaiting(app).isNotEmpty()) flush(app)
+        }
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             for (job in queue) {
                 try {
@@ -62,8 +68,101 @@ object DownloadTranslations {
 
     /** Called once a download is recorded; does nothing while the setting is off. */
     fun downloaded(song: Song, uri: Uri) {
-        if (context == null || !AppSettings.keepDownloadTranslations.value) return
+        val app = context ?: return
+        if (!AppSettings.keepDownloadTranslations.value) return
+        // At half price, a while later: gathered and sent ahead as one batch.
+        if (AppSettings.downloadTranslationsBatch.value && TranslateAhead.available()) {
+            gather(app, song)
+            return
+        }
         queue.trySend(Job(song, uri.toString()))
+    }
+
+    // ---- Gathered for a batch ------------------------------------------------
+
+    /** A downloaded song waiting to go up in the next batch. */
+    @kotlinx.serialization.Serializable
+    private data class Waiting(
+        val videoId: String,
+        val title: String,
+        val artist: String,
+        val album: String? = null,
+        val durationText: String? = null,
+    )
+
+    /** A batch goes up this long after the last download, or once [GATHER_SONGS] are waiting. */
+    private const val GATHER_QUIET_MS = 3L * 60L * 1000L
+    private const val GATHER_SONGS = 20
+    private const val WAITING_FILE = "translate_ahead/download_waiting.json"
+    private val waitingSerializer = kotlinx.serialization.builtins.ListSerializer(Waiting.serializer())
+    private val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+    private val gatherLock = Any()
+    private val gatherScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var flushJob: kotlinx.coroutines.Job? = null
+
+    private fun waitingFile(app: Context) = java.io.File(app.filesDir, WAITING_FILE)
+
+    private fun readWaiting(app: Context): List<Waiting> =
+        runCatching { json.decodeFromString(waitingSerializer, waitingFile(app).readText()) }.getOrDefault(emptyList())
+
+    private fun writeWaiting(app: Context, list: List<Waiting>) {
+        runCatching {
+            val file = waitingFile(app)
+            if (list.isEmpty()) {
+                file.delete()
+                return
+            }
+            file.parentFile?.mkdirs()
+            file.writeText(json.encodeToString(waitingSerializer, list))
+        }
+    }
+
+    /** Kept on disk as they come, so songs downloaded just before the app closed still go. */
+    private fun gather(app: Context, song: Song) {
+        val count = synchronized(gatherLock) {
+            val list = readWaiting(app).filter { it.videoId != song.videoId } +
+                Waiting(song.videoId, song.title, song.artist, song.albumName, song.durationText)
+            writeWaiting(app, list)
+            list.size
+        }
+        TranslationStatus.remember(song.videoId, song.title, song.artist)
+        flushJob?.cancel()
+        flushJob = gatherScope.launch {
+            if (count < GATHER_SONGS) kotlinx.coroutines.delay(GATHER_QUIET_MS)
+            flush(app)
+        }
+    }
+
+    /** Sends what has gathered as one batch, named for when it went. */
+    private fun flush(app: Context) {
+        val songs = synchronized(gatherLock) { readWaiting(app) }
+        if (songs.isEmpty()) return
+        val title = app.getString(
+            com.music.bitchord.R.string.translate_ahead_download_job,
+            java.text.SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(java.util.Date()),
+        )
+        val started = TranslateAhead.start(
+            title = title,
+            songs = songs.map {
+                Song(
+                    videoId = it.videoId,
+                    title = it.title,
+                    artist = it.artist,
+                    thumbnailUrl = null,
+                    durationText = it.durationText,
+                    albumName = it.album,
+                )
+            },
+            model = LyricsTranslation.claudeModel,
+            reading = AppSettings.translateAheadReading.value,
+        )
+        // Taken off the list only once they are a job; otherwise they wait for the next start.
+        if (started) {
+            synchronized(gatherLock) {
+                val sent = songs.map { it.videoId }.toSet()
+                writeWaiting(app, readWaiting(app).filter { it.videoId !in sent })
+            }
+        }
     }
 
     private suspend fun translate(context: Context, job: Job) {

@@ -304,6 +304,9 @@ fun SettingsScreen(
     val aheadIntro by AppSettings.translateAheadIntro.collectAsStateWithLifecycle()
     val keepClaudeTranslations by AppSettings.keepClaudeTranslations.collectAsStateWithLifecycle()
     val keptLimitMb by AppSettings.keptStoreLimitMb.collectAsStateWithLifecycle()
+    val downloadTranslationsBatch by AppSettings.downloadTranslationsBatch.collectAsStateWithLifecycle()
+    val aheadWatchHours by AppSettings.aheadWatchHours.collectAsStateWithLifecycle()
+    val aheadWatches by com.music.bitchord.download.TranslateAhead.watches.collectAsStateWithLifecycle()
     val storageOpen by com.music.bitchord.ui.components.KoAlerts.storage.collectAsStateWithLifecycle()
     var storageUse by remember { mutableStateOf<com.music.bitchord.data.lyrics.LyricsTranslation.StorageUse?>(null) }
     // Measured again each time the storage page closes, since it can clear things.
@@ -899,6 +902,20 @@ fun SettingsScreen(
                         onClick = { com.music.bitchord.ui.components.KoAlerts.aheadLog.value = true },
                     )
                 }
+                val watchIntervalTitle = stringResource(R.string.translate_ahead_watch_interval)
+                row(watchIntervalTitle, "claude", "batch", "playlist", "new", "watch", "미리", "새 곡", "확인", "주기") {
+                    SettingsRow(
+                        icon = SfIcons.AutoAwesome,
+                        title = watchIntervalTitle,
+                        subtitle = stringResource(
+                            R.string.translate_ahead_watch_interval_subtitle,
+                            aheadWatchHours,
+                            aheadWatches.size,
+                        ),
+                        trailing = { Chevron() },
+                        onClick = { com.music.bitchord.ui.components.KoAlerts.watchInterval.value = true },
+                    )
+                }
                 val aheadIntroTitle = stringResource(R.string.translate_ahead_intro_setting)
                 row(aheadIntroTitle, "claude", "batch", "translate", "ahead", "ask", "미리", "번역", "안내") {
                     SettingsRow(
@@ -1066,6 +1083,21 @@ fun SettingsScreen(
                         )
                     },
                     onClick = { AppSettings.setKeepDownloadTranslations(!keepDownloadTranslations) },
+                )
+            }
+            val batchDownloadsTitle = stringResource(R.string.download_translations_batch)
+            row(batchDownloadsTitle, "download", "batch", "translate", "claude", "다운로드", "번역", "반값") {
+                SettingsRow(
+                    icon = SfIcons.Download,
+                    title = batchDownloadsTitle,
+                    subtitle = stringResource(R.string.download_translations_batch_subtitle),
+                    trailing = {
+                        IosSwitch(
+                            checked = downloadTranslationsBatch,
+                            onCheckedChange = AppSettings::setDownloadTranslationsBatch,
+                        )
+                    },
+                    onClick = { AppSettings.setDownloadTranslationsBatch(!downloadTranslationsBatch) },
                 )
             }
             val backUpTranslationsTitle = stringResource(R.string.translations_back_up)

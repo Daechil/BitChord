@@ -320,7 +320,7 @@ private fun ReleaseStatusAlert(hazeState: HazeState, release: AheadAsk, onDismis
                 emphasised = true,
                 onClick = {
                     onDismiss()
-                    requestTranslateAhead(context, release.title, missing)
+                    requestTranslateAhead(context, release.title, missing, release.browseId, release.songs)
                 },
             )
         }

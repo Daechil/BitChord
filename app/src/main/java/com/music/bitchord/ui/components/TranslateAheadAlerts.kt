@@ -86,8 +86,17 @@ fun TranslateAheadAlerts(hazeState: HazeState) {
     }
 }
 
-/** What "Translate lyrics ahead" was chosen on: the release's name and its tracks. */
-class AheadAsk(val title: String, val songs: List<Song>)
+/**
+ * What "Translate lyrics ahead" was chosen on: the release's name and the
+ * tracks to send. [browseId] is set for a playlist that can be watched for
+ * new songs, whose every track now is [allSongs].
+ */
+class AheadAsk(
+    val title: String,
+    val songs: List<Song>,
+    val browseId: String? = null,
+    val allSongs: List<Song> = songs,
+)
 
 /** Typical tokens of one song's translation, until this device has figures of its own. */
 private const val TYPICAL_INPUT_TOKENS = 2_500L
@@ -120,10 +129,16 @@ private fun remainingCapUsd(): Double? {
  * The menu's "Translate lyrics ahead": the dialog, or — once "don't show this
  * again" has been ticked — the batch itself, with the choices made last time.
  */
-fun requestTranslateAhead(context: Context, title: String, songs: List<Song>) {
+fun requestTranslateAhead(
+    context: Context,
+    title: String,
+    songs: List<Song>,
+    browseId: String? = null,
+    allSongs: List<Song> = songs,
+) {
     if (songs.isEmpty()) return
     if (AppSettings.translateAheadIntro.value) {
-        KoAlerts.aheadAsk.value = AheadAsk(title, songs)
+        KoAlerts.aheadAsk.value = AheadAsk(title, songs, browseId, allSongs)
         return
     }
     val model = AppSettings.translateAheadModel.value
@@ -152,6 +167,7 @@ private fun TranslateAheadAskAlert(hazeState: HazeState, ask: AheadAsk, onDismis
     var model by remember { mutableStateOf(AppSettings.translateAheadModel.value) }
     var reading by remember { mutableStateOf(AppSettings.translateAheadReading.value) }
     var dontShow by remember { mutableStateOf(false) }
+    var watch by remember { mutableStateOf(TranslateAhead.isWatched(ask.browseId)) }
     val count = remember(ask) { ask.songs.distinctBy { it.videoId }.size }
     val language = remember {
         val tag = com.music.bitchord.download.DownloadTranslations.targetLanguage(context)
@@ -198,6 +214,16 @@ private fun TranslateAheadAskAlert(hazeState: HazeState, ask: AheadAsk, onDismis
             checkbox = true,
             onClick = { reading = !reading },
         )
+        if (ask.browseId != null) {
+            AlertRule()
+            AheadOptionRow(
+                label = stringResource(R.string.translate_ahead_watch),
+                detail = stringResource(R.string.translate_ahead_watch_detail, AppSettings.aheadWatchHours.value),
+                checked = watch,
+                checkbox = true,
+                onClick = { watch = !watch },
+            )
+        }
         AlertRule()
         AheadOptionRow(
             label = stringResource(R.string.translate_ahead_dont_show),
@@ -215,6 +241,13 @@ private fun TranslateAheadAskAlert(hazeState: HazeState, ask: AheadAsk, onDismis
                 AppSettings.setTranslateAheadChoice(model, reading)
                 if (dontShow) AppSettings.setTranslateAheadIntro(false)
                 TranslateAhead.start(ask.title, ask.songs, model, reading)
+                ask.browseId?.let { id ->
+                    if (watch) {
+                        TranslateAhead.watch(id, ask.title, ask.allSongs, model, reading)
+                    } else if (TranslateAhead.isWatched(id)) {
+                        TranslateAhead.unwatch(id)
+                    }
+                }
                 Toast.makeText(context, context.getString(R.string.translate_ahead_started, ask.title), Toast.LENGTH_LONG).show()
                 onDismiss()
             },
@@ -304,6 +337,23 @@ private fun TranslateAheadLogAlert(
     onDismiss: () -> Unit,
 ) {
     val time = remember { SimpleDateFormat("MM-dd HH:mm", Locale.US) }
+    val watches by TranslateAhead.watches.collectAsStateWithLifecycle()
+    var stopping by remember { mutableStateOf<TranslateAhead.Watch?>(null) }
+    stopping?.let { watch ->
+        ConfirmationAlert(
+            hazeState = hazeState,
+            title = stringResource(R.string.translate_ahead_unwatch),
+            description = stringResource(R.string.translate_ahead_unwatch_confirm, watch.title),
+            confirmLabel = stringResource(R.string.translate_ahead_unwatch),
+            onConfirm = {
+                TranslateAhead.unwatch(watch.browseId)
+                stopping = null
+            },
+            onDismiss = { stopping = null },
+        )
+        return
+    }
+    val neverChecked = stringResource(R.string.translate_ahead_watch_never)
     AlertScaffold(hazeState = hazeState, onDismiss = onDismiss) {
         AlertHeading(
             title = stringResource(R.string.translate_ahead_log),
@@ -311,6 +361,28 @@ private fun TranslateAheadLogAlert(
                 if (jobs.isEmpty()) R.string.translate_ahead_log_empty else R.string.translate_ahead_log_hint,
             ),
         )
+        if (watches.isNotEmpty()) {
+            Text(
+                text = stringResource(R.string.translate_ahead_watching, AppSettings.aheadWatchHours.value),
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp),
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, fontWeight = FontWeight.W600),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            watches.forEach { watch ->
+                AlertRule()
+                TappableLines(
+                    title = "👁 " + watch.title,
+                    detail = stringResource(
+                        R.string.translate_ahead_watch_line,
+                        modelLabel(watch.model),
+                        watch.sent,
+                        if (watch.lastChecked > 0) time.format(Date(watch.lastChecked)) else neverChecked,
+                    ),
+                    onClick = { stopping = watch },
+                )
+            }
+            AlertRule()
+        }
         if (jobs.isNotEmpty()) {
             Column(
                 modifier = Modifier

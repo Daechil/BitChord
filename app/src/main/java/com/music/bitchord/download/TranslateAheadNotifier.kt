@@ -21,7 +21,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
 
 /**
@@ -74,7 +73,8 @@ object TranslateAheadNotifier {
         channels(app)
         reconcile(app)
         scope.launch {
-            TranslateAhead.jobs.conflate().collect {
+            // A StateFlow hands a slow collector only the latest list, so the pause below drops nothing that matters.
+            TranslateAhead.jobs.collect {
                 render(app)
                 // At most once a second: Android sheds a busier app's updates.
                 delay(1_000L)

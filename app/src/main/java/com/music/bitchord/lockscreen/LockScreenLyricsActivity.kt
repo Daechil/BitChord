@@ -236,19 +236,26 @@ private fun LockScreenLyricsScreen(onUnlock: () -> Unit, onClose: () -> Unit) {
     LaunchedEffect(song?.videoId, lines) {
         val id = song?.videoId ?: return@LaunchedEffect
         if (lines.isEmpty()) return@LaunchedEffect
-        val target = DownloadTranslations.targetLanguage(context)
-        val result = try {
-            // Cached only: the lock screen shows what the player has already
-            // made, and never pays for a translation nobody asked for.
-            withContext(Dispatchers.IO) { LyricsTranslation.translate(id, lines, target, cacheOnly = true) }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            null
+        // Cached only: the lock screen shows what the player has already made,
+        // and never pays for a translation nobody asked for. Matched line by
+        // line where these lyrics differ from the player's; looked for again
+        // whenever a translation is written.
+        LyricsTranslation.translationsChanged.collect {
+            val found = try {
+                withContext(Dispatchers.IO) { FloatingLyrics.translationsFor(context, id, lines) }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                null
+            }
+            if (found != null) {
+                translated = lines.mapIndexed { index, line ->
+                    found[index]?.let { text ->
+                        line.copy(text = text, words = emptyList(), background = null, timingSource = line.takeIf { it.isWordSynced })
+                    } ?: line
+                }
+            }
         }
-        (result as? LyricsTranslation.Result.Translated)?.lines
-            ?.takeIf { it.size == lines.size }
-            ?.let { translated = it }
     }
 
     // Swiping up lifts the whole screen with the finger, the way the system

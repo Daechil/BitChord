@@ -98,7 +98,10 @@ object FloatingLyrics {
 
     private var trackId: String? = null
     private var lines: List<LyricLine> = emptyList()
-    private var translated: List<LyricLine>? = null
+    /** Each line's translation, by its place in [lines]; null where none was found. */
+    private var translated: List<String?>? = null
+    /** Every line with words had its translation found: no need to look again. */
+    private var translationComplete = false
     private var lastTranslationCheck = 0L
     private var translationJob: Job? = null
     private var shownIndex = Int.MIN_VALUE
@@ -116,10 +119,21 @@ object FloatingLyrics {
                 trackId = entry?.videoId
                 lines = entry?.lines.orEmpty()
                 translated = null
+                translationComplete = false
                 lastTranslationCheck = 0L
                 shownIndex = Int.MIN_VALUE
                 translationJob?.cancel()
                 lookUpTranslation(app)
+            }
+        }
+        // A translation just made or shown by the player: looked for at once,
+        // not on the next round.
+        owned.launch {
+            LyricsTranslation.translationsChanged.collect {
+                if (!translationComplete) {
+                    lastTranslationCheck = 0L
+                    lookUpTranslation(app)
+                }
             }
         }
     }
@@ -148,13 +162,13 @@ object FloatingLyrics {
         applyLook(context)
 
         val index = lines.indexOfLast { it.timeMs <= positionMs }
-        if (translated == null && System.currentTimeMillis() - lastTranslationCheck > TRANSLATION_RECHECK_MS) {
+        if (!translationComplete && System.currentTimeMillis() - lastTranslationCheck > TRANSLATION_RECHECK_MS) {
             lookUpTranslation(context.applicationContext)
         }
         if (index == shownIndex) return
         shownIndex = index
         val line = lines.getOrNull(index)?.takeIf { !it.isGap && it.text.isNotBlank() }
-        val translation = line?.let { translated?.getOrNull(index)?.text }?.takeIf { it.isNotBlank() && it != line.text }
+        val translation = line?.let { translated?.getOrNull(index) }?.takeIf { it.isNotBlank() && it != line.text }
         val show = AppSettings.floatingLyricsShow.value
         // Translation only: a song with none yet still shows its own words rather than nothing.
         val main = if (show == AppSettings.FLOATING_TRANSLATION && translation != null) translation else line?.text
@@ -164,33 +178,48 @@ object FloatingLyrics {
         subView?.visibility = if (sub == null) View.GONE else View.VISIBLE
     }
 
-    /** The player's translation of this song, from the cache only; asked again now and then. */
+    /**
+     * The player's translation of this song, never asked for here: the one
+     * stored for exactly these lines where there is one, and otherwise line
+     * by line from the song's translation as the player made it — this bar's
+     * lyrics come from the service's own lookup, which can bring another
+     * source or timing than the player's. Looked at again now and then, and
+     * whenever a translation is written, until every line has one.
+     */
     private fun lookUpTranslation(context: Context) {
         val id = trackId ?: return
         val source = lines
         if (source.isEmpty() || translationJob?.isActive == true) return
         lastTranslationCheck = System.currentTimeMillis()
         translationJob = scope?.launch {
-            val result = try {
-                withContext(Dispatchers.IO) {
-                    LyricsTranslation.translate(
-                        id,
-                        source,
-                        DownloadTranslations.targetLanguage(context),
-                        cacheOnly = true,
-                    )
-                }
+            val found = try {
+                withContext(Dispatchers.IO) { translationsFor(context, id, source) }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
                 null
             }
-            val found = (result as? LyricsTranslation.Result.Translated)?.lines?.takeIf { it.size == source.size }
-            if (found != null && trackId == id) {
+            if (found != null && trackId == id && lines === source) {
                 translated = found
+                val wanted = source.indices.filter { source[it].text.isNotBlank() }
+                translationComplete = wanted.all { found[it] != null }
                 shownIndex = Int.MIN_VALUE
             }
         }
+    }
+
+    /** Each line's translation, by place; null when none of them has one. */
+    internal suspend fun translationsFor(context: Context, id: String, source: List<LyricLine>): List<String?>? {
+        val target = DownloadTranslations.targetLanguage(context)
+        val exact = (LyricsTranslation.translate(id, source, target, cacheOnly = true) as? LyricsTranslation.Result.Translated)
+            ?.lines?.takeIf { it.size == source.size }
+        val byLine = LyricsTranslation.lineTranslations(id, target)
+        if (exact == null && byLine == null) return null
+        val result = source.mapIndexed { index, line ->
+            exact?.getOrNull(index)?.text?.takeIf { it.isNotBlank() && it != line.text }
+                ?: byLine?.get(LyricsTranslation.lineKey(line.text))
+        }
+        return result.takeIf { list -> list.any { it != null } }
     }
 
     @SuppressLint("ClickableViewAccessibility")

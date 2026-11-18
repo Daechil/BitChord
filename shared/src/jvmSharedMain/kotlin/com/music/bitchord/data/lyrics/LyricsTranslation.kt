@@ -281,6 +281,7 @@ object LyricsTranslation {
             if (keepTranslationFor(trackId) && !isKept(cacheKey)) writeCache(cacheKey, cached, keep = true)
             val keptNow = isKept(cacheKey)
             noteStored(cacheKey, trackId, KIND_TRANSLATION, cached, target, model = null, kept = keptNow, via = null)
+            writeLineMap(googlePrefix(trackId), target, slots, cached, keptNow, onlyOnce = true)
             return if (sameLanguage(cached.sourceLanguage, target)) {
                 Result.SameLanguage(cached.sourceLanguage)
             } else {
@@ -348,6 +349,7 @@ object LyricsTranslation {
         val keepGoogle = keepTranslationFor(trackId) || isKept(cacheKey)
         writeCache(cacheKey, entry, keep = keepGoogle)
         noteStored(cacheKey, trackId, KIND_TRANSLATION, entry, target, model = null, kept = keepGoogle && keepDir != null, via = via)
+        writeLineMap(googlePrefix(trackId), target, slots, entry, keepGoogle)
 
         return if (sameLanguage(source, target)) {
             Result.SameLanguage(source)
@@ -560,6 +562,7 @@ object LyricsTranslation {
                 cacheKey, trackId, KIND_TRANSLATION, cached, target,
                 model = if (cached.sonnetStandIn) CLAUDE_SONNET else null, kept = keptNow, via = null, styled = true,
             )
+            writeLineMap(claudePrefix(trackId), target, slots, cached, keptNow, onlyOnce = true)
             return ClaudeAttempt(cached.copy(engine = ENGINE_CLAUDE), fromCache = true, failure = null, kept = keptNow)
         }
         if (!fresh) {
@@ -598,6 +601,7 @@ object LyricsTranslation {
             cacheKey, trackId, KIND_TRANSLATION, entry, target,
             model = if (standIn) CLAUDE_SONNET else model, kept = keepClaude && keepDir != null, via = via, styled = true,
         )
+        writeLineMap(claudePrefix(trackId), target, slots, entry, keepClaude)
         return ClaudeAttempt(entry, fromCache = false, failure = null)
     }
 
@@ -1756,6 +1760,74 @@ object LyricsTranslation {
 
     private fun aheadKey(prefix: String, target: String): String = cacheKey(AHEAD_PREFIX + prefix, target, emptyList())
 
+    private fun claudePrefix(trackId: String) = "claude\u0000$translationSpeech\u0000$translationMode\u0000$trackId"
+    private fun googlePrefix(trackId: String) = "google\u0000$trackId"
+
+    /** A line as it is matched across lyric sources: the same words, whatever the spacing. */
+    fun lineKey(text: String): String = text.trim().replace(WHITESPACE, " ")
+    private val WHITESPACE = Regex("\\s+")
+
+    /**
+     * Bumped whenever a song's line-by-line translation is written, so a
+     * screen that shows translations made elsewhere — the floating bar, the
+     * lock screen — can look again at once rather than on its next round.
+     */
+    val translationsChanged = MutableStateFlow(0L)
+
+    /** Line maps written this run, so a translation read again is not written out again too. */
+    private val lineMapsWritten = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    /**
+     * Files [value]'s answer line by line — each source line beside its
+     * translation — under the song alone, not its exact lyrics. Other screens
+     * get their lyrics from their own lookup, which can bring a different
+     * source, timing or split; this is what lets them still find each line.
+     */
+    private suspend fun writeLineMap(
+        prefix: String,
+        target: String,
+        slots: List<TextSlot>,
+        value: CachedTranslation,
+        keep: Boolean,
+        onlyOnce: Boolean = false,
+    ) {
+        if (value.texts.size != slots.size || sameLanguage(value.sourceLanguage, target)) return
+        val key = aheadKey(prefix, target)
+        if (onlyOnce && !lineMapsWritten.add(key)) return
+        lineMapsWritten.add(key)
+        writeCache(key, value.copy(texts = slots.map { it.text } + value.texts), keep = keep)
+        translationsChanged.value = translationsChanged.value + 1
+    }
+
+    /**
+     * The song's translation as the player last made or showed it, by line:
+     * [lineKey] of each source line to its translation. Claude's in the style
+     * Settings has now first, Google's otherwise. Null when there is none, or
+     * the lyrics are already in [targetLanguageTag]. Never a request.
+     */
+    suspend fun lineTranslations(trackId: String, targetLanguageTag: String): Map<String, String>? {
+        val target = targetLanguageTag.trim()
+        if (target.isBlank()) return null
+        val order = if (claudeEnabled) {
+            listOf(claudePrefix(trackId), googlePrefix(trackId))
+        } else {
+            listOf(googlePrefix(trackId), claudePrefix(trackId))
+        }
+        for (prefix in order) {
+            val map = readCache(aheadKey(prefix, target)) ?: continue
+            if (sameLanguage(map.sourceLanguage, target)) return null
+            val half = map.texts.size / 2
+            if (half == 0 || map.texts.size != half * 2) continue
+            val result = HashMap<String, String>(half * 2)
+            for (index in 0 until half) {
+                val translated = map.texts[half + index]
+                if (translated.isNotBlank()) result.putIfAbsent(lineKey(map.texts[index]), translated)
+            }
+            if (result.isNotEmpty()) return result
+        }
+        return null
+    }
+
     /**
      * An answer for [slots] put together from one translated ahead for other
      * lyrics of the same song: the same lines from another source, timed or
@@ -1773,10 +1845,10 @@ object LyricsTranslation {
         val half = ahead.texts.size / 2
         if (half == 0 || ahead.texts.size != half * 2) return null
         val bySource = HashMap<String, String>(half * 2)
-        for (index in 0 until half) bySource.putIfAbsent(ahead.texts[index].trim(), ahead.texts[half + index])
+        for (index in 0 until half) bySource.putIfAbsent(lineKey(ahead.texts[index]), ahead.texts[half + index])
         val texts = ArrayList<String>(slots.size)
         for (slot in slots) {
-            val text = bySource[slot.text.trim()]
+            val text = bySource[lineKey(slot.text)]
             if (text == null) {
                 if (report) aheadMismatch?.invoke(trackId)
                 return null
@@ -2055,6 +2127,7 @@ object LyricsTranslation {
         )
         // The lines and their answers side by side, for [fromAhead].
         writeCache(item.aheadKey, entry.copy(texts = item.sources + texts), keep = true)
+        translationsChanged.value = translationsChanged.value + 1
         return out(null)
     }
 

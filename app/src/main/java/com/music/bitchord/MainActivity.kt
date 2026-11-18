@@ -399,6 +399,7 @@ class MainActivity : AppCompatActivity() {
         // the request already standing by the time BitChordApp first reads it.
         PlayerDeepLink.consume(intent)
         JamInviteLink.consume(intent)
+        openTranslateAheadLog(intent)
         // Likewise for a link tapped or shared from another app — see [MusicLink].
         MusicLink.consume(intent)
         setContent {
@@ -508,6 +509,14 @@ class MainActivity : AppCompatActivity() {
         PlayerDeepLink.consume(intent)
         JamInviteLink.consume(intent)
         MusicLink.consume(intent)
+        openTranslateAheadLog(intent)
+    }
+
+    /** A tap on a "translate ahead" notification: the log, over whatever is showing. */
+    private fun openTranslateAheadLog(intent: Intent?) {
+        if (intent?.getBooleanExtra(com.music.bitchord.download.TranslateAheadNotifier.EXTRA_OPEN_LOG, false) != true) return
+        intent.removeExtra(com.music.bitchord.download.TranslateAheadNotifier.EXTRA_OPEN_LOG)
+        com.music.bitchord.ui.components.KoAlerts.aheadLog.value = true
     }
 }
 

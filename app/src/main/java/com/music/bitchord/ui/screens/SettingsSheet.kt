@@ -305,6 +305,7 @@ fun SettingsScreen(
     val keepClaudeTranslations by AppSettings.keepClaudeTranslations.collectAsStateWithLifecycle()
     val keptLimitMb by AppSettings.keptStoreLimitMb.collectAsStateWithLifecycle()
     val downloadTranslationsBatch by AppSettings.downloadTranslationsBatch.collectAsStateWithLifecycle()
+    val askNotifications = com.music.bitchord.ui.components.rememberNotificationAsk()
     val aheadWatchHours by AppSettings.aheadWatchHours.collectAsStateWithLifecycle()
     val aheadWatches by com.music.bitchord.download.TranslateAhead.watches.collectAsStateWithLifecycle()
     val storageOpen by com.music.bitchord.ui.components.KoAlerts.storage.collectAsStateWithLifecycle()
@@ -1094,10 +1095,17 @@ fun SettingsScreen(
                     trailing = {
                         IosSwitch(
                             checked = downloadTranslationsBatch,
-                            onCheckedChange = AppSettings::setDownloadTranslationsBatch,
+                            onCheckedChange = { on ->
+                                AppSettings.setDownloadTranslationsBatch(on)
+                                if (on) askNotifications()
+                            },
                         )
                     },
-                    onClick = { AppSettings.setDownloadTranslationsBatch(!downloadTranslationsBatch) },
+                    onClick = {
+                        val on = !downloadTranslationsBatch
+                        AppSettings.setDownloadTranslationsBatch(on)
+                        if (on) askNotifications()
+                    },
                 )
             }
             val backUpTranslationsTitle = stringResource(R.string.translations_back_up)

@@ -1,11 +1,7 @@
 package com.music.bitchord.download
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
 import android.util.Log
-import androidx.core.app.NotificationCompat
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
@@ -72,8 +68,6 @@ object TranslateAhead {
     private const val PERIODIC_WORK = "translate_ahead_poll"
     private const val WATCH_WORK = "translate_ahead_watch"
     private const val WATCHES_FILE = "watches.json"
-    private const val CHANNEL_ID = "translate_ahead"
-    private const val NOTIFICATION_BASE = 0x7A0000
     private const val LYRICS_TIMEOUT_MS = 25_000L
 
     /**
@@ -171,6 +165,8 @@ object TranslateAhead {
         /** A [ClaudeFailure] name, for a job that failed as a whole. */
         val error: String? = null,
         val finishedAt: Long? = null,
+        /** When its batches were last asked about, for "last checked" in the notification. */
+        val lastPolled: Long = 0,
     ) {
         val active: Boolean
             get() = state == State.PREPARING || state == State.WAITING || state == State.CANCELING
@@ -216,6 +212,8 @@ object TranslateAhead {
             val stored = readJobs(app).map(::migrated)
             update(save = false) { current -> current + stored.filter { old -> current.none { it.id == old.id } } }
             loaded.complete(Unit)
+            // After the jobs are in, so what it shows matches them from the first draw.
+            TranslateAheadNotifier.init(app)
             if (_jobs.value.any { it.active }) work(app)
         }
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
@@ -316,6 +314,21 @@ object TranslateAhead {
             out.forEach { chunk -> chunk.batchId?.let { LyricsTranslation.cancelAhead(it) } }
             work(app)
         }
+    }
+
+    private var lastManualCheck = 0L
+
+    /**
+     * The notification's "Check now": asks about every batch still out at
+     * once. False when it was asked less than a minute ago, and nothing is sent.
+     */
+    fun checkNow(): Boolean {
+        val app = context ?: return false
+        val now = System.currentTimeMillis()
+        if (now - lastManualCheck < 60_000L) return false
+        lastManualCheck = now
+        scope.launch { work(app) }
+        return true
     }
 
     /** Forgets every job that is over; the translations they filed stay. */
@@ -500,9 +513,12 @@ object TranslateAhead {
     private fun kick(app: Context) {
         scope.launch { work(app) }
         runCatching {
+            // At once rather than after a delay: the worker is what keeps the
+            // lyric search alive, in the foreground with its notification, once
+            // the app is left.
             val request = OneTimeWorkRequestBuilder<TranslateAheadWorker>()
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-                .setInitialDelay(2, TimeUnit.MINUTES)
+                .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 .build()
             WorkManager.getInstance(app).enqueueUniqueWork(ONE_OFF_WORK, ExistingWorkPolicy.KEEP, request)
         }
@@ -781,6 +797,7 @@ object TranslateAhead {
                 Log.d(TAG, "could not collect ${job.id}/${chunk.index}: $error")
             }
         }
+        edit(job.id, save = false) { it.copy(lastPolled = System.currentTimeMillis()) }
         val now = _jobs.value.firstOrNull { it.id == job.id } ?: return
         // Still being prepared: more batches may yet go up, and [prepare] closes it.
         if (now.state == State.PREPARING) return
@@ -985,40 +1002,7 @@ object TranslateAhead {
 
     private fun notifyDone(app: Context, jobId: String) {
         val job = _jobs.value.firstOrNull { it.id == jobId } ?: return
-        // A job stopped by hand needs no announcing.
-        if (job.state == State.CANCELED) return
-        val manager = app.getSystemService(NotificationManager::class.java) ?: return
-        runCatching {
-            manager.createNotificationChannel(
-                NotificationChannel(
-                    CHANNEL_ID,
-                    app.getString(R.string.translate_ahead_channel),
-                    NotificationManager.IMPORTANCE_LOW,
-                ).apply { setShowBadge(false) },
-            )
-            val open = app.packageManager.getLaunchIntentForPackage(app.packageName)?.let {
-                PendingIntent.getActivity(app, 0, it, PendingIntent.FLAG_IMMUTABLE)
-            }
-            val asked = job.tracks.count { it.status == TrackStatus.TRANSLATED || it.status == TrackStatus.DECLINED || it.status == TrackStatus.FAILED }
-            val title = when (job.state) {
-                State.DONE -> app.getString(
-                    R.string.translate_ahead_done_title,
-                    job.title,
-                    job.count(TrackStatus.TRANSLATED),
-                    asked,
-                )
-                State.EXPIRED -> app.getString(R.string.translate_ahead_expired_title, job.title)
-                else -> app.getString(R.string.translate_ahead_failed_title, job.title)
-            }
-            val notification = NotificationCompat.Builder(app, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_notification_logo)
-                .setContentTitle(title)
-                .setContentText(app.getString(R.string.translate_ahead_notification_text))
-                .setContentIntent(open)
-                .setAutoCancel(true)
-                .build()
-            manager.notify(NOTIFICATION_BASE + (job.createdAt % 10_000).toInt(), notification)
-        }
+        TranslateAheadNotifier.done(app, job)
     }
 }
 
@@ -1026,9 +1010,29 @@ object TranslateAhead {
 class TranslateAheadWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         TranslateAhead.init(applicationContext)
-        TranslateAhead.work(applicationContext, waitForRunning = true)
+        // While lyrics are being looked for, in the foreground: the search goes
+        // on with the app left, and the bar shows it. Refused when this starts
+        // with the app in the background (Android 12+); then it runs as before.
+        if (TranslateAhead.jobs.value.any { it.state == TranslateAhead.State.PREPARING }) {
+            try {
+                setForeground(getForegroundInfo())
+                TranslateAheadNotifier.foreground = true
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (refused: Exception) {
+                Log.d("TranslateAhead", "not in the foreground: $refused")
+            }
+        }
+        try {
+            TranslateAhead.work(applicationContext, waitForRunning = true)
+        } finally {
+            TranslateAheadNotifier.foreground = false
+        }
         return Result.success()
     }
+
+    override suspend fun getForegroundInfo(): androidx.work.ForegroundInfo =
+        TranslateAheadNotifier.foregroundInfo(applicationContext)
 }
 
 /** The watch of [TranslateAhead]: looks at watched playlists for new songs. */

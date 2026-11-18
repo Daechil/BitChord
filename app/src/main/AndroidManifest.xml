@@ -669,6 +669,21 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!--
+          WorkManager's own foreground service, which the "translate ahead"
+          worker uses while it looks for lyrics: it has to say what kind of work
+          it is (Android 14+), and fetching lyrics is a data sync.
+        -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
+
+        <!-- The "translate ahead" notification's buttons. Only its own notifications reach it. -->
+        <receiver
+            android:name=".download.TranslateAheadNotificationReceiver"
+            android:exported="false" />
+
         <!-- The tap on a "new songs in this playlist" notification. See PlaylistSync. -->
         <receiver
             android:name=".download.PlaylistSyncApproval"

@@ -153,6 +153,7 @@ private fun TranslateAheadAskAlert(hazeState: HazeState, ask: AheadAsk, onDismis
     var reading by remember { mutableStateOf(AppSettings.translateAheadReading.value) }
     var dontShow by remember { mutableStateOf(false) }
     var watch by remember { mutableStateOf(TranslateAhead.isWatched(ask.browseId)) }
+    val askNotifications = rememberNotificationAsk()
     val count = remember(ask) { ask.songs.distinctBy { it.videoId }.size }
     val language = remember {
         val tag = com.music.bitchord.download.DownloadTranslations.targetLanguage(context)
@@ -225,6 +226,7 @@ private fun TranslateAheadAskAlert(hazeState: HazeState, ask: AheadAsk, onDismis
             onClick = {
                 AppSettings.setTranslateAheadChoice(model, reading)
                 if (dontShow) AppSettings.setTranslateAheadIntro(false)
+                askNotifications()
                 TranslateAhead.start(ask.title, ask.songs, model, reading)
                 ask.browseId?.let { id ->
                     if (watch) {
@@ -286,6 +288,30 @@ private fun AheadOptionRow(label: String, detail: String?, checked: Boolean, che
     }
 }
 
+/**
+ * Asks for the notification permission (Android 13+) when it is missing,
+ * so a job's progress and result can be shown; refusing changes nothing else.
+ */
+@Composable
+internal fun rememberNotificationAsk(): () -> Unit {
+    val context = LocalContext.current
+    val launcher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { }
+    return remember(launcher) {
+        {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+                androidx.core.content.ContextCompat.checkSelfPermission(
+                    context,
+                    android.Manifest.permission.POST_NOTIFICATIONS,
+                ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                runCatching { launcher.launch(android.Manifest.permission.POST_NOTIFICATIONS) }
+            }
+        }
+    }
+}
+
 /** "Finding lyrics 12/40", "Waiting for Claude", "Done" — where a job stands. */
 @Composable
 private fun stateLabel(job: TranslateAhead.Job): String = when (job.state) {
@@ -339,6 +365,10 @@ private fun TranslateAheadLogAlert(
         return
     }
     val neverChecked = stringResource(R.string.translate_ahead_watch_never)
+    val context = LocalContext.current
+    val notificationsShown = remember(jobs) {
+        com.music.bitchord.download.TranslateAheadNotifier.progressVisible(context)
+    }
     AlertScaffold(hazeState = hazeState, onDismiss = onDismiss) {
         AlertHeading(
             title = stringResource(R.string.translate_ahead_log),
@@ -346,6 +376,20 @@ private fun TranslateAheadLogAlert(
                 if (jobs.isEmpty()) R.string.translate_ahead_log_empty else R.string.translate_ahead_log_hint,
             ),
         )
+        if (!notificationsShown) {
+            AlertRule()
+            TappableLines(
+                title = stringResource(R.string.translate_ahead_notifications_off),
+                detail = stringResource(R.string.translate_ahead_notifications_off_detail),
+                onClick = {
+                    val intent = android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                        .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    runCatching { context.startActivity(intent) }
+                },
+            )
+            AlertRule()
+        }
         if (watches.isNotEmpty()) {
             Text(
                 text = stringResource(R.string.translate_ahead_watching, AppSettings.aheadWatchHours.value),

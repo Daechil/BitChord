@@ -574,6 +574,14 @@
     <string name="claude_usage_month_total_only">%1$s · $%2$s</string>
     <string name="claude_usage_reset_month">이번 달 초기화</string>
     <string name="claude_usage_reset_all">전체 기록 지우기</string>
+    <string name="claude_usage_reset_all_confirm">이번 달 사용량과 지난 기록을 모두 지워요. Anthropic 계정에는 아무 변화가 없어요.</string>
+    <string name="ko_window_summary">요약</string>
+    <string name="ko_window_songs">곡 · %1$d곡</string>
+    <string name="ko_window_space">사용 공간</string>
+    <string name="ko_window_manage">관리</string>
+    <string name="ko_window_no_match">검색 결과가 없어요.</string>
+    <string name="ko_window_jobs">작업 · %1$d건</string>
+    <string name="ko_window_by_model">모델별 (입력 / 출력 토큰)</string>
     <string name="translate_ahead_watch">새 곡이 추가되면 자동으로 미리 번역</string>
     <string name="translate_ahead_watch_detail">%1$d시간마다 이 재생목록을 확인해 새 곡만 Batch로 보내요</string>
     <string name="translate_ahead_watch_job">%1$s · 새 곡</string>

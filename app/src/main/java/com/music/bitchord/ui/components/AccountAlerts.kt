@@ -671,8 +671,10 @@ fun ConfirmationAlert(
     confirmLabel: String,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
+    /** False when drawn in a window of its own — see [AlertScaffold]. */
+    frosted: Boolean = true,
 ) {
-    AlertScaffold(hazeState = hazeState, onDismiss = onDismiss) {
+    AlertScaffold(hazeState = hazeState, onDismiss = onDismiss, frosted = frosted) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()

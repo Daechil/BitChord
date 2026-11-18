@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -41,9 +44,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.launch
-
-/** Rows shown at most in a long list; the search narrows the rest. */
-private const val MAX_LISTED = 200
 
 /**
  * The words every status screen needs, resolved once in composition: the
@@ -158,7 +158,11 @@ internal fun TranslationStatusRow(song: Song, accent: Color, onOpen: () -> Unit)
     )
 }
 
-/** The alerts of the translation status screens, shown by flags in [KoAlerts]. */
+/**
+ * The translation status screens, shown by flags in [KoAlerts]: the song
+ * menu's one song as an alert, and a release's songs and Settings' storage
+ * page as windows of their own, which have room for every song.
+ */
 @Composable
 fun TranslationStatusAlerts(hazeState: HazeState) {
     val song by KoAlerts.songStatus.collectAsStateWithLifecycle()
@@ -168,42 +172,55 @@ fun TranslationStatusAlerts(hazeState: HazeState) {
     }
     val release by KoAlerts.releaseStatus.collectAsStateWithLifecycle()
     release?.let { shown ->
-        BackHandler { KoAlerts.releaseStatus.value = null }
-        ReleaseStatusAlert(hazeState = hazeState, release = shown, onDismiss = { KoAlerts.releaseStatus.value = null })
+        ReleaseStatusWindow(release = shown, onDismiss = { KoAlerts.releaseStatus.value = null })
     }
     val storage by KoAlerts.storage.collectAsStateWithLifecycle()
     if (storage) {
-        var opened by remember { mutableStateOf<Song?>(null) }
-        val inner = opened
-        BackHandler { if (inner != null) opened = null else KoAlerts.storage.value = false }
-        if (inner != null) {
-            SongStatusAlert(hazeState = hazeState, song = inner, onBack = { opened = null })
-        } else {
-            StorageAlert(hazeState = hazeState, onOpen = { opened = it }, onDismiss = { KoAlerts.storage.value = false })
-        }
+        StorageWindow(hazeState = hazeState, onDismiss = { KoAlerts.storage.value = false })
     }
 }
+
+/** [song]'s status, looked up again whenever another song is asked for; null while it is read. */
+@Composable
+private fun rememberSongStatus(song: Song?): TranslationStatus.SongStatus? {
+    val context = LocalContext.current
+    var status by remember(song?.videoId) { mutableStateOf<TranslationStatus.SongStatus?>(null) }
+    LaunchedEffect(song?.videoId) {
+        val id = song?.videoId ?: return@LaunchedEffect
+        status = TranslationStatus.statusOf(context, listOf(id))[id]
+    }
+    return status
+}
+
+/** The words a song's own page shows above its answers: who sings it, where it stands. */
+private class SongPageWords(val nothing: String, val otherNote: String)
+
+@Composable
+private fun songPageWords() = SongPageWords(
+    nothing = stringResource(R.string.translation_status_nothing),
+    otherNote = stringResource(R.string.translation_status_other_note),
+)
+
+private fun songHeading(song: Song, status: TranslationStatus.SongStatus?, words: StatusWords, page: SongPageWords): String =
+    listOfNotNull(
+        song.artist.takeIf { it.isNotBlank() },
+        status?.let { words.states[it.state] },
+        page.otherNote.takeIf { status?.state == TranslationStatus.State.CLAUDE_OTHER_STYLE },
+    ).joinToString("\n")
+
+private fun songLines(status: TranslationStatus.SongStatus?, words: StatusWords): List<Pair<String, String>> =
+    status?.answers.orEmpty()
+        .sortedWith(compareBy<StoredAnswer> { it.kind }.thenByDescending { it.at })
+        .map { answer -> (words.kinds[answer.kind] ?: answer.kind) to words.describe(answer) }
 
 /** Every stored answer of one song, each with who wrote it, in which style, and where it is kept. */
 @Composable
 private fun SongStatusAlert(hazeState: HazeState, song: Song, onBack: () -> Unit) {
-    val context = LocalContext.current
-    var status by remember(song.videoId) { mutableStateOf<TranslationStatus.SongStatus?>(null) }
-    LaunchedEffect(song.videoId) {
-        status = TranslationStatus.statusOf(context, listOf(song.videoId))[song.videoId]
-    }
+    val current = rememberSongStatus(song)
     val words = statusWords()
-    val current = status
-    val nothing = stringResource(R.string.translation_status_nothing)
-    val otherNote = stringResource(R.string.translation_status_other_note)
-    val heading = listOfNotNull(
-        song.artist.takeIf { it.isNotBlank() },
-        current?.let { words.states[it.state] },
-        otherNote.takeIf { current?.state == TranslationStatus.State.CLAUDE_OTHER_STYLE },
-    ).joinToString("\n")
-    val lines = current?.answers.orEmpty()
-        .sortedWith(compareBy<StoredAnswer> { it.kind }.thenByDescending { it.at })
-        .map { answer -> (words.kinds[answer.kind] ?: answer.kind) + "\n   " + words.describe(answer) }
+    val page = songPageWords()
+    val heading = songHeading(song, current, words, page)
+    val lines = songLines(current, words).map { (kind, detail) -> kind + "\n   " + detail }
     AlertScaffold(hazeState = hazeState, onDismiss = onBack) {
         AlertHeading(title = song.title, message = heading)
         Column(
@@ -213,7 +230,7 @@ private fun SongStatusAlert(hazeState: HazeState, song: Song, onBack: () -> Unit
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp),
         ) {
-            (if (current != null && lines.isEmpty()) listOf(nothing) else lines).forEach { line ->
+            (if (current != null && lines.isEmpty()) listOf(page.nothing) else lines).forEach { line ->
                 Text(
                     text = line,
                     modifier = Modifier.padding(vertical = 4.dp),
@@ -227,12 +244,31 @@ private fun SongStatusAlert(hazeState: HazeState, song: Song, onBack: () -> Unit
     }
 }
 
+/** The same song, as a page inside a window: its standing, then each stored answer as a row. */
+private fun LazyListScope.songStatusItems(
+    song: Song,
+    status: TranslationStatus.SongStatus?,
+    words: StatusWords,
+    page: SongPageWords,
+    loading: String,
+) {
+    val heading = songHeading(song, status, words, page)
+    windowText(if (status == null) loading else heading.ifBlank { song.title })
+    if (status == null) return
+    val lines = songLines(status, words)
+    if (lines.isEmpty()) {
+        windowText(page.nothing)
+    } else {
+        windowCard(rows = lines) { (kind, detail) -> WindowLine(title = kind, detail = detail) }
+    }
+}
+
 /**
  * A playlist's or an album's songs, each with where it stands, and the
- * missing ones sent ahead at the batch price.
+ * missing ones sent ahead at the batch price. A song opens its own page.
  */
 @Composable
-private fun ReleaseStatusAlert(hazeState: HazeState, release: AheadAsk, onDismiss: () -> Unit) {
+private fun ReleaseStatusWindow(release: AheadAsk, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val songs = remember(release) { release.songs.distinctBy { it.videoId } }
     var statuses by remember(release) { mutableStateOf<Map<String, TranslationStatus.SongStatus>?>(null) }
@@ -240,7 +276,10 @@ private fun ReleaseStatusAlert(hazeState: HazeState, release: AheadAsk, onDismis
         songs.forEach { TranslationStatus.remember(it.videoId, it.title, it.artist) }
         statuses = TranslationStatus.statusOf(context, songs.map { it.videoId })
     }
+    var opened by remember(release) { mutableStateOf<Song?>(null) }
+    val openedStatus = rememberSongStatus(opened)
     val words = statusWords()
+    val page = songPageWords()
     val all = statuses
     val counts = TranslationStatus.State.entries.associateWith { state -> all?.values?.count { it.state == state } ?: 0 }
     val keptCount = all?.values?.count { it.covered && it.translation?.kept == true } ?: 0
@@ -251,8 +290,9 @@ private fun ReleaseStatusAlert(hazeState: HazeState, release: AheadAsk, onDismis
         words.speech[LyricsTranslation.translationSpeech] ?: LyricsTranslation.translationSpeech,
         words.mode[LyricsTranslation.translationMode] ?: LyricsTranslation.translationMode,
     ).joinToString(" · ")
+    val loading = stringResource(R.string.translation_status_loading)
     val summary = if (all == null) {
-        stringResource(R.string.translation_status_loading)
+        loading
     } else {
         listOf(
             style,
@@ -265,76 +305,64 @@ private fun ReleaseStatusAlert(hazeState: HazeState, release: AheadAsk, onDismis
                 counts[TranslationStatus.State.NONE] ?: 0,
             ),
             stringResource(R.string.translation_status_stores, keptCount, cacheCount),
-            stringResource(R.string.translation_status_note),
         ).joinToString("\n")
     }
-    val lines = if (all == null) {
-        emptyList()
+    val note = stringResource(R.string.translation_status_note)
+    val summaryHeader = stringResource(R.string.ko_window_summary)
+    val songsHeader = stringResource(R.string.ko_window_songs, songs.size)
+    val translateMissing = stringResource(R.string.translation_status_translate_missing, missing.size)
+    val buttons = if (missing.isNotEmpty() && TranslateAhead.available()) {
+        listOf(
+            WindowButton(label = translateMissing) {
+                onDismiss()
+                requestTranslateAhead(context, release.title, missing, release.browseId, release.songs)
+            },
+        )
     } else {
-        songs.take(MAX_LISTED).map { song ->
-            val status = all[song.videoId]
-            val state = status?.state ?: TranslationStatus.State.NONE
-            buildString {
-                append(mark(state)).append(' ').append(song.title)
-                if (song.artist.isNotBlank()) append(" — ").append(song.artist)
-                append('\n').append("   ").append(words.states[state].orEmpty())
-                status?.translation?.takeIf { status.covered || state == TranslationStatus.State.GOOGLE }?.let {
-                    append(" · ").append(if (it.kept) words.kept else words.cache)
-                }
-                if (status?.reading != null) append(" · ").append(words.kinds[LyricsTranslation.KIND_READING]).append(" ✓")
-            }
-        }
+        emptyList()
     }
-    AlertScaffold(hazeState = hazeState, onDismiss = onDismiss) {
-        AlertHeading(title = release.title, message = summary)
-        if (lines.isNotEmpty()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 300.dp)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp),
-            ) {
-                lines.forEach { line ->
-                    Text(
-                        text = line,
-                        modifier = Modifier.padding(vertical = 4.dp),
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, lineHeight = 16.sp),
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
+    val mainState = rememberLazyListState()
+    val songState = remember(opened?.videoId) { LazyListState() }
+    val inner = opened
+    KoWindow(
+        title = inner?.title ?: release.title,
+        onBack = { if (opened != null) opened = null else onDismiss() },
+        listState = if (inner != null) songState else mainState,
+    ) {
+        if (inner != null) {
+            songStatusItems(inner, openedStatus, words, page, loading)
+            return@KoWindow
+        }
+        windowText(summary, header = summaryHeader, footer = note.takeIf { all != null })
+        windowActions(buttons)
+        if (all != null) {
+            windowCard(rows = songs, header = songsHeader, key = { it.videoId }) { song ->
+                val status = all[song.videoId]
+                val state = status?.state ?: TranslationStatus.State.NONE
+                val detail = buildString {
+                    append(words.states[state].orEmpty())
+                    status?.translation?.takeIf { status.covered || state == TranslationStatus.State.GOOGLE }?.let {
+                        append(" · ").append(if (it.kept) words.kept else words.cache)
+                    }
+                    if (status?.reading != null) append(" · ").append(words.kinds[LyricsTranslation.KIND_READING]).append(" ✓")
                 }
-                if (songs.size > MAX_LISTED) {
-                    Text(
-                        text = stringResource(R.string.translation_status_more, songs.size - MAX_LISTED),
-                        modifier = Modifier.padding(vertical = 4.dp),
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
-                    )
-                }
+                WindowLine(
+                    title = if (song.artist.isBlank()) song.title else song.title + " — " + song.artist,
+                    detail = detail,
+                    mark = mark(state),
+                    onClick = { opened = song },
+                )
             }
         }
-        if (missing.isNotEmpty() && TranslateAhead.available()) {
-            AlertRule()
-            AlertAction(
-                label = stringResource(R.string.translation_status_translate_missing, missing.size),
-                emphasised = true,
-                onClick = {
-                    onDismiss()
-                    requestTranslateAhead(context, release.title, missing, release.browseId, release.songs)
-                },
-            )
-        }
-        AlertRule()
-        AlertAction(label = stringResource(R.string.close), emphasised = false, onClick = onDismiss)
     }
 }
 
 /**
  * Every song with something stored, searchable; what it all takes up, by
- * kind and by place; and the cache's clearing and the kept store's limit.
+ * kind and by place; the kept store's limit; and the cache's clearing.
  */
 @Composable
-private fun StorageAlert(hazeState: HazeState, onOpen: (Song) -> Unit, onDismiss: () -> Unit) {
+private fun StorageWindow(hazeState: HazeState, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var answers by remember { mutableStateOf<List<StoredAnswer>?>(null) }
@@ -342,57 +370,17 @@ private fun StorageAlert(hazeState: HazeState, onOpen: (Song) -> Unit, onDismiss
     var query by remember { mutableStateOf("") }
     var reload by remember { mutableIntStateOf(0) }
     var confirmingClear by remember { mutableStateOf(false) }
-    var pickingLimit by remember { mutableStateOf(false) }
+    var opened by remember { mutableStateOf<Song?>(null) }
     LaunchedEffect(reload) {
         answers = LyricsTranslation.storedAnswers()
         breakdown = LyricsTranslation.storageBreakdown()
     }
+    val openedStatus = rememberSongStatus(opened)
     val keptLimitMb by AppSettings.keptStoreLimitMb.collectAsStateWithLifecycle()
     val words = statusWords()
+    val page = songPageWords()
     val all = answers
     val clearedText = stringResource(R.string.translation_storage_cleared)
-
-    if (pickingLimit) {
-        val options = listOf(100, 200, 500)
-        ChoiceAlert(
-            hazeState = hazeState,
-            title = stringResource(R.string.translation_storage_limit),
-            message = stringResource(R.string.translation_storage_limit_description),
-            options = options,
-            selected = options.minByOrNull { kotlin.math.abs(it - keptLimitMb) } ?: 100,
-            label = { "$it MB" },
-            onSelect = {
-                AppSettings.setKeptStoreLimitMb(it)
-                pickingLimit = false
-            },
-            onDismiss = { pickingLimit = false },
-        )
-        return
-    }
-    if (confirmingClear) {
-        ConfirmationAlert(
-            hazeState = hazeState,
-            title = stringResource(R.string.translation_storage_clear_all),
-            description = stringResource(
-                if (AppSettings.keepClaudeTranslations.value) {
-                    R.string.translation_storage_clear_all_confirm
-                } else {
-                    R.string.translation_storage_clear_all_confirm_claude
-                },
-            ),
-            confirmLabel = stringResource(R.string.translation_storage_clear_all),
-            onConfirm = {
-                confirmingClear = false
-                scope.launch {
-                    val cleared = LyricsTranslation.clearCache(googleOnly = false)
-                    Toast.makeText(context, clearedText.format(cleared.files, megabytes(cleared.bytes)), Toast.LENGTH_SHORT).show()
-                    reload++
-                }
-            },
-            onDismiss = { confirmingClear = false },
-        )
-        return
-    }
 
     // One row per song, newest first: the answers of a song together.
     val songs = remember(all) {
@@ -414,8 +402,9 @@ private fun StorageAlert(hazeState: HazeState, onOpen: (Song) -> Unit, onDismiss
     }
     val parts = breakdown
     val cacheLimit = LyricsTranslation.CACHE_LIMIT_BYTES
+    val loading = stringResource(R.string.translation_status_loading)
     val summary = if (all == null || parts == null) {
-        stringResource(R.string.translation_status_loading)
+        loading
     } else {
         listOfNotNull(
             stringResource(
@@ -440,79 +429,111 @@ private fun StorageAlert(hazeState: HazeState, onOpen: (Song) -> Unit, onDismiss
         ).joinToString("\n")
     }
     val unnamed = stringResource(R.string.translation_storage_unnamed)
-    AlertScaffold(hazeState = hazeState, onDismiss = onDismiss) {
-        AlertHeading(title = stringResource(R.string.translation_storage), message = summary)
-        if (songs.isNotEmpty()) {
-            PillTextField(
-                value = query,
-                onValueChange = { query = it },
-                placeholder = stringResource(R.string.translation_storage_search),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 16.dp, end = 16.dp, bottom = 10.dp),
-            )
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 260.dp)
-                    .verticalScroll(rememberScrollState()),
-            ) {
-                shown.take(MAX_LISTED).forEach { group ->
-                    val first = group.first()
-                    val title = group.firstNotNullOfOrNull { it.title } ?: unnamed
-                    val artist = group.firstNotNullOfOrNull { it.artist }.orEmpty()
-                    val detail = group
-                        .sortedBy { it.kind }
-                        .joinToString(" · ") { answer ->
-                            (words.kinds[answer.kind] ?: answer.kind) + " " +
-                                (if (answer.byClaude) "Claude" else words.google) + " " +
-                                (if (answer.kept) words.kept else words.cache)
+    val spaceHeader = stringResource(R.string.ko_window_space)
+    val limitHeader = stringResource(R.string.translation_storage_limit)
+    val limitFooter = stringResource(R.string.translation_storage_limit_description)
+    val manageHeader = stringResource(R.string.ko_window_manage)
+    val songsHeader = stringResource(R.string.ko_window_songs, shown.size)
+    val searchHint = stringResource(R.string.translation_storage_search)
+    val noMatch = stringResource(R.string.ko_window_no_match)
+    val limits = listOf(100, 200, 500)
+    val limitChosen = limits.minByOrNull { kotlin.math.abs(it - keptLimitMb) } ?: 100
+    val buttons = listOf(
+        WindowButton(label = stringResource(R.string.translation_storage_clear_google)) {
+            scope.launch {
+                val cleared = LyricsTranslation.clearCache(googleOnly = true)
+                Toast.makeText(context, clearedText.format(cleared.files, megabytes(cleared.bytes)), Toast.LENGTH_SHORT).show()
+                reload++
+            }
+        },
+        WindowButton(label = stringResource(R.string.translation_storage_clear_all), destructive = true) {
+            confirmingClear = true
+        },
+    )
+    val clearTitle = stringResource(R.string.translation_storage_clear_all)
+    val clearDescription = stringResource(
+        if (AppSettings.keepClaudeTranslations.value) {
+            R.string.translation_storage_clear_all_confirm
+        } else {
+            R.string.translation_storage_clear_all_confirm_claude
+        },
+    )
+    val mainState = rememberLazyListState()
+    val songState = remember(opened?.videoId) { LazyListState() }
+    val inner = opened
+    KoWindow(
+        title = inner?.title ?: stringResource(R.string.translation_storage),
+        onBack = {
+            when {
+                confirmingClear -> confirmingClear = false
+                opened != null -> opened = null
+                else -> onDismiss()
+            }
+        },
+        listState = if (inner != null) songState else mainState,
+        overlay = {
+            if (confirmingClear) {
+                ConfirmationAlert(
+                    hazeState = hazeState,
+                    title = clearTitle,
+                    description = clearDescription,
+                    confirmLabel = clearTitle,
+                    onConfirm = {
+                        confirmingClear = false
+                        scope.launch {
+                            val cleared = LyricsTranslation.clearCache(googleOnly = false)
+                            Toast.makeText(context, clearedText.format(cleared.files, megabytes(cleared.bytes)), Toast.LENGTH_SHORT).show()
+                            reload++
                         }
-                    AlertRule()
-                    TappableLines(
-                        title = if (artist.isBlank()) title else "$title — $artist",
-                        detail = detail,
-                        onClick = {
-                            onOpen(Song(videoId = first.trackId, title = title, artist = artist, thumbnailUrl = null))
-                        },
-                    )
-                }
-                if (shown.size > MAX_LISTED) {
-                    Text(
-                        text = stringResource(R.string.translation_status_more, shown.size - MAX_LISTED),
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
-                    )
-                }
+                    },
+                    onDismiss = { confirmingClear = false },
+                    frosted = false,
+                )
+            }
+        },
+    ) {
+        if (inner != null) {
+            songStatusItems(inner, openedStatus, words, page, loading)
+            return@KoWindow
+        }
+        windowText(summary, header = spaceHeader)
+        windowCard(rows = limits, header = limitHeader, footer = limitFooter) { limit ->
+            WindowChoice(label = "$limit MB", checked = limit == limitChosen) { AppSettings.setKeptStoreLimitMb(limit) }
+        }
+        windowActions(buttons, header = manageHeader)
+        if (all == null) return@KoWindow
+        if (songs.isNotEmpty()) {
+            item(key = "search") {
+                PillTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    placeholder = searchHint,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, top = 24.dp),
+                )
             }
         }
-        AlertRule()
-        AlertAction(
-            label = stringResource(R.string.translation_storage_clear_google),
-            emphasised = false,
-            onClick = {
-                scope.launch {
-                    val cleared = LyricsTranslation.clearCache(googleOnly = true)
-                    Toast.makeText(context, clearedText.format(cleared.files, megabytes(cleared.bytes)), Toast.LENGTH_SHORT).show()
-                    reload++
+        if (shown.isEmpty()) {
+            if (query.isNotBlank()) windowText(noMatch)
+            return@KoWindow
+        }
+        windowCard(rows = shown, header = songsHeader, key = { it.first().trackId }) { group ->
+            val first = group.first()
+            val title = group.firstNotNullOfOrNull { it.title } ?: unnamed
+            val artist = group.firstNotNullOfOrNull { it.artist }.orEmpty()
+            val detail = group
+                .sortedBy { it.kind }
+                .joinToString(" · ") { answer ->
+                    (words.kinds[answer.kind] ?: answer.kind) + " " +
+                        (if (answer.byClaude) "Claude" else words.google) + " " +
+                        (if (answer.kept) words.kept else words.cache)
                 }
-            },
-        )
-        AlertRule()
-        AlertAction(
-            label = stringResource(R.string.translation_storage_clear_all),
-            emphasised = false,
-            destructive = true,
-            onClick = { confirmingClear = true },
-        )
-        AlertRule()
-        AlertAction(
-            label = stringResource(R.string.translation_storage_limit_row, keptLimitMb),
-            emphasised = false,
-            onClick = { pickingLimit = true },
-        )
-        AlertRule()
-        AlertAction(label = stringResource(R.string.close), emphasised = false, onClick = onDismiss)
+            WindowLine(
+                title = if (artist.isBlank()) title else "$title — $artist",
+                detail = detail,
+                onClick = { opened = Song(videoId = first.trackId, title = title, artist = artist, thumbnailUrl = null) },
+            )
+        }
     }
 }

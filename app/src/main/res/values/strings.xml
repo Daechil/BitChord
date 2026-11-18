@@ -613,6 +613,14 @@
     <string name="claude_usage_month_total_only">%1$s · $%2$s</string>
     <string name="claude_usage_reset_month">Reset this month</string>
     <string name="claude_usage_reset_all">Clear all history</string>
+    <string name="claude_usage_reset_all_confirm">This month\'s usage and every past month are cleared. Nothing changes on your Anthropic account.</string>
+    <string name="ko_window_summary">Summary</string>
+    <string name="ko_window_songs">Songs · %1$d</string>
+    <string name="ko_window_space">Space used</string>
+    <string name="ko_window_manage">Manage</string>
+    <string name="ko_window_no_match">No songs match.</string>
+    <string name="ko_window_jobs">Jobs · %1$d</string>
+    <string name="ko_window_by_model">By model (input / output tokens)</string>
     <string name="translate_ahead_watch">Also translate new songs as they are added</string>
     <string name="translate_ahead_watch_detail">Checks this playlist every %1$d hours and sends only new songs, in a batch</string>
     <string name="translate_ahead_watch_job">%1$s · new songs</string>

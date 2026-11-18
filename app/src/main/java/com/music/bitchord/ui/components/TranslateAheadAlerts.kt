@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -67,22 +69,7 @@ fun TranslateAheadAlerts(hazeState: HazeState) {
     }
     val showLog by KoAlerts.aheadLog.collectAsStateWithLifecycle()
     if (showLog) {
-        var opened by remember { mutableStateOf<String?>(null) }
-        val jobs by TranslateAhead.jobs.collectAsStateWithLifecycle()
-        val job = opened?.let { id -> jobs.firstOrNull { it.id == id } }
-        BackHandler {
-            if (job != null) opened = null else KoAlerts.aheadLog.value = false
-        }
-        if (job != null) {
-            TranslateAheadJobAlert(hazeState = hazeState, job = job, onBack = { opened = null })
-        } else {
-            TranslateAheadLogAlert(
-                hazeState = hazeState,
-                jobs = jobs,
-                onOpen = { opened = it },
-                onDismiss = { KoAlerts.aheadLog.value = false },
-            )
-        }
+        TranslateAheadLogWindow(hazeState = hazeState, onDismiss = { KoAlerts.aheadLog.value = false })
     }
 }
 
@@ -339,120 +326,132 @@ private fun modelLabel(model: String): String = stringResource(
 
 private fun usd(value: Double): String = String.format(Locale.US, if (value < 0.1) "%.3f" else "%.2f", value)
 
-/** Every job, newest first: what was asked for, when, and how far it has got. */
+/**
+ * Every job, newest first — what was asked for, when, and how far it has got
+ * — and the watched playlists, in a window of its own; a job opens its page
+ * of every song and what became of it.
+ */
 @Composable
-private fun TranslateAheadLogAlert(
-    hazeState: HazeState,
-    jobs: List<TranslateAhead.Job>,
-    onOpen: (String) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val time = remember { SimpleDateFormat("MM-dd HH:mm", Locale.US) }
-    val watches by TranslateAhead.watches.collectAsStateWithLifecycle()
-    var stopping by remember { mutableStateOf<TranslateAhead.Watch?>(null) }
-    stopping?.let { watch ->
-        ConfirmationAlert(
-            hazeState = hazeState,
-            title = stringResource(R.string.translate_ahead_unwatch),
-            description = stringResource(R.string.translate_ahead_unwatch_confirm, watch.title),
-            confirmLabel = stringResource(R.string.translate_ahead_unwatch),
-            onConfirm = {
-                TranslateAhead.unwatch(watch.browseId)
-                stopping = null
-            },
-            onDismiss = { stopping = null },
-        )
-        return
-    }
-    val neverChecked = stringResource(R.string.translate_ahead_watch_never)
+private fun TranslateAheadLogWindow(hazeState: HazeState, onDismiss: () -> Unit) {
     val context = LocalContext.current
+    val time = remember { SimpleDateFormat("MM-dd HH:mm", Locale.US) }
+    val jobs by TranslateAhead.jobs.collectAsStateWithLifecycle()
+    val watches by TranslateAhead.watches.collectAsStateWithLifecycle()
+    var opened by remember { mutableStateOf<String?>(null) }
+    var stopping by remember { mutableStateOf<TranslateAhead.Watch?>(null) }
+    val job = opened?.let { id -> jobs.firstOrNull { it.id == id } }
+    val neverChecked = stringResource(R.string.translate_ahead_watch_never)
     val notificationsShown = remember(jobs) {
         com.music.bitchord.download.TranslateAheadNotifier.progressVisible(context)
     }
-    AlertScaffold(hazeState = hazeState, onDismiss = onDismiss) {
-        AlertHeading(
-            title = stringResource(R.string.translate_ahead_log),
-            message = stringResource(
-                if (jobs.isEmpty()) R.string.translate_ahead_log_empty else R.string.translate_ahead_log_hint,
-            ),
-        )
+    val hint = stringResource(if (jobs.isEmpty()) R.string.translate_ahead_log_empty else R.string.translate_ahead_log_hint)
+    val notificationsOff = stringResource(R.string.translate_ahead_notifications_off)
+    val notificationsOffDetail = stringResource(R.string.translate_ahead_notifications_off_detail)
+    val watchingHeader = stringResource(R.string.translate_ahead_watching, AppSettings.aheadWatchHours.value)
+    val jobsHeader = stringResource(R.string.ko_window_jobs, jobs.size)
+    val watchLine = stringResource(R.string.translate_ahead_watch_line)
+    val haiku = stringResource(R.string.claude_model_haiku)
+    val sonnet = stringResource(R.string.claude_model_sonnet)
+    val modelOf = { model: String -> if (model == LyricsTranslation.CLAUDE_SONNET) sonnet else haiku }
+    // Every job's state line, resolved here: the list below is not composable.
+    val states = jobs.associate { it.id to stateLabel(it) }
+    val clearLabel = stringResource(R.string.translate_ahead_clear)
+    val unwatchTitle = stringResource(R.string.translate_ahead_unwatch)
+    val unwatchConfirm = stringResource(R.string.translate_ahead_unwatch_confirm)
+    val jobPage = job?.let { jobPageText(it) }
+    val mainState = rememberLazyListState()
+    val jobState = remember(opened) { androidx.compose.foundation.lazy.LazyListState() }
+    KoWindow(
+        title = job?.title ?: stringResource(R.string.translate_ahead_log),
+        onBack = {
+            when {
+                stopping != null -> stopping = null
+                opened != null -> opened = null
+                else -> onDismiss()
+            }
+        },
+        listState = if (job != null) jobState else mainState,
+        overlay = {
+            stopping?.let { watch ->
+                ConfirmationAlert(
+                    hazeState = hazeState,
+                    title = unwatchTitle,
+                    description = unwatchConfirm.format(watch.title),
+                    confirmLabel = unwatchTitle,
+                    onConfirm = {
+                        TranslateAhead.unwatch(watch.browseId)
+                        stopping = null
+                    },
+                    onDismiss = { stopping = null },
+                    frosted = false,
+                )
+            }
+        },
+    ) {
+        if (job != null && jobPage != null) {
+            jobItems(job, jobPage, onBack = { opened = null })
+            return@KoWindow
+        }
+        windowText(hint)
         if (!notificationsShown) {
-            AlertRule()
-            TappableLines(
-                title = stringResource(R.string.translate_ahead_notifications_off),
-                detail = stringResource(R.string.translate_ahead_notifications_off_detail),
-                onClick = {
-                    val intent = android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                        .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
-                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                    runCatching { context.startActivity(intent) }
-                },
-            )
-            AlertRule()
+            windowCard(rows = listOf(Unit)) {
+                WindowLine(
+                    title = notificationsOff,
+                    detail = notificationsOffDetail,
+                    onClick = {
+                        val intent = android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                            .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        runCatching { context.startActivity(intent) }
+                    },
+                )
+            }
         }
         if (watches.isNotEmpty()) {
-            Text(
-                text = stringResource(R.string.translate_ahead_watching, AppSettings.aheadWatchHours.value),
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp),
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, fontWeight = FontWeight.W600),
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            watches.forEach { watch ->
-                AlertRule()
-                TappableLines(
+            windowCard(rows = watches, header = watchingHeader, key = { "watch:" + it.browseId }) { watch ->
+                WindowLine(
                     title = "👁 " + watch.title,
-                    detail = stringResource(
-                        R.string.translate_ahead_watch_line,
-                        modelLabel(watch.model),
+                    detail = watchLine.format(
+                        modelOf(watch.model),
                         watch.sent,
                         if (watch.lastChecked > 0) time.format(Date(watch.lastChecked)) else neverChecked,
                     ),
                     onClick = { stopping = watch },
                 )
             }
-            AlertRule()
         }
         if (jobs.isNotEmpty()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 360.dp)
-                    .verticalScroll(rememberScrollState()),
-            ) {
-                jobs.forEach { job ->
-                    AlertRule()
-                    val translated = job.count(TranslateAhead.TrackStatus.TRANSLATED)
-                    val model = modelLabel(job.model)
-                    val state = stateLabel(job)
-                    val line = buildString {
-                        append(time.format(Date(job.createdAt))).append(" · ").append(model)
-                        append(" · ").append(state)
-                        if (!job.active) {
-                            append(" · ").append(translated).append('/').append(job.tracks.size)
-                            if (job.inputTokens > 0 || job.outputTokens > 0) append(" · $").append(usd(job.costUsd()))
-                        }
+            windowCard(rows = jobs, header = jobsHeader, key = { "job:" + it.id }) { item ->
+                val translated = item.count(TranslateAhead.TrackStatus.TRANSLATED)
+                val line = buildString {
+                    append(time.format(Date(item.createdAt))).append(" · ").append(modelOf(item.model))
+                    append(" · ").append(states[item.id].orEmpty())
+                    if (!item.active) {
+                        append(" · ").append(translated).append('/').append(item.tracks.size)
+                        if (item.inputTokens > 0 || item.outputTokens > 0) append(" · $").append(usd(item.costUsd()))
                     }
-                    TappableLines(title = job.title, detail = line, onClick = { onOpen(job.id) })
                 }
+                WindowLine(title = item.title, detail = line, onClick = { opened = item.id })
             }
         }
         if (jobs.any { !it.active }) {
-            AlertRule()
-            AlertAction(
-                label = stringResource(R.string.translate_ahead_clear),
-                emphasised = false,
-                destructive = true,
-                onClick = { TranslateAhead.clearFinished() },
-            )
+            windowActions(listOf(WindowButton(label = clearLabel, destructive = true) { TranslateAhead.clearFinished() }))
         }
-        AlertRule()
-        AlertAction(label = stringResource(R.string.close), emphasised = false, onClick = onDismiss)
     }
 }
 
-/** One job: its totals, then every song and what became of it. */
+/** A job's page, in words: its totals, then a line per song. */
+private class JobPageText(
+    val summary: String,
+    val tracks: List<Pair<String, String>>,
+    val marks: List<String>,
+    val cancel: String,
+    val resendSonnet: String,
+    val resendFailed: String,
+)
+
 @Composable
-private fun TranslateAheadJobAlert(hazeState: HazeState, job: TranslateAhead.Job, onBack: () -> Unit) {
+private fun jobPageText(job: TranslateAhead.Job): JobPageText {
     val status = TranslateAhead.TrackStatus
     val statusLabels = mapOf(
         status.PENDING to stringResource(R.string.translate_ahead_track_pending),
@@ -499,78 +498,60 @@ private fun TranslateAheadJobAlert(hazeState: HazeState, job: TranslateAhead.Job
         countsLine,
         costLine.takeIf { job.inputTokens > 0 || job.outputTokens > 0 },
         expiredLine.takeIf { job.state == TranslateAhead.State.EXPIRED },
-    )
-    val lines = job.tracks.map { track ->
-        val mark = when (track.status) {
+    ).joinToString("\n")
+    val tracks = job.tracks.map { track ->
+        val title = if (track.artist.isBlank()) track.title else track.title + " — " + track.artist
+        val detail = buildString {
+            append(statusLabels[track.status] ?: track.status)
+            if (track.status == status.FAILED) track.detail?.let { append(" (").append(failureLabels[it] ?: it).append(')') }
+            track.readingStatus?.let { reading ->
+                append(" · ").append(readingLabel.format(statusLabels[reading] ?: reading))
+            }
+            if (track.lyricsChanged) append('\n').append(changedLabel)
+        }
+        title to detail
+    }
+    val marks = job.tracks.map { track ->
+        when (track.status) {
             status.TRANSLATED, status.ALREADY -> "✓"
             status.DECLINED, status.FAILED -> "✗"
             status.PENDING, status.SENT -> "…"
             else -> "–"
         }
-        buildString {
-            append(mark).append(' ').append(track.title)
-            if (track.artist.isNotBlank()) append(" — ").append(track.artist)
-            append('\n').append("   ").append(statusLabels[track.status] ?: track.status)
-            if (track.status == status.FAILED) track.detail?.let { append(" (").append(failureLabels[it] ?: it).append(')') }
-            track.readingStatus?.let { reading ->
-                append(" · ").append(readingLabel.format(statusLabels[reading] ?: reading))
-            }
-            if (track.lyricsChanged) append('\n').append("   ").append(changedLabel)
-        }
     }
+    return JobPageText(
+        summary = summary,
+        tracks = tracks,
+        marks = marks,
+        cancel = stringResource(R.string.translate_ahead_cancel),
+        resendSonnet = stringResource(R.string.translate_ahead_resend_sonnet),
+        resendFailed = stringResource(R.string.translate_ahead_resend_failed),
+    )
+}
+
+/** One job's page: its totals, what can be done with it, then every song. */
+private fun LazyListScope.jobItems(job: TranslateAhead.Job, text: JobPageText, onBack: () -> Unit) {
+    val status = TranslateAhead.TrackStatus
+    windowText(text.summary)
     val anyDeclined = job.tracks.any { it.status == status.DECLINED || it.readingStatus == status.DECLINED }
     val anyFailed = job.tracks.any { it.status == status.FAILED || it.readingStatus == status.FAILED }
-    AlertScaffold(hazeState = hazeState, onDismiss = onBack) {
-        AlertHeading(title = job.title, message = summary.joinToString("\n"))
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = 300.dp)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-        ) {
-            lines.forEach { line ->
-                Text(
-                    text = line,
-                    modifier = Modifier.padding(vertical = 4.dp),
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, lineHeight = 16.sp),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        }
-        if (job.state == TranslateAhead.State.PREPARING || job.state == TranslateAhead.State.WAITING) {
-            AlertRule()
-            AlertAction(
-                label = stringResource(R.string.translate_ahead_cancel),
-                emphasised = false,
-                destructive = true,
-                onClick = { TranslateAhead.cancel(job.id) },
-            )
-        }
-        if (!job.active && anyDeclined && job.model != LyricsTranslation.CLAUDE_SONNET) {
-            AlertRule()
-            AlertAction(
-                label = stringResource(R.string.translate_ahead_resend_sonnet),
-                emphasised = true,
-                onClick = {
-                    TranslateAhead.resend(job.id, declined = true)
-                    onBack()
-                },
-            )
-        }
-        if (!job.active && anyFailed) {
-            AlertRule()
-            AlertAction(
-                label = stringResource(R.string.translate_ahead_resend_failed),
-                emphasised = false,
-                onClick = {
-                    TranslateAhead.resend(job.id, declined = false)
-                    onBack()
-                },
-            )
-        }
-        AlertRule()
-        AlertAction(label = stringResource(R.string.back), emphasised = false, onClick = onBack)
+    windowActions(
+        listOfNotNull(
+            WindowButton(label = text.cancel, destructive = true) { TranslateAhead.cancel(job.id) }
+                .takeIf { job.state == TranslateAhead.State.PREPARING || job.state == TranslateAhead.State.WAITING },
+            WindowButton(label = text.resendSonnet) {
+                TranslateAhead.resend(job.id, declined = true)
+                onBack()
+            }.takeIf { !job.active && anyDeclined && job.model != LyricsTranslation.CLAUDE_SONNET },
+            WindowButton(label = text.resendFailed) {
+                TranslateAhead.resend(job.id, declined = false)
+                onBack()
+            }.takeIf { !job.active && anyFailed },
+        ),
+    )
+    windowCard(rows = text.tracks.indices.toList()) { index ->
+        val (title, detail) = text.tracks[index]
+        WindowLine(title = title, detail = detail, mark = text.marks[index])
     }
 }
 

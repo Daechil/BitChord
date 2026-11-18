@@ -144,8 +144,7 @@ fun ClaudeAlerts(
         )
     }
     if (showLog) {
-        BackHandler { onDismissLog() }
-        ClaudeLogAlert(hazeState = hazeState, onDismiss = onDismissLog)
+        ClaudeLogWindow(onDismiss = onDismissLog)
     }
     if (showKey) {
         BackHandler { onDismissKey() }
@@ -249,94 +248,7 @@ fun ClaudeAlerts(
     }
 
     if (showUsage) {
-        BackHandler { onDismissUsage() }
-        val usage by AppSettings.claudeUsage.collectAsStateWithLifecycle()
-        val history by AppSettings.claudeUsageHistory.collectAsStateWithLifecycle()
-        val totalLine = stringResource(
-            R.string.claude_usage_subtitle,
-            com.music.bitchord.ui.screens.compactTokens(usage.inputTokens),
-            com.music.bitchord.ui.screens.compactTokens(usage.outputTokens),
-            String.format(java.util.Locale.US, "%.2f", usage.estimatedUsd()),
-        )
-        val haikuLabel = stringResource(R.string.claude_model_haiku)
-        val sonnetLabel = stringResource(R.string.claude_model_sonnet)
-        val noteLine = stringResource(R.string.claude_usage_note)
-        val monthsTitle = stringResource(R.string.claude_usage_months)
-        val totalOnly = stringResource(R.string.claude_usage_month_total_only)
-        val monthFormat = stringResource(R.string.claude_usage_month_line)
-        val lines = buildList {
-            add(totalLine)
-            usage.inputByModel.keys.union(usage.outputByModel.keys).sorted().forEach { model ->
-                // Tokens that went through a batch are tallied apart: they cost half.
-                val batch = model.endsWith(com.music.bitchord.data.lyrics.LyricsTranslation.BATCH_MODEL_SUFFIX)
-                val plain = model.removeSuffix(com.music.bitchord.data.lyrics.LyricsTranslation.BATCH_MODEL_SUFFIX)
-                val label = (if (plain == com.music.bitchord.data.lyrics.LyricsTranslation.CLAUDE_SONNET) sonnetLabel else haikuLabel) +
-                    if (batch) " (Batch)" else ""
-                add(
-                    "$label: ${com.music.bitchord.ui.screens.compactTokens(usage.inputByModel[model] ?: 0L)} / " +
-                        com.music.bitchord.ui.screens.compactTokens(usage.outputByModel[model] ?: 0L),
-                )
-            }
-            add("")
-            add(monthsTitle)
-            // This month and up to eleven before it, newest first.
-            (listOf(AppSettings.MonthUsage(usage.month, usage.inputByModel, usage.outputByModel)) + history).forEach { month ->
-                val total = month.usd()
-                add(
-                    if (month.usdOnly != null) {
-                        totalOnly.format(month.month, String.format(java.util.Locale.US, "%.2f", total))
-                    } else {
-                        val batch = month.batchUsd()
-                        monthFormat.format(
-                            month.month,
-                            String.format(java.util.Locale.US, "%.2f", total),
-                            String.format(java.util.Locale.US, "%.2f", total - batch),
-                            String.format(java.util.Locale.US, "%.2f", batch),
-                            (month.sonnetShare() * 100).toInt(),
-                        )
-                    },
-                )
-            }
-            add("")
-            add(noteLine)
-        }
-        AlertScaffold(hazeState = hazeState, onDismiss = onDismissUsage) {
-            AlertHeading(title = stringResource(R.string.claude_usage), message = null)
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 360.dp)
-                    .verticalScroll(rememberScrollState())
-                    .padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
-            ) {
-                Text(
-                    text = lines.joinToString("\n"),
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, lineHeight = 17.sp),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-            AlertRule()
-            AlertAction(
-                label = stringResource(R.string.claude_usage_reset_month),
-                emphasised = false,
-                onClick = {
-                    AppSettings.resetClaudeUsage(everything = false)
-                    onDismissUsage()
-                },
-            )
-            AlertRule()
-            AlertAction(
-                label = stringResource(R.string.claude_usage_reset_all),
-                emphasised = false,
-                destructive = true,
-                onClick = {
-                    AppSettings.resetClaudeUsage(everything = true)
-                    onDismissUsage()
-                },
-            )
-            AlertRule()
-            AlertAction(label = stringResource(R.string.close), emphasised = false, onClick = onDismissUsage)
-        }
+        ClaudeUsageWindow(hazeState = hazeState, onDismiss = onDismissUsage)
     }
 }
 
@@ -416,13 +328,100 @@ fun floatingShowLabelRes(show: String): Int = when (show) {
 }
 
 /**
- * The last Claude requests and how each went, newest first — what was asked,
- * of which model, and why it failed when it did. Copy puts the whole log on
- * the clipboard to paste into a bug report; nothing in it is secret (no key,
- * no lyrics).
+ * This month's Claude use, by model, and the months before it, in a window
+ * of its own: the history no longer has to fit an alert.
  */
 @Composable
-private fun ClaudeLogAlert(hazeState: HazeState, onDismiss: () -> Unit) {
+private fun ClaudeUsageWindow(hazeState: HazeState, onDismiss: () -> Unit) {
+    val usage by AppSettings.claudeUsage.collectAsStateWithLifecycle()
+    val history by AppSettings.claudeUsageHistory.collectAsStateWithLifecycle()
+    var confirmingReset by remember { mutableStateOf(false) }
+    val totalLine = stringResource(
+        R.string.claude_usage_subtitle,
+        com.music.bitchord.ui.screens.compactTokens(usage.inputTokens),
+        com.music.bitchord.ui.screens.compactTokens(usage.outputTokens),
+        String.format(Locale.US, "%.2f", usage.estimatedUsd()),
+    )
+    val haikuLabel = stringResource(R.string.claude_model_haiku)
+    val sonnetLabel = stringResource(R.string.claude_model_sonnet)
+    val noteLine = stringResource(R.string.claude_usage_note)
+    val monthsTitle = stringResource(R.string.claude_usage_months)
+    val totalOnly = stringResource(R.string.claude_usage_month_total_only)
+    val monthFormat = stringResource(R.string.claude_usage_month_line)
+    val byModelTitle = stringResource(R.string.ko_window_by_model)
+    val suffix = com.music.bitchord.data.lyrics.LyricsTranslation.BATCH_MODEL_SUFFIX
+    val models = usage.inputByModel.keys.union(usage.outputByModel.keys).sorted().map { model ->
+        // Tokens that went through a batch are tallied apart: they cost half.
+        val batch = model.endsWith(suffix)
+        val plain = model.removeSuffix(suffix)
+        val label = (if (plain == com.music.bitchord.data.lyrics.LyricsTranslation.CLAUDE_SONNET) sonnetLabel else haikuLabel) +
+            if (batch) " (Batch)" else ""
+        label to (
+            com.music.bitchord.ui.screens.compactTokens(usage.inputByModel[model] ?: 0L) + " / " +
+                com.music.bitchord.ui.screens.compactTokens(usage.outputByModel[model] ?: 0L)
+            )
+    }
+    // This month and up to eleven before it, newest first.
+    val months = (listOf(AppSettings.MonthUsage(usage.month, usage.inputByModel, usage.outputByModel)) + history).map { month ->
+        val total = month.usd()
+        if (month.usdOnly != null) {
+            totalOnly.format(month.month, String.format(Locale.US, "%.2f", total))
+        } else {
+            val batch = month.batchUsd()
+            monthFormat.format(
+                month.month,
+                String.format(Locale.US, "%.2f", total),
+                String.format(Locale.US, "%.2f", total - batch),
+                String.format(Locale.US, "%.2f", batch),
+                (month.sonnetShare() * 100).toInt(),
+            )
+        }
+    }
+    val resetMonth = stringResource(R.string.claude_usage_reset_month)
+    val resetAll = stringResource(R.string.claude_usage_reset_all)
+    val resetAllConfirm = stringResource(R.string.claude_usage_reset_all_confirm)
+    KoWindow(
+        title = stringResource(R.string.claude_usage),
+        onBack = { if (confirmingReset) confirmingReset = false else onDismiss() },
+        overlay = {
+            if (confirmingReset) {
+                ConfirmationAlert(
+                    hazeState = hazeState,
+                    title = resetAll,
+                    description = resetAllConfirm,
+                    confirmLabel = resetAll,
+                    onConfirm = {
+                        AppSettings.resetClaudeUsage(everything = true)
+                        confirmingReset = false
+                    },
+                    onDismiss = { confirmingReset = false },
+                    frosted = false,
+                )
+            }
+        },
+    ) {
+        windowText(totalLine)
+        if (models.isNotEmpty()) {
+            windowCard(rows = models, header = byModelTitle) { (label, tokens) -> WindowLine(title = label, detail = tokens) }
+        }
+        windowCard(rows = months, header = monthsTitle, footer = noteLine) { WindowLine(title = it) }
+        windowActions(
+            listOf(
+                WindowButton(label = resetMonth) { AppSettings.resetClaudeUsage(everything = false) },
+                WindowButton(label = resetAll, destructive = true) { confirmingReset = true },
+            ),
+        )
+    }
+}
+
+/**
+ * The last Claude requests and how each went, newest first — what was asked,
+ * of which model, and why it failed when it did — in a window of its own.
+ * Copy puts the whole log on the clipboard to paste into a bug report;
+ * nothing in it is secret (no key, no lyrics).
+ */
+@Composable
+private fun ClaudeLogWindow(onDismiss: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val entries by ClaudeDiagnostics.entries.collectAsStateWithLifecycle()
@@ -454,9 +453,9 @@ private fun ClaudeLogAlert(hazeState: HazeState, onDismiss: () -> Unit) {
             else -> entry.model
         }
         val outcome = entry.failureKind?.let { "✗ ${failureLabels[it].orEmpty()}" } ?: "✓ $okText"
-        buildString {
-            append(time.format(Date(entry.at))).append(" · ").append(purpose).append(" · ").append(model)
-            append('\n').append(outcome)
+        val head = time.format(Date(entry.at)) + " · " + purpose + " · " + model
+        val body = buildString {
+            append(outcome)
             if (entry.linesAsked != null) {
                 append(" · ").append(entry.linesGot?.toString() ?: "-").append('/').append(entry.linesAsked)
             }
@@ -466,77 +465,34 @@ private fun ClaudeLogAlert(hazeState: HazeState, onDismiss: () -> Unit) {
             if (entry.inputTokens != null || entry.outputTokens != null) {
                 append(" · in ").append(entry.inputTokens ?: 0).append("/out ").append(entry.outputTokens ?: 0)
             }
-            entry.detail?.let { append('\n').append("  ").append(it) }
+            entry.detail?.let { append('\n').append(it) }
         }
+        head to body
     }
-    AlertScaffold(hazeState = hazeState, onDismiss = onDismiss) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 19.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                text = stringResource(R.string.claude_log),
-                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 17.sp, fontWeight = FontWeight.W600),
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center,
-            )
-            Text(
-                text = if (entries.isEmpty()) {
-                    stringResource(R.string.claude_log_empty)
-                } else {
-                    stringResource(R.string.claude_log_subtitle, entries.size, entries.count { it.failed })
-                },
-                modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp, lineHeight = 17.sp),
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center,
-            )
-            if (lines.isNotEmpty()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 380.dp)
-                        .verticalScroll(rememberScrollState()),
-                ) {
-                    lines.forEach { line ->
-                        Text(
-                            text = line,
-                            modifier = Modifier.padding(vertical = 5.dp),
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 11.sp,
-                                lineHeight = 15.sp,
-                            ),
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-                }
-            }
-        }
+    val subtitle = if (entries.isEmpty()) {
+        stringResource(R.string.claude_log_empty)
+    } else {
+        stringResource(R.string.claude_log_subtitle, entries.size, entries.count { it.failed })
+    }
+    val copyLabel = stringResource(R.string.claude_log_copy)
+    val clearLabel = stringResource(R.string.claude_log_clear)
+    val mono = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 15.sp)
+    KoWindow(title = stringResource(R.string.claude_log), onBack = onDismiss) {
+        windowText(subtitle)
         if (lines.isNotEmpty()) {
-            AlertRule()
-            AlertAction(
-                label = stringResource(R.string.claude_log_copy),
-                emphasised = true,
-                onClick = {
-                    val header = "BitChord KO ${com.music.bitchord.BuildConfig.VERSION_NAME} · Claude log (${entries.size})"
-                    val text = (listOf(header) + lines).joinToString("\n\n")
-                    context.getSystemService(ClipboardManager::class.java)
-                        ?.setPrimaryClip(ClipData.newPlainText("Claude log", text))
-                    Toast.makeText(context, copiedText, Toast.LENGTH_SHORT).show()
-                },
+            windowActions(
+                listOf(
+                    WindowButton(label = copyLabel) {
+                        val header = "BitChord KO ${com.music.bitchord.BuildConfig.VERSION_NAME} · Claude log (${entries.size})"
+                        val text = (listOf(header) + lines.map { (head, body) -> head + "\n" + body }).joinToString("\n\n")
+                        context.getSystemService(ClipboardManager::class.java)
+                            ?.setPrimaryClip(ClipData.newPlainText("Claude log", text))
+                        Toast.makeText(context, copiedText, Toast.LENGTH_SHORT).show()
+                    },
+                    WindowButton(label = clearLabel, destructive = true) { scope.launch { ClaudeDiagnostics.clear() } },
+                ),
             )
-            AlertRule()
-            AlertAction(
-                label = stringResource(R.string.claude_log_clear),
-                emphasised = false,
-                destructive = true,
-                onClick = { scope.launch { ClaudeDiagnostics.clear() } },
-            )
+            windowCard(rows = lines) { (head, body) -> WindowLine(title = head, detail = body, detailStyle = mono) }
         }
-        AlertRule()
-        AlertAction(label = stringResource(R.string.close), emphasised = false, onClick = onDismiss)
     }
 }

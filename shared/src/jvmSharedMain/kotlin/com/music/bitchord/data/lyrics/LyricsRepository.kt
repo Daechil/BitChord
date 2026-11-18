@@ -126,10 +126,19 @@ object LyricsRepository {
                 onSourceStarted, onSourceResult, onSourceCancelled,
             )
         }
-        runCatching { OriginalNames.fromYouTubeMusic(title, artist, durationMs) }.getOrNull()?.let { name ->
+        // A cancelled lookup stops here rather than being taken for a miss and
+        // moving on to the next, paid, step.
+        suspend fun <T> attempt(block: suspend () -> T?): T? = try {
+            block()
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
+        }
+        attempt { OriginalNames.fromYouTubeMusic(title, artist, durationMs) }?.let { name ->
             retry(name)?.let { return it }
         }
-        runCatching { OriginalNames.fromClaude(title, artist) }.getOrNull()?.let { name ->
+        attempt { OriginalNames.fromClaude(title, artist) }?.let { name ->
             retry(name)?.let { return it }
         }
         return null

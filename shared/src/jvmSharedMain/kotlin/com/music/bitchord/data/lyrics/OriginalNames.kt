@@ -58,9 +58,15 @@ object OriginalNames {
     }
 
     /** Claude's answer for the original's name; null when it has none or isn't set up. */
+    /** When asking Claude for a song's name last failed, by key; not asked again for a day. */
+    private val claudeFailedAt = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    private const val CLAUDE_RETRY_MS = 24L * 60L * 60L * 1000L
+
     suspend fun fromClaude(title: String, artist: String): Name? {
         val key = key(title, artist)
         entry(key)?.takeIf { it.aiChecked }?.let { return it.ai() }
+        claudeFailedAt[key]?.let { at -> if (System.currentTimeMillis() - at < CLAUDE_RETRY_MS) return null }
+        val asked = LyricsTranslation.claudeEnabled && LyricsTranslation.claudeKeyUsable
         return when (val answer = LyricsTranslation.nativeName(title, artist)) {
             is LyricsTranslation.NativeNameResult.Found -> {
                 val name = Name(answer.title, answer.artist)
@@ -71,7 +77,11 @@ object OriginalNames {
                 update(key) { it.copy(aiChecked = true, aiTitle = null, aiArtist = null) }
                 null
             }
-            LyricsTranslation.NativeNameResult.Unavailable -> null
+            LyricsTranslation.NativeNameResult.Unavailable -> {
+                // A request that went out and failed, not one never made, is held off for a day.
+                if (asked) claudeFailedAt[key] = System.currentTimeMillis()
+                null
+            }
         }
     }
 

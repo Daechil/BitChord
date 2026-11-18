@@ -101,9 +101,6 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory, Configu
         migrateScriptOnlyAppLocale()
         LyricsTranslation.cacheDir = cacheDir
         LyricsTranslation.keepDir = filesDir
-        com.music.bitchord.download.DownloadTranslations.init(this)
-        com.music.bitchord.download.TranslateAhead.init(this)
-        com.music.bitchord.download.TranslationStatus.init(this)
         // Read off the main thread; the Settings row shows it once it is in.
         CoroutineScope(Dispatchers.IO).launch { com.music.bitchord.data.lyrics.ClaudeDiagnostics.load() }
         // PlaybackService shares this process, so seeding the cookie here means
@@ -172,6 +169,12 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory, Configu
         Downloads.init(this)
         // After both of the things a check reads: the setting and the record.
         PlaylistSync.init(this)
+        // The KO translation features read the settings (style, lyric sources,
+        // "keep every Claude answer") and the download record as they start:
+        // both have to be in before any of them runs.
+        com.music.bitchord.download.DownloadTranslations.init(this)
+        com.music.bitchord.download.TranslateAhead.init(this)
+        com.music.bitchord.download.TranslationStatus.init(this)
         // The device's own listening record. Opened here rather than in
         // PlaybackService because the Replay page reads it from the UI side and
         // both live in this process — one owner, one directory.

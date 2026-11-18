@@ -345,7 +345,7 @@ object LyricsTranslation {
             engine = ENGINE_GOOGLE,
         )
         memory.put(cacheKey, entry)
-        val keepGoogle = keepTranslationFor(trackId)
+        val keepGoogle = keepTranslationFor(trackId) || isKept(cacheKey)
         writeCache(cacheKey, entry, keep = keepGoogle)
         noteStored(cacheKey, trackId, KIND_TRANSLATION, entry, target, model = null, kept = keepGoogle && keepDir != null, via = via)
 
@@ -590,7 +590,9 @@ object LyricsTranslation {
             sonnetStandIn = standIn,
         )
         memory.put(cacheKey, entry)
-        val keepClaude = keepClaude(trackId)
+        // An older answer in the kept store is read before the cache, so a new
+        // one — a retranslation — replaces it there rather than hide behind it.
+        val keepClaude = keepClaude(trackId) || isKept(cacheKey)
         writeCache(cacheKey, entry, keep = keepClaude)
         noteStored(
             cacheKey, trackId, KIND_TRANSLATION, entry, target,
@@ -1498,23 +1500,64 @@ object LyricsTranslation {
                         temporary.copyTo(destination, overwrite = true)
                         temporary.delete()
                     }
-                    trimCache(directory, if (kept) keptLimitBytes else MAX_CACHE_BYTES)
+                    trimIfOver(directory, if (kept) keptLimitBytes else MAX_CACHE_BYTES, destination.length())
                     // Moved to the kept store: the cache's copy is only space now.
-                    if (kept) cacheDir?.let { File(File(it, CACHE_DIRECTORY), "$key.json.gz") }?.takeIf { it.isFile }?.delete()
+                    if (kept) {
+                        cacheDir?.let { File(File(it, CACHE_DIRECTORY), "$key.json.gz") }?.takeIf { it.isFile }?.let { copy ->
+                            val size = copy.length()
+                            if (copy.delete()) cacheDir?.let { adjustSize(File(it, CACHE_DIRECTORY), -size) }
+                        }
+                    }
                     Unit
                 }.onFailure { temporary.delete() }
             }
         }
 
-    private fun trimCache(directory: File, maxBytes: Long) {
-        val files = directory.listFiles { file -> file.extension == "gz" }
-            ?.sortedByDescending(File::lastModified)
-            .orEmpty()
-        var kept = 0L
-        files.forEach { file ->
-            kept += file.length()
-            if (kept > maxBytes) file.delete()
+    /**
+     * Each store's size as last added up, so a write need not list and sort
+     * a directory of thousands of files: only once the running total passes
+     * the limit is it trimmed, and counted afresh. Called holding [diskMutex].
+     */
+    private val storeBytes = HashMap<String, Long>()
+
+    private fun trimIfOver(directory: File, maxBytes: Long, added: Long) {
+        val known = storeBytes[directory.path]
+        if (known == null) {
+            storeBytes[directory.path] = trimCache(directory, maxBytes)
+            return
         }
+        // An overwritten file counts twice here: the total can only run high,
+        // which costs an early recount, never an overfull store.
+        val total = known + added
+        storeBytes[directory.path] = if (total > maxBytes) trimCache(directory, maxBytes) else total
+    }
+
+    /** After files went outside a write: what [trimIfOver] holds for [directory], corrected by [delta]. */
+    private fun adjustSize(directory: File, delta: Long) {
+        storeBytes[directory.path]?.let { storeBytes[directory.path] = (it + delta).coerceAtLeast(0L) }
+    }
+
+    /** Forgets every running total, for after changes too many to account for one by one. */
+    private fun forgetSizes() = storeBytes.clear()
+
+    /** Trims [directory] to [maxBytes], least recently used first; returns what is left. */
+    private fun trimCache(directory: File, maxBytes: Long): Long {
+        // Each file's time read once: a sort that asks the disk on every comparison is the slow part.
+        val files = directory.listFiles { file -> file.extension == "gz" }
+            .orEmpty()
+            .map { Triple(it, it.lastModified(), it.length()) }
+            .sortedByDescending { it.second }
+        var kept = 0L
+        var over = false
+        files.forEach { (file, _, size) ->
+            if (over || kept + size > maxBytes) {
+                over = true
+                file.delete()
+            } else {
+                kept += size
+            }
+        }
+        return kept
     }
 
     // ---- How the lyrics sound, in the reader's own script --------------------
@@ -1570,7 +1613,7 @@ object LyricsTranslation {
             engine = ENGINE_CLAUDE,
         )
         memory.put(cacheKey, entry)
-        val keepReading = keepClaude(trackId)
+        val keepReading = keepClaude(trackId) || isKept(cacheKey)
         writeCache(cacheKey, entry, keep = keepReading)
         noteStored(cacheKey, trackId, KIND_READING, entry, target, model = readingModel, kept = keepReading && keepDir != null, via = VIA_PLAYER)
         return RomanizationResult.Romanized(rebuild(lines, slots, entry.texts), entry.sourceLanguage, fromCache = false)
@@ -2250,6 +2293,7 @@ object LyricsTranslation {
                 }
             }
         }
+        if (moved > 0) diskMutex.withLock { forgetSizes() }
         if (keys.isNotEmpty()) {
             withIndex { map ->
                 keys.forEach { key -> map[key]?.let { map[key] = it.copy(kept = true) } }
@@ -2272,6 +2316,7 @@ object LyricsTranslation {
         var files = 0
         var bytes = 0L
         diskMutex.withLock {
+            forgetSizes()
             directory.listFiles { file -> file.name.endsWith(".json.gz") }.orEmpty().forEach { file ->
                 if (googleOnly && readTranslationFile(file)?.engine != ENGINE_GOOGLE) return@forEach
                 val size = file.length()
@@ -2443,6 +2488,7 @@ object LyricsTranslation {
             val root = keepDir ?: cacheDir ?: return@withLock null
             var added = 0
             var skipped = 0
+            forgetSizes()
             var marked = false
             var listing: List<StoredAnswer> = emptyList()
             java.util.zip.ZipInputStream(input).use { zip ->
@@ -2705,7 +2751,8 @@ object LyricsTranslation {
      * finds nothing in them.
      */
     suspend fun nativeName(title: String, artist: String): NativeNameResult {
-        if (!claudeKeyUsable) return NativeNameResult.Unavailable
+        // Claude switched off means no Claude requests, this one included.
+        if (!claudeEnabled || !claudeKeyUsable) return NativeNameResult.Unavailable
         val input = buildJsonObject {
             put("title", title)
             put("artist", artist)

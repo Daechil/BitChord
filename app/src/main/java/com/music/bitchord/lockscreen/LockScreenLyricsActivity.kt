@@ -118,8 +118,25 @@ class LockScreenLyricsActivity : ComponentActivity() {
 
     private val unlocked = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action == Intent.ACTION_USER_PRESENT) finish()
+            when (intent.action) {
+                Intent.ACTION_USER_PRESENT -> finish()
+                // Started as the screen went off, before the phone locked: if it
+                // comes back on still unlocked, this must not cover the app in use.
+                Intent.ACTION_SCREEN_ON -> finishUnlessLocked()
+            }
         }
+    }
+
+    /** Leaves at once when the screen is on and the phone is not locked: this page is for the lock screen only. */
+    private fun finishUnlessLocked() {
+        val power = getSystemService(android.os.PowerManager::class.java)
+        val keyguard = getSystemService(KeyguardManager::class.java)
+        if (power?.isInteractive == true && keyguard?.isKeyguardLocked != true) finish()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        finishUnlessLocked()
     }
     private var unlockedRegistered = false
 
@@ -139,7 +156,10 @@ class LockScreenLyricsActivity : ComponentActivity() {
             ContextCompat.registerReceiver(
                 this,
                 unlocked,
-                IntentFilter(Intent.ACTION_USER_PRESENT),
+                IntentFilter().apply {
+                    addAction(Intent.ACTION_USER_PRESENT)
+                    addAction(Intent.ACTION_SCREEN_ON)
+                },
                 ContextCompat.RECEIVER_EXPORTED,
             )
         }.isSuccess

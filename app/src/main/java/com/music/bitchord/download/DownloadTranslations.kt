@@ -16,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Translates a song's lyrics as it finishes downloading, and keeps the
@@ -119,24 +120,35 @@ object DownloadTranslations {
 
     /** Kept on disk as they come, so songs downloaded just before the app closed still go. */
     private fun gather(app: Context, song: Song) {
-        val count = synchronized(gatherLock) {
+        TranslationStatus.remember(song.videoId, song.title, song.artist)
+        // One timer at a time: each download restarts it, under the same lock
+        // as the list, so two finishing together cannot leave two behind.
+        synchronized(gatherLock) {
             val list = readWaiting(app).filter { it.videoId != song.videoId } +
                 Waiting(song.videoId, song.title, song.artist, song.albumName, song.durationText)
             writeWaiting(app, list)
-            list.size
-        }
-        TranslationStatus.remember(song.videoId, song.title, song.artist)
-        flushJob?.cancel()
-        flushJob = gatherScope.launch {
-            if (count < GATHER_SONGS) kotlinx.coroutines.delay(GATHER_QUIET_MS)
-            flush(app)
+            flushJob?.cancel()
+            val full = list.size >= GATHER_SONGS
+            flushJob = gatherScope.launch {
+                if (!full) kotlinx.coroutines.delay(GATHER_QUIET_MS)
+                flush(app)
+            }
         }
     }
 
+    /** One batch being made at a time, from whichever timer or start-up pass got there first. */
+    private val flushing = kotlinx.coroutines.sync.Mutex()
+
     /** Sends what has gathered as one batch, named for when it went. */
-    private fun flush(app: Context) {
-        val songs = synchronized(gatherLock) { readWaiting(app) }
-        if (songs.isEmpty()) return
+    private suspend fun flush(app: Context): Unit = flushing.withLock {
+        // Taken off the list as they are read, so no other flush can send them too;
+        // put back if the job could not start.
+        val songs = synchronized(gatherLock) {
+            val list = readWaiting(app)
+            writeWaiting(app, emptyList())
+            list
+        }
+        if (songs.isEmpty()) return@withLock
         val title = app.getString(
             com.music.bitchord.R.string.translate_ahead_download_job,
             java.text.SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(java.util.Date()),
@@ -156,11 +168,10 @@ object DownloadTranslations {
             model = LyricsTranslation.claudeModel,
             reading = AppSettings.translateAheadReading.value,
         )
-        // Taken off the list only once they are a job; otherwise they wait for the next start.
-        if (started) {
+        if (!started) {
             synchronized(gatherLock) {
-                val sent = songs.map { it.videoId }.toSet()
-                writeWaiting(app, readWaiting(app).filter { it.videoId !in sent })
+                val now = readWaiting(app)
+                writeWaiting(app, songs.filter { old -> now.none { it.videoId == old.videoId } } + now)
             }
         }
     }

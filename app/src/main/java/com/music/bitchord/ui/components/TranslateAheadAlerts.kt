@@ -98,32 +98,17 @@ class AheadAsk(
     val allSongs: List<Song> = songs,
 )
 
-/** Typical tokens of one song's translation, until this device has figures of its own. */
-private const val TYPICAL_INPUT_TOKENS = 2_500L
-private const val TYPICAL_OUTPUT_TOKENS = 3_000L
-
 /**
  * What translating [songs] songs ahead would cost at the batch rate, in
  * dollars: from what this device's own translations have taken per song where
  * the log has a few, otherwise from a typical song. An estimate, and on the
  * high side — songs already translated or without lyrics are not sent.
  */
-private fun aheadEstimateUsd(songs: Int, model: String, reading: Boolean): Double {
-    val past = ClaudeDiagnostics.entries.value.filter {
-        it.purpose == ClaudeDiagnostics.PURPOSE_TRANSLATE && !it.failed && it.inputTokens != null && it.outputTokens != null
-    }
-    val input = if (past.size >= 3) past.sumOf { it.inputTokens ?: 0L } / past.size else TYPICAL_INPUT_TOKENS
-    val output = if (past.size >= 3) past.sumOf { it.outputTokens ?: 0L } / past.size else TYPICAL_OUTPUT_TOKENS
-    val (inPrice, outPrice) = AppSettings.claudePricePerMillion(model + LyricsTranslation.BATCH_MODEL_SUFFIX)
-    val perSong = input * inPrice / 1_000_000.0 + output * outPrice / 1_000_000.0
-    return perSong * songs * (if (reading) 2 else 1)
-}
+private fun aheadEstimateUsd(songs: Int, model: String, reading: Boolean): Double =
+    TranslateAhead.estimateUsd(songs * (if (reading) 2 else 1), model)
 
-/** What is left of this month's limit, in dollars; null when no limit is set. */
-private fun remainingCapUsd(): Double? {
-    val cap = AppSettings.claudeMonthlyCap.value
-    return if (cap > 0.0) (cap - AppSettings.claudeSpentThisMonth()).coerceAtLeast(0.0) else null
-}
+/** What is left of this month's limit, batches still out held back; null when no limit is set. */
+private fun remainingCapUsd(): Double? = AppSettings.claudeBudgetLeft()
 
 /**
  * The menu's "Translate lyrics ahead": the dialog, or — once "don't show this

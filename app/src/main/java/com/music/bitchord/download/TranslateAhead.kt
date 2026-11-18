@@ -142,6 +142,8 @@ object TranslateAhead {
         val outputTokens: Long = 0,
         /** A [ClaudeFailure] name, for a batch that was not taken or could not be read. */
         val error: String? = null,
+        /** What it was expected to cost when sent: held against the monthly limit until it is collected. */
+        val estimatedUsd: Double = 0.0,
     )
 
     @Serializable
@@ -329,6 +331,35 @@ object TranslateAhead {
         }
     }
 
+    // ---- What batches are expected to cost ---------------------------------
+
+    /** Typical tokens of one song's translation, until this device has figures of its own. */
+    private const val TYPICAL_INPUT_TOKENS = 2_500L
+    private const val TYPICAL_OUTPUT_TOKENS = 3_000L
+
+    /**
+     * What [requests] translation or pronunciation requests would cost in a
+     * batch with [model], in dollars: from what this device's own translations
+     * have taken where the log has a few, otherwise from a typical song.
+     */
+    fun estimateUsd(requests: Int, model: String): Double {
+        val past = com.music.bitchord.data.lyrics.ClaudeDiagnostics.entries.value.filter {
+            it.purpose == com.music.bitchord.data.lyrics.ClaudeDiagnostics.PURPOSE_TRANSLATE &&
+                !it.failed && it.inputTokens != null && it.outputTokens != null
+        }
+        val input = if (past.size >= 3) past.sumOf { it.inputTokens ?: 0L } / past.size else TYPICAL_INPUT_TOKENS
+        val output = if (past.size >= 3) past.sumOf { it.outputTokens ?: 0L } / past.size else TYPICAL_OUTPUT_TOKENS
+        val (inPrice, outPrice) = AppSettings.claudePricePerMillion(model + LyricsTranslation.BATCH_MODEL_SUFFIX)
+        return (input * inPrice / 1_000_000.0 + output * outPrice / 1_000_000.0) * requests
+    }
+
+    /**
+     * What the batches still out are expected to cost. Their tokens are only
+     * counted once collected, so the monthly limit holds this back meanwhile.
+     */
+    fun pendingUsd(): Double =
+        _jobs.value.sumOf { job -> job.chunks.filter { it.state == State.WAITING }.sumOf { it.estimatedUsd } }
+
     // ---- Playlists watched for new songs ------------------------------------
 
     /**
@@ -496,9 +527,11 @@ object TranslateAhead {
      * Moves every job as far as it will go just now. One caller at a time; a
      * second one arriving meanwhile has nothing to add and returns.
      */
-    internal suspend fun work(app: Context) {
+    internal suspend fun work(app: Context, waitForRunning: Boolean = false) {
         loaded.await()
-        if (!working.tryLock()) return
+        // A worker waits its turn, which keeps the process alive while the pass
+        // already running finishes; anything else would only repeat that pass.
+        if (waitForRunning) working.lock() else if (!working.tryLock()) return
         try {
             // Jobs added while this runs are picked up by the next pass.
             while (true) {
@@ -636,7 +669,15 @@ object TranslateAhead {
     private suspend fun sendChunk(app: Context, job: Job, pending: Pending): ClaudeFailure? {
         val index = (_jobs.value.firstOrNull { it.id == job.id }?.chunks?.maxOfOrNull { it.index } ?: -1) + 1
         val songs = pending.videoIds.toSet()
-        val sent = LyricsTranslation.submitAhead(pending.requests.toList(), job.model)
+        val estimate = estimateUsd(pending.requests.size, job.model)
+        // Over the monthly limit with this batch on top of what is spent and what is still out:
+        // not sent, and nothing after it either.
+        val left = AppSettings.claudeBudgetLeft()
+        val sent = if (left != null && estimate > left) {
+            LyricsTranslation.AheadSubmitted(null, ClaudeFailure.BUDGET, "not sent: over this month's limit")
+        } else {
+            LyricsTranslation.submitAhead(pending.requests.toList(), job.model)
+        }
         val batchId = sent.batchId
         if (batchId == null) {
             val failure = sent.failure ?: ClaudeFailure.ERROR
@@ -671,12 +712,24 @@ object TranslateAhead {
         }
         edit(job.id) { now ->
             now.copy(
-                chunks = now.chunks + Chunk(index = index, batchId = batchId, requests = pending.requests.size),
+                chunks = now.chunks + Chunk(
+                    index = index,
+                    batchId = batchId,
+                    requests = pending.requests.size,
+                    estimatedUsd = estimate,
+                ),
                 requests = now.requests + pending.requests.size,
                 tracks = now.tracks.map { track ->
                     if (track.videoId in songs && track.chunk == null) track.copy(chunk = index) else track
                 },
             )
+        }
+        // Canceled while this batch was going up: [cancel] could not have known
+        // of it, so it is stopped here, and the job collects what it answered.
+        val state = _jobs.value.firstOrNull { it.id == job.id }?.state
+        if (state == State.CANCELED || state == State.CANCELING) {
+            LyricsTranslation.cancelAhead(batchId)
+            if (state == State.CANCELED) edit(job.id) { it.copy(state = State.CANCELING, finishedAt = null) }
         }
         return null
     }
@@ -973,7 +1026,7 @@ object TranslateAhead {
 class TranslateAheadWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         TranslateAhead.init(applicationContext)
-        TranslateAhead.work(applicationContext)
+        TranslateAhead.work(applicationContext, waitForRunning = true)
         return Result.success()
     }
 }
@@ -983,6 +1036,8 @@ class TranslateAheadWatchWorker(context: Context, params: WorkerParameters) : Co
     override suspend fun doWork(): Result {
         TranslateAhead.init(applicationContext)
         TranslateAhead.checkWatches(applicationContext)
+        // Whatever the check started is seen through here, while the worker keeps the process up.
+        TranslateAhead.work(applicationContext, waitForRunning = true)
         return Result.success()
     }
 }

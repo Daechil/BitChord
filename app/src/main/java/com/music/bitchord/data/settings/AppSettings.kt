@@ -1809,8 +1809,19 @@ object AppSettings {
     }
 
     private fun claudeOverBudget(): Boolean {
+        val left = claudeBudgetLeft() ?: return false
+        return left <= 0.0
+    }
+
+    /**
+     * What is left of this month's limit, in dollars, with the batches still
+     * out held back at what they are expected to cost; null with no limit.
+     */
+    fun claudeBudgetLeft(): Double? {
         val cap = claudeMonthlyCap.value
-        return cap > 0.0 && claudeSpentThisMonth() >= cap
+        if (cap <= 0.0) return null
+        val pending = runCatching { com.music.bitchord.download.TranslateAhead.pendingUsd() }.getOrDefault(0.0)
+        return (cap - claudeSpentThisMonth() - pending).coerceAtLeast(0.0)
     }
 
     fun setClaudeSonnetStandIn(value: Boolean) {

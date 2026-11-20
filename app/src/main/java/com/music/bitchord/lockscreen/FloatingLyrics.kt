@@ -66,6 +66,8 @@ object FloatingLyrics {
     /** Android lets touches through an overlay only at this opacity or below. */
     private const val PASS_THROUGH_ALPHA = 0.8f
     private const val TRANSLATION_RECHECK_MS = 15_000L
+    /** Where the bar first appears, below the status bar. */
+    private const val DEFAULT_Y_DP = 120
 
     private var scope: CoroutineScope? = null
     private var appContext: Context? = null
@@ -90,8 +92,9 @@ object FloatingLyrics {
     }
 
     private var root: LinearLayout? = null
-    private var lineView: TextView? = null
-    private var subView: TextView? = null
+    private var lineView: EdgedTextView? = null
+    private var subView: EdgedTextView? = null
+    private var nextView: EdgedTextView? = null
     private var params: WindowManager.LayoutParams? = null
     private var appliedLock: Boolean? = null
     private var appliedLook: String? = null
@@ -161,7 +164,9 @@ object FloatingLyrics {
         applyLock(context)
         applyLook(context)
 
-        val index = lines.indexOfLast { it.timeMs <= positionMs }
+        // The player's offset, then the bar's own on top: positive shows the words later, as in the player.
+        val lyricsMs = positionMs - AppSettings.lyricsOffsetMs.value - AppSettings.floatingLyricsOffsetMs.value
+        val index = lines.indexOfLast { it.timeMs <= lyricsMs }
         if (!translationComplete && System.currentTimeMillis() - lastTranslationCheck > TRANSLATION_RECHECK_MS) {
             lookUpTranslation(context.applicationContext)
         }
@@ -176,6 +181,31 @@ object FloatingLyrics {
         lineView?.text = main ?: "♪"
         subView?.text = sub.orEmpty()
         subView?.visibility = if (sub == null) View.GONE else View.VISIBLE
+        // The next line with words, in what the bar shows: its translation where only that is shown.
+        val next = if (AppSettings.floatingLyricsNextLine.value) {
+            val at = (index + 1 until lines.size).firstOrNull { !lines[it].isGap && lines[it].text.isNotBlank() }
+            at?.let { i ->
+                val own = lines[i].text
+                val its = translated?.getOrNull(i)?.takeIf { it.isNotBlank() && it != own }
+                if (show == AppSettings.FLOATING_TRANSLATION && its != null) its else own
+            }
+        } else {
+            null
+        }
+        nextView?.text = next.orEmpty()
+        nextView?.visibility = if (next == null) View.GONE else View.VISIBLE
+    }
+
+    /** Back to where the bar first appears, top centre: for a bar dragged off the screen. */
+    fun resetPosition(context: Context) {
+        val app = context.applicationContext
+        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(KEY_X).remove(KEY_Y).apply()
+        val view = root ?: return
+        val layout = params ?: return
+        val density = app.resources.displayMetrics.density
+        layout.x = 0
+        layout.y = (DEFAULT_Y_DP * density).toInt()
+        runCatching { app.getSystemService(WindowManager::class.java)?.updateViewLayout(view, layout) }
     }
 
     /**
@@ -229,7 +259,7 @@ object FloatingLyrics {
         val maxWidth = context.resources.displayMetrics.widthPixels - (32 * density).toInt()
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-        val line = TextView(context).apply {
+        val line = EdgedTextView(context).apply {
             setTextColor(0xFFFFFFFF.toInt())
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             typeface = Typeface.DEFAULT_BOLD
@@ -238,10 +268,19 @@ object FloatingLyrics {
             gravity = Gravity.CENTER
             this.maxWidth = maxWidth
         }
-        val sub = TextView(context).apply {
+        val sub = EdgedTextView(context).apply {
             setTextColor(0xCCFFFFFF.toInt())
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             maxLines = 2
+            ellipsize = TextUtils.TruncateAt.END
+            gravity = Gravity.CENTER
+            this.maxWidth = maxWidth
+            visibility = View.GONE
+        }
+        val next = EdgedTextView(context).apply {
+            setTextColor(0x8CFFFFFF.toInt())
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
             gravity = Gravity.CENTER
             this.maxWidth = maxWidth
@@ -259,6 +298,7 @@ object FloatingLyrics {
             }
             addView(line)
             addView(sub)
+            addView(next)
         }
         val layout = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -269,7 +309,7 @@ object FloatingLyrics {
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
             x = prefs.getInt(KEY_X, 0)
-            y = prefs.getInt(KEY_Y, (120 * density).toInt())
+            y = prefs.getInt(KEY_Y, (DEFAULT_Y_DP * density).toInt())
         }
 
         val slop = ViewConfiguration.get(context).scaledTouchSlop
@@ -303,9 +343,15 @@ object FloatingLyrics {
                 MotionEvent.ACTION_MOVE -> {
                     val dx = event.rawX - downX
                     val dy = event.rawY - downY
-                    if (!dragging && (abs(dx) > slop || abs(dy) > slop)) {
+                    // Pinned, a move is no drag: the bar stays put, and only a hold or a tap counts.
+                    if (!dragging && !AppSettings.floatingLyricsPinned.value && (abs(dx) > slop || abs(dy) > slop)) {
                         dragging = true
                         handler.removeCallbacks(putAway)
+                    }
+                    if (AppSettings.floatingLyricsPinned.value && (abs(dx) > slop || abs(dy) > slop)) {
+                        // A finger that wandered is not a tap or a hold either.
+                        handler.removeCallbacks(putAway)
+                        held = true
                     }
                     if (dragging && !held) {
                         current.x = startX + dx.toInt()
@@ -331,6 +377,7 @@ object FloatingLyrics {
             root = bar
             lineView = line
             subView = sub
+            nextView = next
             params = layout
             appliedLock = null
             appliedLook = null
@@ -363,7 +410,9 @@ object FloatingLyrics {
     private fun applyLook(context: Context) {
         val size = AppSettings.floatingLyricsSize.value
         val opacity = AppSettings.floatingLyricsOpacity.value.coerceIn(10, 100)
-        val look = "$size/$opacity/${AppSettings.floatingLyricsShow.value}"
+        val edge = AppSettings.floatingLyricsEdge.value
+        val color = AppSettings.floatingLyricsTranslationColor.value
+        val look = "$size/$opacity/${AppSettings.floatingLyricsShow.value}/$edge/$color/${AppSettings.floatingLyricsNextLine.value}"
         if (look == appliedLook) return
         val view = root ?: return
         val scale = when (size) {
@@ -373,6 +422,25 @@ object FloatingLyrics {
         }
         lineView?.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f * scale)
         subView?.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f * scale)
+        nextView?.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f * scale)
+        subView?.setTextColor(AppSettings.FLOATING_COLORS[color] ?: 0xCCFFFFFF.toInt())
+        val density = context.resources.displayMetrics.density
+        listOfNotNull(lineView, subView, nextView).forEach { text ->
+            when (edge) {
+                AppSettings.FLOATING_EDGE_SHADOW -> {
+                    text.outlineWidth = 0f
+                    text.setShadowLayer(3f * density, 0f, 1.2f * density, 0xD9000000.toInt())
+                }
+                AppSettings.FLOATING_EDGE_OUTLINE -> {
+                    text.setShadowLayer(0f, 0f, 0f, 0)
+                    text.outlineWidth = 2.2f * density
+                }
+                else -> {
+                    text.setShadowLayer(0f, 0f, 0f, 0)
+                    text.outlineWidth = 0f
+                }
+            }
+        }
         view.background = GradientDrawable().apply {
             cornerRadius = 18 * context.resources.displayMetrics.density
             setColor(((opacity * 255 / 100) shl 24) or 0x121212)
@@ -404,6 +472,7 @@ object FloatingLyrics {
         root = null
         lineView = null
         subView = null
+        nextView = null
         params = null
         appliedLock = null
         appliedLook = null

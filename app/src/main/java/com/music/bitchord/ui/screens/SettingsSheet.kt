@@ -314,9 +314,6 @@ fun SettingsScreen(
     LaunchedEffect(storageOpen) {
         if (!storageOpen) storageUse = com.music.bitchord.data.lyrics.LyricsTranslation.storageUse()
     }
-    val floatingSize by AppSettings.floatingLyricsSize.collectAsStateWithLifecycle()
-    val floatingOpacity by AppSettings.floatingLyricsOpacity.collectAsStateWithLifecycle()
-    val floatingShow by AppSettings.floatingLyricsShow.collectAsStateWithLifecycle()
     val claudeKeyRejected by com.music.bitchord.data.lyrics.LyricsTranslation.claudeKeyRejected
         .collectAsStateWithLifecycle()
     val theme by AppSettings.themeMode.collectAsStateWithLifecycle()
@@ -1014,34 +1011,18 @@ fun SettingsScreen(
                         onClick = { AppSettings.setFloatingLyricsLocked(!floatingLyricsLocked) },
                     )
                 }
-                val floatingSizeTitle = stringResource(R.string.floating_lyrics_size)
-                row(floatingSizeTitle, "lyrics", "floating", "size", "font", "플로팅", "글자", "크기") {
+                val floatingSettingsTitle = stringResource(R.string.floating_settings)
+                row(
+                    floatingSettingsTitle, "lyrics", "floating", "size", "font", "opacity", "background", "translation",
+                    "outline", "shadow", "color", "sync", "offset", "position", "next line",
+                    "플로팅", "글자", "크기", "투명", "배경", "번역", "테두리", "그림자", "색", "싱크", "위치", "다음 줄",
+                ) {
                     SettingsRow(
                         icon = SfIcons.Translate,
-                        title = floatingSizeTitle,
-                        subtitle = stringResource(com.music.bitchord.ui.components.floatingSizeLabelRes(floatingSize)),
+                        title = floatingSettingsTitle,
+                        subtitleContent = { com.music.bitchord.ui.components.FloatingSettingsSubtitle() },
                         trailing = { Chevron() },
-                        onClick = { com.music.bitchord.ui.components.KoAlerts.floatingChoice.value = "size" },
-                    )
-                }
-                val floatingOpacityTitle = stringResource(R.string.floating_lyrics_opacity)
-                row(floatingOpacityTitle, "lyrics", "floating", "opacity", "background", "플로팅", "투명", "배경") {
-                    SettingsRow(
-                        icon = SfIcons.Translate,
-                        title = floatingOpacityTitle,
-                        subtitle = "$floatingOpacity%",
-                        trailing = { Chevron() },
-                        onClick = { com.music.bitchord.ui.components.KoAlerts.floatingChoice.value = "opacity" },
-                    )
-                }
-                val floatingShowTitle = stringResource(R.string.floating_lyrics_show)
-                row(floatingShowTitle, "lyrics", "floating", "translation", "original", "플로팅", "번역", "원문") {
-                    SettingsRow(
-                        icon = SfIcons.Translate,
-                        title = floatingShowTitle,
-                        subtitle = stringResource(com.music.bitchord.ui.components.floatingShowLabelRes(floatingShow)),
-                        trailing = { Chevron() },
-                        onClick = { com.music.bitchord.ui.components.KoAlerts.floatingChoice.value = "show" },
+                        onClick = { com.music.bitchord.ui.components.KoAlerts.floatingSettings.value = true },
                     )
                 }
             }

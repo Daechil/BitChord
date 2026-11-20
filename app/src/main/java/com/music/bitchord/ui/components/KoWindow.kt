@@ -377,6 +377,8 @@ internal fun WindowChoice(
     checked: Boolean,
     detail: String? = null,
     enabled: Boolean = true,
+    /** A dot of this colour in front, for a choice that is a colour. */
+    swatch: androidx.compose.ui.graphics.Color? = null,
     onClick: () -> Unit,
 ) {
     Row(
@@ -388,6 +390,15 @@ internal fun WindowChoice(
             .padding(horizontal = ROW_INSET, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (swatch != null) {
+            Box(
+                Modifier
+                    .size(20.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(swatch),
+            )
+            Spacer(Modifier.width(12.dp))
+        }
         Column(Modifier.weight(1f)) {
             Text(
                 text = label,
@@ -447,5 +458,97 @@ internal fun LazyListScope.windowActions(buttons: List<WindowButton>, header: St
     if (buttons.isEmpty()) return
     windowCard(rows = buttons, header = header, footer = footer) {
         WindowAction(label = it.label, destructive = it.destructive, enabled = it.enabled, onClick = it.onClick)
+    }
+}
+
+/** A setting that is on or off: the row and the switch both turn it. */
+@Composable
+internal fun WindowSwitch(label: String, detail: String? = null, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onChange(!checked) }
+            .heightIn(min = 48.dp)
+            .padding(horizontal = ROW_INSET, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+            if (!detail.isNullOrEmpty()) {
+                Text(
+                    text = detail,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        IosSwitch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
+/** A figure moved a step at a time: "−", the value, "+". */
+@Composable
+internal fun WindowStepper(
+    label: String,
+    value: String,
+    detail: String? = null,
+    canLower: Boolean,
+    canRaise: Boolean,
+    onLower: () -> Unit,
+    onRaise: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .padding(start = ROW_INSET, end = 6.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+            if (!detail.isNullOrEmpty()) {
+                Text(
+                    text = detail,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        StepButton(text = "−", enabled = canLower, onClick = onLower)
+        Text(
+            text = value,
+            modifier = Modifier.width(64.dp),
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+            textAlign = TextAlign.Center,
+        )
+        StepButton(text = "+", enabled = canRaise, onClick = onRaise)
+    }
+}
+
+@Composable
+private fun StepButton(text: String, enabled: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(androidx.compose.foundation.shape.CircleShape)
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = if (enabled) 0.14f else 0.05f))
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary.copy(alpha = if (enabled) 1f else 0.35f),
+        )
     }
 }

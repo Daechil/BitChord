@@ -74,6 +74,9 @@ object KoAlerts {
 
     /** The translate-ahead batch size choice. */
     val chunkSize = MutableStateFlow(false)
+
+    /** The floating bar's window of looks, timing and position. */
+    val floatingSettings = MutableStateFlow(false)
 }
 
 /** The batch sizes offered, in songs. */
@@ -157,6 +160,10 @@ fun ClaudeAlerts(
             },
             onDismiss = { KoAlerts.chunkSize.value = false },
         )
+    }
+    val showFloating by KoAlerts.floatingSettings.collectAsStateWithLifecycle()
+    if (showFloating) {
+        FloatingLyricsWindow(onDismiss = { KoAlerts.floatingSettings.value = false })
     }
     val showCost by KoAlerts.costSettings.collectAsStateWithLifecycle()
     if (showCost) {

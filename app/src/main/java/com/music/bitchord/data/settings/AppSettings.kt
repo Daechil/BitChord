@@ -601,6 +601,37 @@ object AppSettings {
     /** What the floating bar shows: [FLOATING_BOTH], [FLOATING_ORIGINAL] or [FLOATING_TRANSLATION]. */
     val floatingLyricsShow = MutableStateFlow(FLOATING_BOTH)
 
+    /** The floating bar cannot be dragged; tapping and holding it work as before. Unlike [floatingLyricsLocked], touches still land on it. */
+    val floatingLyricsPinned = MutableStateFlow(false)
+
+    /** The floating bar shows the next line too, smaller, under the one being sung. */
+    val floatingLyricsNextLine = MutableStateFlow(false)
+
+    /** What is drawn around the floating bar's letters: [FLOATING_EDGE_NONE], [FLOATING_EDGE_SHADOW] or [FLOATING_EDGE_OUTLINE]. */
+    val floatingLyricsEdge = MutableStateFlow(FLOATING_EDGE_NONE)
+
+    /** The floating bar's translation colour, one of [FLOATING_COLORS]' keys. */
+    val floatingLyricsTranslationColor = MutableStateFlow(FLOATING_COLOR_WHITE)
+
+    /** Moves the floating bar's lyrics on top of the player's own offset, in milliseconds; positive shows them later. */
+    val floatingLyricsOffsetMs = MutableStateFlow(0)
+
+    const val FLOATING_EDGE_NONE = "none"
+    const val FLOATING_EDGE_SHADOW = "shadow"
+    const val FLOATING_EDGE_OUTLINE = "outline"
+    const val FLOATING_COLOR_WHITE = "white"
+    const val FLOATING_OFFSET_LIMIT_MS = 1_000
+
+    /** The floating bar's translation colours, in the order offered, as ARGB. */
+    val FLOATING_COLORS: Map<String, Int> = linkedMapOf(
+        FLOATING_COLOR_WHITE to 0xE6FFFFFF.toInt(),
+        "yellow" to 0xFFFFD60A.toInt(),
+        "sky" to 0xFF64D2FF.toInt(),
+        "green" to 0xFF7CE38B.toInt(),
+        "pink" to 0xFFFF8FB1.toInt(),
+        "orange" to 0xFFFFB04D.toInt(),
+    )
+
     const val FLOATING_SMALL = "small"
     const val FLOATING_MEDIUM = "medium"
     const val FLOATING_LARGE = "large"
@@ -1287,6 +1318,15 @@ object AppSettings {
         floatingLyricsSize.value = prefs.getString(KEY_FLOATING_LYRICS_SIZE, null) ?: FLOATING_MEDIUM
         floatingLyricsOpacity.value = prefs.getInt(KEY_FLOATING_LYRICS_OPACITY, 85)
         floatingLyricsShow.value = prefs.getString(KEY_FLOATING_LYRICS_SHOW, null) ?: FLOATING_BOTH
+        floatingLyricsPinned.value = prefs.getBoolean(KEY_FLOATING_LYRICS_PINNED, false)
+        floatingLyricsNextLine.value = prefs.getBoolean(KEY_FLOATING_LYRICS_NEXT_LINE, false)
+        floatingLyricsEdge.value = prefs.getString(KEY_FLOATING_LYRICS_EDGE, null)
+            ?.takeIf { it == FLOATING_EDGE_NONE || it == FLOATING_EDGE_SHADOW || it == FLOATING_EDGE_OUTLINE }
+            ?: FLOATING_EDGE_NONE
+        floatingLyricsTranslationColor.value = prefs.getString(KEY_FLOATING_LYRICS_COLOR, null)
+            ?.takeIf { it in FLOATING_COLORS } ?: FLOATING_COLOR_WHITE
+        floatingLyricsOffsetMs.value = prefs.getInt(KEY_FLOATING_LYRICS_OFFSET, 0)
+            .coerceIn(-FLOATING_OFFSET_LIMIT_MS, FLOATING_OFFSET_LIMIT_MS)
         translateAheadIntro.value = prefs.getBoolean(KEY_TRANSLATE_AHEAD_INTRO, true)
         translateAheadModel.value = prefs.getString(KEY_TRANSLATE_AHEAD_MODEL, null)
             ?: com.music.bitchord.data.lyrics.LyricsTranslation.CLAUDE_HAIKU
@@ -1945,6 +1985,32 @@ object AppSettings {
     fun setFloatingLyricsShow(value: String) {
         floatingLyricsShow.value = value
         prefs.edit().putString(KEY_FLOATING_LYRICS_SHOW, value).apply()
+    }
+
+    fun setFloatingLyricsPinned(value: Boolean) {
+        floatingLyricsPinned.value = value
+        prefs.edit().putBoolean(KEY_FLOATING_LYRICS_PINNED, value).apply()
+    }
+
+    fun setFloatingLyricsNextLine(value: Boolean) {
+        floatingLyricsNextLine.value = value
+        prefs.edit().putBoolean(KEY_FLOATING_LYRICS_NEXT_LINE, value).apply()
+    }
+
+    fun setFloatingLyricsEdge(value: String) {
+        floatingLyricsEdge.value = value
+        prefs.edit().putString(KEY_FLOATING_LYRICS_EDGE, value).apply()
+    }
+
+    fun setFloatingLyricsTranslationColor(value: String) {
+        floatingLyricsTranslationColor.value = value
+        prefs.edit().putString(KEY_FLOATING_LYRICS_COLOR, value).apply()
+    }
+
+    fun setFloatingLyricsOffsetMs(value: Int) {
+        val clamped = value.coerceIn(-FLOATING_OFFSET_LIMIT_MS, FLOATING_OFFSET_LIMIT_MS)
+        floatingLyricsOffsetMs.value = clamped
+        prefs.edit().putInt(KEY_FLOATING_LYRICS_OFFSET, clamped).apply()
     }
 
     fun setTranslateAheadIntro(value: Boolean) {
@@ -2860,6 +2926,11 @@ object AppSettings {
     private const val KEY_CLAUDE_SPEECH = "claude_speech"
     private const val KEY_CLAUDE_MODE = "claude_mode"
     private const val KEY_CLAUDE_MONTHLY_CAP = "ko_claude_monthly_cap"
+    private const val KEY_FLOATING_LYRICS_PINNED = "ko_floating_lyrics_pinned"
+    private const val KEY_FLOATING_LYRICS_NEXT_LINE = "ko_floating_lyrics_next_line"
+    private const val KEY_FLOATING_LYRICS_EDGE = "ko_floating_lyrics_edge"
+    private const val KEY_FLOATING_LYRICS_COLOR = "ko_floating_lyrics_color"
+    private const val KEY_FLOATING_LYRICS_OFFSET = "ko_floating_lyrics_offset"
     private const val KEY_MONEY_DISPLAY = "ko_money_display"
     private const val KEY_KRW_PER_USD = "ko_krw_per_usd"
     private const val KEY_CLAUDE_CAP_WARN = "ko_claude_cap_warn"

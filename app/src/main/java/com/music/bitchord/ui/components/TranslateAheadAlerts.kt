@@ -155,19 +155,18 @@ internal fun aheadPlan(
     ids: List<String>,
     reading: Boolean,
 ): AheadPlan {
-    val state = com.music.bitchord.download.TranslationStatus.State
     var send = 0
     var noLyrics = 0
     var already = 0
     var requests = 0
     for (id in ids) {
         val status = statuses[id]
-        if (status?.state == state.NO_LYRICS) {
+        if (status?.state == com.music.bitchord.download.TranslationStatus.State.NO_LYRICS) {
             noLyrics++
             continue
         }
         val needsTranslation = status?.covered != true
-        val needsReading = reading && status?.reading == null && status?.state != state.SAME_LANGUAGE
+        val needsReading = reading && status?.reading == null && status?.state != com.music.bitchord.download.TranslationStatus.State.SAME_LANGUAGE
         val asked = (if (needsTranslation) 1 else 0) + (if (needsReading) 1 else 0)
         if (asked == 0) already++ else send++
         requests += asked

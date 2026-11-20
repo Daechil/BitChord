@@ -152,7 +152,8 @@ object PlayedLyrics {
 
     /** The least recently used songs go once there are more than [MAX_SONGS]. */
     private fun trim() {
-        val files = dir?.listFiles { file -> file.name.endsWith(".json") } ?: return
+        // The songs' files only: the list of songs with no lyrics lives beside them.
+        val files = dir?.listFiles { file -> file.name.endsWith(".json") && file.name != MISSING_FILE } ?: return
         if (files.size <= MAX_SONGS) return
         files.map { it to it.lastModified() }
             .sortedBy { it.second }

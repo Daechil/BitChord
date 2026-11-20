@@ -238,7 +238,8 @@ object TranslateAhead {
     /** Starts a job for [songs]; its progress and outcome are in [jobs] from here on. False when it could not start. */
     fun start(title: String, songs: List<Song>, model: String, reading: Boolean): Boolean {
         val app = context ?: return false
-        val tracks = songs.distinctBy { it.videoId }.map { song ->
+        // Songs found to have no lyrics are left out: there is nothing to send for them.
+        val tracks = songs.distinctBy { it.videoId }.filterNot { PlayedLyrics.isMissing(it.videoId) }.map { song ->
             Track(
                 videoId = song.videoId,
                 title = song.title,
@@ -461,15 +462,25 @@ object TranslateAhead {
                 if (!listing.complete) continue
                 val known = watch.known.toHashSet()
                 val fresh = listing.songs.filter { it.videoId !in known }
-                if (fresh.isNotEmpty()) {
-                    fresh.forEach { TranslationStatus.remember(it.videoId, it.title, it.artist) }
-                    start(app.getString(R.string.translate_ahead_watch_job, watch.title), fresh, watch.model, watch.reading)
+                // Songs with no lyrics have nothing to send; the rest are only
+                // counted as known once a job has really started for them — with
+                // Claude off or its key gone, they are tried again next time
+                // rather than passed over for good.
+                val sendable = fresh.filterNot { PlayedLyrics.isMissing(it.videoId) }
+                fresh.forEach { TranslationStatus.remember(it.videoId, it.title, it.artist) }
+                val started = sendable.isEmpty() || (
+                    available() &&
+                        start(app.getString(R.string.translate_ahead_watch_job, watch.title), sendable, watch.model, watch.reading)
+                    )
+                val updated = if (started) {
+                    watch.copy(
+                        known = (watch.known + fresh.map { it.videoId }).distinct(),
+                        lastChecked = System.currentTimeMillis(),
+                        sent = watch.sent + sendable.size,
+                    )
+                } else {
+                    watch.copy(lastChecked = System.currentTimeMillis())
                 }
-                val updated = watch.copy(
-                    known = (watch.known + fresh.map { it.videoId }).distinct(),
-                    lastChecked = System.currentTimeMillis(),
-                    sent = watch.sent + fresh.size,
-                )
                 setWatches(app, _watches.value.map { if (it.browseId == watch.browseId) updated else it })
             }
         } finally {
@@ -793,6 +804,7 @@ object TranslateAhead {
         savedUri?.let { uri -> EmbeddedLyrics.forUri(app, uri)?.let { return LyricsLookup.Found(it) } }
         // What the player showed, from whichever source it found or was told to use.
         PlayedLyrics.get(track.videoId)?.let { return LyricsLookup.Found(it) }
+        if (PlayedLyrics.isMissing(track.videoId)) return LyricsLookup.Missing
         if (!online(app)) return LyricsLookup.Failed
         return try {
             // A playlist row may come without a length, and sources match a recording by it.
@@ -815,7 +827,10 @@ object TranslateAhead {
                 // Every source answered and none had them; but with the connection
                 // gone halfway, their silence says nothing.
                 !online(app) -> LyricsLookup.Failed
-                else -> LyricsLookup.Missing
+                else -> {
+                    PlayedLyrics.markMissing(track.videoId)
+                    LyricsLookup.Missing
+                }
             }
         } catch (cancelled: CancellationException) {
             throw cancelled

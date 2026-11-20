@@ -37,6 +37,63 @@ object PlayedLyrics {
     fun init(context: Context) {
         if (dir != null) return
         dir = File(context.applicationContext.filesDir, DIRECTORY)
+        scope.launch { loadMissing() }
+    }
+
+    // ---- Songs with no lyrics ------------------------------------------------
+
+    /**
+     * Songs every source was asked about and none had lyrics for, with when:
+     * left out of translating ahead, rather than looked up again — up to a
+     * minute each — every time a playlist holding them is sent. Asked again
+     * after [MISSING_FOR_MS], since sources add lyrics, and forgotten as soon
+     * as the player shows lyrics for one.
+     */
+    private const val MISSING_FILE = "no_lyrics.json"
+    private const val MISSING_FOR_MS = 30L * 24L * 60L * 60L * 1000L
+    private val missing = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    private val missingSerializer = kotlinx.serialization.serializer<Map<String, Long>>()
+
+    private fun missingFile(): File? = dir?.let { File(it, MISSING_FILE) }
+
+    private fun loadMissing() {
+        runCatching {
+            val file = missingFile()?.takeIf { it.isFile } ?: return
+            val saved = json.decodeFromString(missingSerializer, file.readText())
+            missing.putAll(saved)
+        }
+    }
+
+    private fun saveMissing() {
+        scope.launch {
+            runCatching {
+                synchronized(lock) {
+                    val file = missingFile() ?: return@synchronized
+                    file.parentFile?.mkdirs()
+                    val now = System.currentTimeMillis()
+                    val kept = missing.filterValues { now - it < MISSING_FOR_MS }
+                    file.writeText(json.encodeToString(missingSerializer, kept))
+                }
+            }
+        }
+    }
+
+    /** Whether [videoId] was found to have no lyrics, recently enough to believe it. */
+    fun isMissing(videoId: String): Boolean {
+        val at = missing[videoId] ?: return false
+        return System.currentTimeMillis() - at < MISSING_FOR_MS
+    }
+
+    /** Notes that no source had lyrics for [videoId]. */
+    fun markMissing(videoId: String) {
+        if (videoId.isBlank()) return
+        missing[videoId] = System.currentTimeMillis()
+        saveMissing()
+    }
+
+    /** Looked for again next time: lyrics turned up, or the listener asked. */
+    fun clearMissing(videoId: String) {
+        if (missing.remove(videoId) != null) saveMissing()
     }
 
     private fun file(videoId: String): File? {
@@ -50,6 +107,7 @@ object PlayedLyrics {
     /** Keeps [lines] as [videoId]'s, replacing what was kept before; written off the caller's thread. */
     fun remember(videoId: String, source: String?, lines: List<LyricLine>) {
         if (videoId.isBlank() || lines.none { it.text.isNotBlank() }) return
+        clearMissing(videoId)
         val saved = Saved(
             videoId = videoId,
             source = source,

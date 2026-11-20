@@ -26,6 +26,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,6 +56,7 @@ import dev.chrisbanes.haze.HazeState
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 /**
  * The alerts of [TranslateAhead], shown by the flags in [KoAlerts]: hosted by
@@ -85,15 +87,6 @@ class AheadAsk(
     val allSongs: List<Song> = songs,
 )
 
-/**
- * What translating [songs] songs ahead would cost at the batch rate, in
- * dollars: from what this device's own translations have taken per song where
- * the log has a few, otherwise from a typical song. An estimate, and on the
- * high side — songs already translated or without lyrics are not sent.
- */
-private fun aheadEstimateUsd(songs: Int, model: String, reading: Boolean): Double =
-    TranslateAhead.estimateUsd(songs * (if (reading) 2 else 1), model)
-
 /** What is left of this month's limit, batches still out held back; null when no limit is set. */
 private fun remainingCapUsd(): Double? = AppSettings.claudeBudgetLeft()
 
@@ -115,20 +108,71 @@ fun requestTranslateAhead(
     }
     val model = AppSettings.translateAheadModel.value
     val reading = AppSettings.translateAheadReading.value
-    val estimate = aheadEstimateUsd(songs.size, model, reading)
-    val remaining = remainingCapUsd()
-    if (remaining != null && estimate > remaining) {
-        Toast.makeText(
-            context,
-            KoFormat(context).let { format ->
-                context.getString(R.string.translate_ahead_over_cap, format.money(estimate), format.money(remaining))
-            },
-            Toast.LENGTH_LONG,
-        ).show()
-        return
+    requestScope.launch {
+        val ids = songs.map { it.videoId }.distinct()
+        val plan = aheadPlan(com.music.bitchord.download.TranslationStatus.statusOf(context, ids), ids, reading)
+        if (plan.requests == 0) {
+            Toast.makeText(context, context.getString(R.string.translate_ahead_nothing), Toast.LENGTH_LONG).show()
+            return@launch
+        }
+        val estimate = TranslateAhead.estimateUsd(plan.requests, model)
+        val remaining = remainingCapUsd()
+        if (remaining != null && estimate > remaining) {
+            Toast.makeText(
+                context,
+                KoFormat(context).let { format ->
+                    context.getString(R.string.translate_ahead_over_cap, format.money(estimate), format.money(remaining))
+                },
+                Toast.LENGTH_LONG,
+            ).show()
+            return@launch
+        }
+        TranslateAhead.start(title, songs, model, reading)
+        Toast.makeText(context, context.getString(R.string.translate_ahead_started, title), Toast.LENGTH_LONG).show()
     }
-    TranslateAhead.start(title, songs, model, reading)
-    Toast.makeText(context, context.getString(R.string.translate_ahead_started, title), Toast.LENGTH_LONG).show()
+}
+
+/** Where a request from a menu runs: it looks at what is stored before sending. */
+private val requestScope = kotlinx.coroutines.MainScope()
+
+/**
+ * What sending [ids] ahead would really ask for: songs with no lyrics are
+ * left out, and a translation (or pronunciation) already stored is not asked
+ * again — so the estimate and the limit check count only what goes.
+ */
+internal class AheadPlan(
+    val songs: Int,
+    /** Songs with at least one request. */
+    val send: Int,
+    val noLyrics: Int,
+    /** Songs whose every wanted answer is stored already. */
+    val already: Int,
+    val requests: Int,
+)
+
+internal fun aheadPlan(
+    statuses: Map<String, com.music.bitchord.download.TranslationStatus.SongStatus>,
+    ids: List<String>,
+    reading: Boolean,
+): AheadPlan {
+    val state = com.music.bitchord.download.TranslationStatus.State
+    var send = 0
+    var noLyrics = 0
+    var already = 0
+    var requests = 0
+    for (id in ids) {
+        val status = statuses[id]
+        if (status?.state == state.NO_LYRICS) {
+            noLyrics++
+            continue
+        }
+        val needsTranslation = status?.covered != true
+        val needsReading = reading && status?.reading == null && status?.state != state.SAME_LANGUAGE
+        val asked = (if (needsTranslation) 1 else 0) + (if (needsReading) 1 else 0)
+        if (asked == 0) already++ else send++
+        requests += asked
+    }
+    return AheadPlan(ids.size, send, noLyrics, already, requests)
 }
 
 /**
@@ -143,7 +187,13 @@ private fun TranslateAheadAskAlert(hazeState: HazeState, ask: AheadAsk, onDismis
     var dontShow by remember { mutableStateOf(false) }
     var watch by remember { mutableStateOf(TranslateAhead.isWatched(ask.browseId)) }
     val askNotifications = rememberNotificationAsk()
-    val count = remember(ask) { ask.songs.distinctBy { it.videoId }.size }
+    val ids = remember(ask) { ask.songs.map { it.videoId }.distinct() }
+    val count = ids.size
+    var statuses by remember(ask) { mutableStateOf<Map<String, com.music.bitchord.download.TranslationStatus.SongStatus>?>(null) }
+    LaunchedEffect(ask) { statuses = com.music.bitchord.download.TranslationStatus.statusOf(context, ids) }
+    // While the statuses are read, every song is counted, as before.
+    val plan = statuses?.let { aheadPlan(it, ids, reading) }
+    val requests = plan?.requests ?: (count * if (reading) 2 else 1)
     val language = remember {
         val tag = com.music.bitchord.download.DownloadTranslations.targetLanguage(context)
         Locale.forLanguageTag(tag.replace('_', '-')).getDisplayName(Locale.getDefault()).ifBlank { tag }
@@ -153,8 +203,8 @@ private fun TranslateAheadAskAlert(hazeState: HazeState, ask: AheadAsk, onDismis
         stringResource(claudeSpeechLabelRes(LyricsTranslation.translationSpeech)),
         stringResource(claudeModeLabelRes(LyricsTranslation.translationMode)),
     ).joinToString(" · ")
-    val haikuUsd = aheadEstimateUsd(count, LyricsTranslation.CLAUDE_HAIKU, reading)
-    val sonnetUsd = aheadEstimateUsd(count, LyricsTranslation.CLAUDE_SONNET, reading)
+    val haikuUsd = TranslateAhead.estimateUsd(requests, LyricsTranslation.CLAUDE_HAIKU)
+    val sonnetUsd = TranslateAhead.estimateUsd(requests, LyricsTranslation.CLAUDE_SONNET)
     val estimate = if (model == LyricsTranslation.CLAUDE_SONNET) sonnetUsd else haikuUsd
     val remaining = remainingCapUsd()
     val overCap = remaining != null && estimate > remaining
@@ -164,6 +214,17 @@ private fun TranslateAheadAskAlert(hazeState: HazeState, ask: AheadAsk, onDismis
     val message = listOfNotNull(
         stringResource(R.string.translate_ahead_description),
         stringResource(R.string.translate_ahead_scope, count, style),
+        if (plan == null) {
+            stringResource(R.string.translate_ahead_checking)
+        } else if (plan.requests == 0) {
+            stringResource(R.string.translate_ahead_nothing)
+        } else {
+            listOfNotNull(
+                stringResource(R.string.translate_ahead_plan, count, plan.send),
+                stringResource(R.string.translate_ahead_plan_already, plan.already).takeIf { plan.already > 0 },
+                stringResource(R.string.translate_ahead_plan_no_lyrics, plan.noLyrics).takeIf { plan.noLyrics > 0 },
+            ).joinToString(" ")
+        },
         stringResource(R.string.translate_ahead_scope_chunks, chunk, (count + chunk - 1) / chunk.coerceAtLeast(1))
             .takeIf { count > chunk },
         stringResource(R.string.translate_ahead_over_cap, usd(estimate), usd(remaining ?: 0.0)).takeIf { overCap },
@@ -216,12 +277,13 @@ private fun TranslateAheadAskAlert(hazeState: HazeState, ask: AheadAsk, onDismis
         AlertAction(
             label = stringResource(R.string.translate_ahead_send),
             emphasised = true,
-            enabled = !overCap,
+            // Nothing to send can still be a playlist to start watching for new songs.
+            enabled = !overCap && (plan?.requests != 0 || (ask.browseId != null && watch != TranslateAhead.isWatched(ask.browseId))),
             onClick = {
                 AppSettings.setTranslateAheadChoice(model, reading)
                 if (dontShow) AppSettings.setTranslateAheadIntro(false)
                 askNotifications()
-                TranslateAhead.start(ask.title, ask.songs, model, reading)
+                if (plan?.requests != 0) TranslateAhead.start(ask.title, ask.songs, model, reading)
                 ask.browseId?.let { id ->
                     if (watch) {
                         TranslateAhead.watch(id, ask.title, ask.allSongs, model, reading)
@@ -229,7 +291,9 @@ private fun TranslateAheadAskAlert(hazeState: HazeState, ask: AheadAsk, onDismis
                         TranslateAhead.unwatch(id)
                     }
                 }
-                Toast.makeText(context, context.getString(R.string.translate_ahead_started, ask.title), Toast.LENGTH_LONG).show()
+                if (plan?.requests != 0) {
+                    Toast.makeText(context, context.getString(R.string.translate_ahead_started, ask.title), Toast.LENGTH_LONG).show()
+                }
                 onDismiss()
             },
         )

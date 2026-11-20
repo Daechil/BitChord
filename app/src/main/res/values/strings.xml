@@ -757,6 +757,16 @@
     <string name="card_fee_footer">Anthropic charges your card in dollars, so the won taken is usually 1–2% more than the base rate. Pick your card\'s overseas fee to add it to amounts in won.</string>
     <string name="krw_rate_applied">Rate used: $1 = ₩%1$s</string>
     <string name="krw_rate_applied_fee">Rate used: $1 = ₩%1$s (base ₩%2$s + card fee %3$s%%)</string>
+    <string name="translation_status_no_lyrics">No lyrics found</string>
+    <string name="translation_badge_no_lyrics">No lyrics</string>
+    <string name="translation_status_no_lyrics_note">No lyrics source had lyrics for this song when it was last looked up. It is left out of translating ahead, and looked up again after 30 days, or as soon as the player shows lyrics for it.</string>
+    <string name="translation_status_look_again">Look for lyrics again</string>
+    <string name="translation_status_look_again_done">Its lyrics are looked for again next time it is translated ahead</string>
+    <string name="translate_ahead_checking">Checking what is already stored…</string>
+    <string name="translate_ahead_plan">%2$d of %1$d songs will be sent.</string>
+    <string name="translate_ahead_plan_already">%1$d already translated are skipped, at no cost.</string>
+    <string name="translate_ahead_plan_no_lyrics">%1$d with no lyrics are left out.</string>
+    <string name="translate_ahead_nothing">Nothing to send: every song is translated already or has no lyrics.</string>
     <string name="ko_window_summary">Summary</string>
     <string name="ko_window_songs">Songs · %1$d</string>
     <string name="ko_window_space">Space used</string>

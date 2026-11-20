@@ -64,6 +64,8 @@ object TranslationStatus {
         GOOGLE,
         /** The lyrics are already in this language. */
         SAME_LANGUAGE,
+        /** No source had lyrics for it when last looked: nothing to translate. */
+        NO_LYRICS,
         NONE,
     }
 
@@ -77,7 +79,7 @@ object TranslationStatus {
         val meaning: StoredAnswer?,
     ) {
         /** Has what the player would use now, or needs none. */
-        val covered: Boolean get() = state == State.CLAUDE || state == State.SAME_LANGUAGE
+        val covered: Boolean get() = state == State.CLAUDE || state == State.SAME_LANGUAGE || state == State.NO_LYRICS
     }
 
     /** The language translations are asked into now. */
@@ -128,6 +130,14 @@ object TranslationStatus {
     suspend fun statusOf(context: Context, videoIds: List<String>): Map<String, SongStatus> {
         val stored = LyricsTranslation.storedFor(videoIds)
         val target = target(context)
-        return videoIds.associateWith { id -> statusOf(id, stored[id].orEmpty(), target) }
+        return videoIds.associateWith { id ->
+            val status = statusOf(id, stored[id].orEmpty(), target)
+            // Nothing stored and no lyrics to be had: not a song waiting for a translation.
+            if (status.state == State.NONE && PlayedLyrics.isMissing(id)) {
+                SongStatus(id, status.answers, State.NO_LYRICS, null, null, null)
+            } else {
+                status
+            }
+        }
     }
 }

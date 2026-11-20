@@ -746,9 +746,14 @@ object LyricsTranslation {
         // did. A schema that large may still be refused for a very long song;
         // the array, with the split-up repair in [parseTranslation], is then
         // the next best thing.
-        if (slots.size > MAX_KEYED_LINES) return ask(keyed = false)
+        // Once the per-line schema has been refused for a song this long, a
+        // longer one is asked with the array straight away: the refusal costs
+        // nothing, but it is a round trip before every translation.
+        if (slots.size > MAX_KEYED_LINES || slots.size >= keyedRefusedFrom) return ask(keyed = false)
         val keyed = ask(keyed = true)
-        return if (keyed.failure == ClaudeFailure.BAD_REQUEST) ask(keyed = false) else keyed
+        if (keyed.failure != ClaudeFailure.BAD_REQUEST) return keyed
+        keyedRefusedFrom = minOf(keyedRefusedFrom, slots.size)
+        return ask(keyed = false)
     }
 
     /** The user's turn of a translation or reading request: the lines, numbered, each with its role. */
@@ -775,6 +780,10 @@ object LyricsTranslation {
 
     /** Past this many lines the per-line schema is not tried; see [requestClaudeTranslation]. */
     private const val MAX_KEYED_LINES = 200
+
+    /** The fewest lines the per-line schema was refused for this run; asked as an array from there on. */
+    @Volatile
+    private var keyedRefusedFrom = Int.MAX_VALUE
 
     /**
      * `{"source_language": "...", "declined_reason": "", "translations": {"0": "...", …, "<count-1>": "..."}}`,

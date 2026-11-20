@@ -97,6 +97,7 @@ private fun statusWords(): StatusWords {
             TranslationStatus.State.CLAUDE_OTHER_STYLE to stringResource(R.string.translation_status_claude_other),
             TranslationStatus.State.GOOGLE to stringResource(R.string.translation_status_google),
             TranslationStatus.State.SAME_LANGUAGE to stringResource(R.string.translation_status_same),
+            TranslationStatus.State.NO_LYRICS to stringResource(R.string.translation_status_no_lyrics),
             TranslationStatus.State.NONE to stringResource(R.string.translation_status_none),
         ),
         kinds = mapOf(
@@ -122,6 +123,10 @@ private fun statusWords(): StatusWords {
             TranslationStatus.State.CLAUDE_OTHER_STYLE to WindowBadge(stringResource(R.string.translation_badge_other), Color(0xFFFF9500)),
             TranslationStatus.State.GOOGLE to WindowBadge(stringResource(R.string.translation_badge_google), Color(0xFF8E8E93)),
             TranslationStatus.State.SAME_LANGUAGE to WindowBadge(stringResource(R.string.translation_badge_same), Color(0xFF0A84FF)),
+            TranslationStatus.State.NO_LYRICS to WindowBadge(
+                stringResource(R.string.translation_badge_no_lyrics),
+                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            ),
             TranslationStatus.State.NONE to WindowBadge(
                 stringResource(R.string.translation_badge_none),
                 MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
@@ -248,12 +253,15 @@ private fun songDeleteAsk(song: Song, count: Int, then: () -> Unit): DeleteAsk {
 }
 
 /** The words a song's own page shows above its answers: who sings it, where it stands. */
-private class SongPageWords(val nothing: String, val otherNote: String)
+private class SongPageWords(val nothing: String, val otherNote: String, val noLyricsNote: String, val lookAgain: String, val lookAgainDone: String)
 
 @Composable
 private fun songPageWords() = SongPageWords(
     nothing = stringResource(R.string.translation_status_nothing),
     otherNote = stringResource(R.string.translation_status_other_note),
+    noLyricsNote = stringResource(R.string.translation_status_no_lyrics_note),
+    lookAgain = stringResource(R.string.translation_status_look_again),
+    lookAgainDone = stringResource(R.string.translation_status_look_again_done),
 )
 
 private fun songHeading(song: Song, status: TranslationStatus.SongStatus?, words: StatusWords, page: SongPageWords): String =
@@ -324,11 +332,24 @@ private fun LazyListScope.songStatusItems(
     page: SongPageWords,
     loading: String,
     deleteLabel: String,
+    onLookAgain: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val heading = songHeading(song, status, words, page)
     windowText(if (status == null) loading else heading.ifBlank { song.title })
     if (status == null) return
+    if (status.state == TranslationStatus.State.NO_LYRICS) {
+        windowText(page.noLyricsNote)
+        windowActions(
+            listOf(
+                WindowButton(label = page.lookAgain) {
+                    com.music.bitchord.download.PlayedLyrics.clearMissing(song.videoId)
+                    onLookAgain()
+                },
+            ),
+        )
+        return
+    }
     val lines = songLines(status, words)
     if (lines.isEmpty()) {
         windowText(page.nothing)
@@ -411,7 +432,7 @@ private fun ReleaseStatusWindow(hazeState: HazeState, release: AheadAsk, onDismi
         overlay = { DeleteWarning(hazeState, asking, frosted = false) { asking = null } },
     ) {
         if (inner != null) {
-            songStatusItems(inner, openedStatus, words, page, loading, deleteLabel) { asking = openedAsk }
+            songStatusItems(inner, openedStatus, words, page, loading, deleteLabel, onLookAgain = { reload++ }) { asking = openedAsk }
             return@KoWindow
         }
         windowText(summary, header = summaryHeader)
@@ -601,7 +622,7 @@ private fun StorageWindow(hazeState: HazeState, onDismiss: () -> Unit) {
         overlay = { DeleteWarning(hazeState, asking, frosted = false) { asking = null } },
     ) {
         if (inner != null) {
-            songStatusItems(inner, openedStatus, words, page, loading, deleteLabel) { asking = openedAsk }
+            songStatusItems(inner, openedStatus, words, page, loading, deleteLabel, onLookAgain = { reload++ }) { asking = openedAsk }
             return@KoWindow
         }
         if (all == null || parts == null) {

@@ -762,7 +762,7 @@
     <string name="translation_status_no_lyrics_note">No lyrics source had lyrics for this song when it was last looked up. It is left out of translating ahead, and looked up again after 30 days, or as soon as the player shows lyrics for it.</string>
     <string name="translation_status_look_again">Look for lyrics again</string>
     <string name="translation_status_look_again_done">Its lyrics are looked for again next time it is translated ahead</string>
-    <string name="translate_ahead_checking">Checking what is already stored…</string>
+    <string name="translate_ahead_plan_checking">Checking what is already stored…</string>
     <string name="translate_ahead_plan">%2$d of %1$d songs will be sent.</string>
     <string name="translate_ahead_plan_already">%1$d already translated are skipped, at no cost.</string>
     <string name="translate_ahead_plan_no_lyrics">%1$d with no lyrics are left out.</string>

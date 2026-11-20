@@ -215,7 +215,7 @@ private fun TranslateAheadAskAlert(hazeState: HazeState, ask: AheadAsk, onDismis
         stringResource(R.string.translate_ahead_description),
         stringResource(R.string.translate_ahead_scope, count, style),
         if (plan == null) {
-            stringResource(R.string.translate_ahead_checking)
+            stringResource(R.string.translate_ahead_plan_checking)
         } else if (plan.requests == 0) {
             stringResource(R.string.translate_ahead_nothing)
         } else {

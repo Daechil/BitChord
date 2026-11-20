@@ -723,7 +723,7 @@
     <string name="translation_status_no_lyrics_note">마지막으로 찾아봤을 때 어느 가사 출처에도 가사가 없던 곡이에요. 미리 번역할 때 빼고 보내요. 30일이 지나거나, 플레이어에서 이 곡의 가사가 보이면 다시 찾아요.</string>
     <string name="translation_status_look_again">가사 다시 찾기</string>
     <string name="translation_status_look_again_done">다음에 미리 번역할 때 이 곡의 가사를 다시 찾아요</string>
-    <string name="translate_ahead_checking">이미 저장된 번역을 확인하는 중…</string>
+    <string name="translate_ahead_plan_checking">이미 저장된 번역을 확인하는 중…</string>
     <string name="translate_ahead_plan">%1$d곡 중 %2$d곡을 보내요.</string>
     <string name="translate_ahead_plan_already">이미 번역된 %1$d곡은 요금 없이 건너뛰어요.</string>
     <string name="translate_ahead_plan_no_lyrics">가사 없는 곡 %1$d곡은 빼요.</string>

@@ -171,6 +171,8 @@ fun SongActionsMenu(
     onCopyLog: (() -> Unit)? = null,
     /** Opens this song's stored translations; null hides the row. */
     onTranslationStatus: (() -> Unit)? = null,
+    /** "Recommend with Claude": opens the suggestions window from this song. */
+    onRecommend: (() -> Unit)? = null,
     /** Opens the timing control offered only by the main player's menu. */
     onLyricsOffset: (() -> Unit)? = null,
     /**
@@ -378,6 +380,9 @@ fun SongActionsMenu(
         }
         if (song.videoId.isNotBlank()) {
             onTranslationStatus?.let { TranslationStatusRow(song, palette.accent, it) }
+            onRecommend?.let {
+                ActionRow(SfIcons.AutoAwesome, stringResource(R.string.recommend_title), accent = palette.accent, onClick = it)
+            }
         }
 
         // The player's own: about the track playing right now rather than

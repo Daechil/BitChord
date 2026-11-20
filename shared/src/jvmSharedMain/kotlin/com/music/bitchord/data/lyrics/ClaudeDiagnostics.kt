@@ -62,6 +62,8 @@ object ClaudeDiagnostics {
     const val PURPOSE_READING = "reading"
     /** A batch of songs translated ahead: one entry when it is sent, one when its answers are filed. */
     const val PURPOSE_BATCH = "batch"
+    /** Songs Claude suggests to play next. */
+    const val PURPOSE_RECOMMEND = "recommend"
 
     @Serializable
     data class Entry(

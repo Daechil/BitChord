@@ -54,6 +54,12 @@ object KoAlerts {
     /** Which of the floating bar's choices is open: "size", "opacity" or "show"; null for none. */
     val floatingChoice = MutableStateFlow<String?>(null)
 
+    /**
+     * Claude's song suggestions window, opened from this song; the window's
+     * own "from" choice can switch it to the queue or what is played most.
+     */
+    val recommend = MutableStateFlow<com.music.bitchord.data.model.Song?>(null)
+
     /** A song whose stored translations are on show. */
     val songStatus = MutableStateFlow<com.music.bitchord.data.model.Song?>(null)
 
@@ -122,6 +128,7 @@ fun ClaudeAlerts(
 ) {
     TranslateAheadAlerts(hazeState)
     TranslationStatusAlerts(hazeState)
+    RecommendAlerts()
     FloatingLyricsAlerts(hazeState)
     val showWatchInterval by KoAlerts.watchInterval.collectAsStateWithLifecycle()
     if (showWatchInterval) {
@@ -486,6 +493,7 @@ private fun ClaudeLogWindow(onDismiss: () -> Unit) {
     val purposeName = stringResource(R.string.claude_purpose_original_name)
     val purposeReading = stringResource(R.string.claude_purpose_reading)
     val purposeBatch = stringResource(R.string.claude_purpose_batch)
+    val purposeRecommend = stringResource(R.string.claude_purpose_recommend)
     val haikuLabel = stringResource(R.string.claude_model_haiku)
     val sonnetLabel = stringResource(R.string.claude_model_sonnet)
     // Every label the lines can need, resolved up front: the loop below is not
@@ -533,6 +541,7 @@ private fun ClaudeLogWindow(onDismiss: () -> Unit) {
             ClaudeDiagnostics.PURPOSE_ORIGINAL_NAME -> purposeName
             ClaudeDiagnostics.PURPOSE_READING -> purposeReading
             ClaudeDiagnostics.PURPOSE_BATCH -> purposeBatch
+            ClaudeDiagnostics.PURPOSE_RECOMMEND -> purposeRecommend
             else -> entry.purpose
         }
         val model = when (entry.model) {

@@ -1998,6 +1998,7 @@ private fun BitChordApp(
     }
     val addSongsToQueue: (List<Song>) -> Unit = { songs -> queueSongs(songs, false) }
     val playSongsNext: (List<Song>) -> Unit = { songs -> queueSongs(songs, true) }
+    com.music.bitchord.ui.components.KoQueueHost(viewModel, play, playSongsNext, addSongsToQueue) { player.queue.drop(controller?.currentMediaItemIndex ?: 0) }
 
     // ---- Links from outside the app ----
 
@@ -4471,6 +4472,10 @@ private fun BitChordApp(
                 onTranslationStatus = {
                     songActions = null
                     com.music.bitchord.ui.components.KoAlerts.songStatus.value = song
+                },
+                onRecommend = {
+                    songActions = null
+                    com.music.bitchord.ui.components.KoAlerts.recommend.value = song
                 },
                 likeStatus = likeStatusOf(song),
                 onPlayNext = { playNext(song); songActions = null },

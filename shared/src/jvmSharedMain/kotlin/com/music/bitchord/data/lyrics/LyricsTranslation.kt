@@ -2414,6 +2414,105 @@ object LyricsTranslation {
         Cleared(files, bytes)
     }
 
+    /** After something stored was deleted: nothing remembered of it is used again. */
+    private fun forgetDeleted() {
+        memory.clear()
+        meanings.clear()
+        lineMapsWritten.clear()
+        translationsChanged.value = translationsChanged.value + 1
+    }
+
+    private fun deleteAll(directory: File?, suffix: String): Cleared {
+        var files = 0
+        var bytes = 0L
+        directory?.listFiles { file -> file.name.endsWith(suffix) }.orEmpty().forEach { file ->
+            val size = file.length()
+            if (file.delete()) {
+                files++
+                bytes += size
+            }
+        }
+        return Cleared(files, bytes)
+    }
+
+    /**
+     * Empties the kept store: every translation and pronunciation kept there,
+     * Claude's paid ones and downloaded songs' included, and the line-by-line
+     * copies. The songs' explanations are not touched — see [clearMeanings].
+     */
+    suspend fun clearKept(): Cleared = withContext(Dispatchers.IO) {
+        val cleared = diskMutex.withLock {
+            forgetSizes()
+            deleteAll(keepDir?.let { File(it, KEPT_DIRECTORY) }, ".json.gz")
+        }
+        forgetDeleted()
+        // The index drops the answers that went the next time it is read.
+        cleared
+    }
+
+    /** Deletes every song's explanation. */
+    suspend fun clearMeanings(): Cleared = withContext(Dispatchers.IO) {
+        val cleared = diskMutex.withLock {
+            forgetSizes()
+            deleteAll((keepDir ?: cacheDir)?.let { File(it, MEANING_DIRECTORY) }, ".json")
+        }
+        forgetDeleted()
+        cleared
+    }
+
+    /**
+     * Deletes everything stored for one song, wherever it is: its translations
+     * and pronunciations in the cache and the kept store, its explanation, and
+     * its line-by-line copies in [targets] (in every speech level and mode).
+     */
+    suspend fun deleteTrack(trackId: String, targets: Collection<String>): Cleared {
+        val answers = withIndex { map -> map.values.filter { it.trackId == trackId } }
+        val wantedTargets = (targets + answers.map { it.target }).map { it.trim() }.filter { it.isNotBlank() }.toSet()
+        val prefixes = buildList {
+            add(googlePrefix(trackId))
+            add("reading\u0000$trackId")
+            for (speech in listOf(SPEECH_AUTO, SPEECH_CASUAL, SPEECH_POLITE)) {
+                for (mode in listOf(MODE_NATURAL, MODE_LITERAL)) add("claude\u0000$speech\u0000$mode\u0000$trackId")
+            }
+        }
+        val lineMapKeys = wantedTargets.flatMap { target -> prefixes.map { aheadKey(it, target) } }
+        val cleared = withContext(Dispatchers.IO) {
+            diskMutex.withLock {
+                forgetSizes()
+                var files = 0
+                var bytes = 0L
+                fun drop(file: File?) {
+                    if (file == null || !file.isFile) return
+                    val size = file.length()
+                    if (file.delete()) {
+                        files++
+                        bytes += size
+                    }
+                }
+                val cache = cacheDir?.let { File(it, CACHE_DIRECTORY) }
+                val meaningsDir = (keepDir ?: cacheDir)?.let { File(it, MEANING_DIRECTORY) }
+                for (answer in answers) {
+                    if (answer.kind == KIND_MEANING) {
+                        drop(meaningsDir?.let { File(it, "${answer.key}.json") })
+                    } else {
+                        drop(keptFile(answer.key))
+                        drop(cache?.let { File(it, "${answer.key}.json.gz") })
+                    }
+                }
+                for (key in lineMapKeys) {
+                    drop(keptFile(key))
+                    drop(cache?.let { File(it, "$key.json.gz") })
+                }
+                Cleared(files, bytes)
+            }
+        }
+        withIndex { map ->
+            if (map.values.removeAll { it.trackId == trackId }) saveIndex()
+        }
+        forgetDeleted()
+        return cleared
+    }
+
     /** One kind of stored answer: how many songs have one, and the space they take. */
     class StorageSlice(val songs: Int, val bytes: Long)
 
@@ -2679,6 +2778,10 @@ object LyricsTranslation {
 
         @Synchronized fun put(key: String, value: SongMeaning) {
             entries[key] = value
+        }
+
+        @Synchronized fun clear() {
+            entries.clear()
         }
     }
 

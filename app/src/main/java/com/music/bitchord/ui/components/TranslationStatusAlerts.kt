@@ -177,7 +177,7 @@ fun TranslationStatusAlerts(hazeState: HazeState) {
     }
     val release by KoAlerts.releaseStatus.collectAsStateWithLifecycle()
     release?.let { shown ->
-        ReleaseStatusWindow(release = shown, onDismiss = { KoAlerts.releaseStatus.value = null })
+        ReleaseStatusWindow(hazeState = hazeState, release = shown, onDismiss = { KoAlerts.releaseStatus.value = null })
     }
     val storage by KoAlerts.storage.collectAsStateWithLifecycle()
     if (storage) {
@@ -185,16 +185,66 @@ fun TranslationStatusAlerts(hazeState: HazeState) {
     }
 }
 
-/** [song]'s status, looked up again whenever another song is asked for; null while it is read. */
+/** [song]'s status, looked up again whenever another song is asked for, or [reload] changes; null while it is read. */
 @Composable
-private fun rememberSongStatus(song: Song?): TranslationStatus.SongStatus? {
+private fun rememberSongStatus(song: Song?, reload: Int = 0): TranslationStatus.SongStatus? {
     val context = LocalContext.current
     var status by remember(song?.videoId) { mutableStateOf<TranslationStatus.SongStatus?>(null) }
-    LaunchedEffect(song?.videoId) {
+    LaunchedEffect(song?.videoId, reload) {
         val id = song?.videoId ?: return@LaunchedEffect
         status = TranslationStatus.statusOf(context, listOf(id))[id]
     }
     return status
+}
+
+/** A delete waiting on its warning's answer: what to say, and what to do on yes. */
+private class DeleteAsk(
+    val title: String,
+    val description: String,
+    val run: suspend () -> LyricsTranslation.Cleared,
+    val then: (LyricsTranslation.Cleared) -> Unit = {},
+)
+
+/**
+ * Where a confirmed delete runs: not in the warning's own scope, which goes
+ * as the warning closes — on the same tap that started it.
+ */
+private val deleteScope = kotlinx.coroutines.MainScope()
+
+/** The warning before [ask] runs, drawn in a window; null shows nothing. */
+@Composable
+private fun DeleteWarning(hazeState: HazeState, ask: DeleteAsk?, frosted: Boolean, onDone: () -> Unit) {
+    if (ask == null) return
+    ConfirmationAlert(
+        hazeState = hazeState,
+        title = ask.title,
+        description = ask.description,
+        confirmLabel = stringResource(R.string.ko_delete),
+        onConfirm = {
+            onDone()
+            deleteScope.launch { ask.then(ask.run()) }
+        },
+        onDismiss = onDone,
+        frosted = frosted,
+    )
+}
+
+/** Asks before deleting everything stored for [song]. */
+@Composable
+private fun songDeleteAsk(song: Song, count: Int, then: () -> Unit): DeleteAsk {
+    val context = LocalContext.current
+    val title = stringResource(R.string.translation_song_delete)
+    val description = stringResource(R.string.translation_song_delete_confirm, song.title, count)
+    val done = stringResource(R.string.translation_song_deleted)
+    return DeleteAsk(
+        title = title,
+        description = description,
+        run = { LyricsTranslation.deleteTrack(song.videoId, listOf(TranslationStatus.target(context))) },
+        then = { cleared ->
+            Toast.makeText(context, done.format(cleared.files), Toast.LENGTH_SHORT).show()
+            then()
+        },
+    )
 }
 
 /** The words a song's own page shows above its answers: who sings it, where it stands. */
@@ -222,7 +272,14 @@ private fun songLines(status: TranslationStatus.SongStatus?, words: StatusWords)
 /** Every stored answer of one song, each with who wrote it, in which style, and where it is kept. */
 @Composable
 private fun SongStatusAlert(hazeState: HazeState, song: Song, onBack: () -> Unit) {
-    val current = rememberSongStatus(song)
+    var reload by remember(song.videoId) { mutableIntStateOf(0) }
+    var asking by remember(song.videoId) { mutableStateOf(false) }
+    val current = rememberSongStatus(song, reload)
+    val ask = songDeleteAsk(song, current?.answers?.size ?: 0) { reload++ }
+    if (asking) {
+        DeleteWarning(hazeState, ask, frosted = true) { asking = false }
+        return
+    }
     val words = statusWords()
     val page = songPageWords()
     val heading = songHeading(song, current, words, page)
@@ -245,6 +302,15 @@ private fun SongStatusAlert(hazeState: HazeState, song: Song, onBack: () -> Unit
                 )
             }
         }
+        if (!current?.answers.isNullOrEmpty()) {
+            AlertRule()
+            AlertAction(
+                label = stringResource(R.string.translation_song_delete),
+                emphasised = false,
+                destructive = true,
+                onClick = { asking = true },
+            )
+        }
         AlertRule()
         AlertAction(label = stringResource(R.string.back), emphasised = false, onClick = onBack)
     }
@@ -257,6 +323,8 @@ private fun LazyListScope.songStatusItems(
     words: StatusWords,
     page: SongPageWords,
     loading: String,
+    deleteLabel: String,
+    onDelete: () -> Unit,
 ) {
     val heading = songHeading(song, status, words, page)
     windowText(if (status == null) loading else heading.ifBlank { song.title })
@@ -266,6 +334,7 @@ private fun LazyListScope.songStatusItems(
         windowText(page.nothing)
     } else {
         windowCard(rows = lines) { (kind, detail) -> WindowLine(title = kind, detail = detail) }
+        windowActions(listOf(WindowButton(label = deleteLabel, destructive = true, onClick = onDelete)))
     }
 }
 
@@ -274,16 +343,20 @@ private fun LazyListScope.songStatusItems(
  * missing ones sent ahead at the batch price. A song opens its own page.
  */
 @Composable
-private fun ReleaseStatusWindow(release: AheadAsk, onDismiss: () -> Unit) {
+private fun ReleaseStatusWindow(hazeState: HazeState, release: AheadAsk, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val songs = remember(release) { release.songs.distinctBy { it.videoId } }
     var statuses by remember(release) { mutableStateOf<Map<String, TranslationStatus.SongStatus>?>(null) }
-    LaunchedEffect(release) {
+    var reload by remember(release) { mutableIntStateOf(0) }
+    var asking by remember(release) { mutableStateOf<DeleteAsk?>(null) }
+    LaunchedEffect(release, reload) {
         songs.forEach { TranslationStatus.remember(it.videoId, it.title, it.artist) }
         statuses = TranslationStatus.statusOf(context, songs.map { it.videoId })
     }
     var opened by remember(release) { mutableStateOf<Song?>(null) }
-    val openedStatus = rememberSongStatus(opened)
+    val openedStatus = rememberSongStatus(opened, reload)
+    val deleteLabel = stringResource(R.string.translation_song_delete)
+    val openedAsk = opened?.let { song -> songDeleteAsk(song, openedStatus?.answers?.size ?: 0) { reload++ } }
     val words = statusWords()
     val page = songPageWords()
     val all = statuses
@@ -327,11 +400,18 @@ private fun ReleaseStatusWindow(release: AheadAsk, onDismiss: () -> Unit) {
     val inner = opened
     KoWindow(
         title = inner?.title ?: release.title,
-        onBack = { if (opened != null) opened = null else onDismiss() },
+        onBack = {
+            when {
+                asking != null -> asking = null
+                opened != null -> opened = null
+                else -> onDismiss()
+            }
+        },
         listState = if (inner != null) songState else mainState,
+        overlay = { DeleteWarning(hazeState, asking, frosted = false) { asking = null } },
     ) {
         if (inner != null) {
-            songStatusItems(inner, openedStatus, words, page, loading)
+            songStatusItems(inner, openedStatus, words, page, loading, deleteLabel) { asking = openedAsk }
             return@KoWindow
         }
         windowText(summary, header = summaryHeader)
@@ -378,13 +458,15 @@ private fun StorageWindow(hazeState: HazeState, onDismiss: () -> Unit) {
     var breakdown by remember { mutableStateOf<LyricsTranslation.StorageBreakdown?>(null) }
     var query by remember { mutableStateOf("") }
     var reload by remember { mutableIntStateOf(0) }
-    var confirmingClear by remember { mutableStateOf(false) }
+    var asking by remember { mutableStateOf<DeleteAsk?>(null) }
     var opened by remember { mutableStateOf<Song?>(null) }
     LaunchedEffect(reload) {
         answers = LyricsTranslation.storedAnswers()
         breakdown = LyricsTranslation.storageBreakdown()
     }
-    val openedStatus = rememberSongStatus(opened)
+    val openedStatus = rememberSongStatus(opened, reload)
+    val deleteLabel = stringResource(R.string.translation_song_delete)
+    val openedAsk = opened?.let { song -> songDeleteAsk(song, openedStatus?.answers?.size ?: 0) { reload++ } }
     val keptLimitMb by AppSettings.keptStoreLimitMb.collectAsStateWithLifecycle()
     val words = statusWords()
     val page = songPageWords()
@@ -455,6 +537,36 @@ private fun StorageWindow(hazeState: HazeState, onDismiss: () -> Unit) {
     val noMatch = stringResource(R.string.ko_window_no_match)
     val limits = listOf(100, 200, 500)
     val limitChosen = limits.minByOrNull { kotlin.math.abs(it - keptLimitMb) } ?: 100
+    val report: (LyricsTranslation.Cleared) -> Unit = { cleared ->
+        Toast.makeText(context, clearedText.format(cleared.files, megabytes(cleared.bytes)), Toast.LENGTH_SHORT).show()
+        reload++
+    }
+    val clearTitle = stringResource(R.string.translation_storage_clear_all)
+    val clearDescription = stringResource(
+        if (AppSettings.keepClaudeTranslations.value) {
+            R.string.translation_storage_clear_all_confirm
+        } else {
+            R.string.translation_storage_clear_all_confirm_claude
+        },
+    )
+    val cacheAsk = DeleteAsk(clearTitle, clearDescription, { LyricsTranslation.clearCache(googleOnly = false) }, report)
+    val keptAsk = DeleteAsk(
+        title = stringResource(R.string.translation_storage_clear_kept),
+        description = stringResource(R.string.translation_storage_clear_kept_confirm, megabytes(parts?.keptBytes ?: 0L)),
+        run = { LyricsTranslation.clearKept() },
+        then = report,
+    )
+    val meaningsAsk = DeleteAsk(
+        title = stringResource(R.string.translation_storage_clear_meanings),
+        description = stringResource(
+            R.string.translation_storage_clear_meanings_confirm,
+            parts?.meaning?.songs ?: 0,
+            megabytes(parts?.meaning?.bytes ?: 0L),
+        ),
+        run = { LyricsTranslation.clearMeanings() },
+        then = report,
+    )
+    val manageFooter = stringResource(R.string.translation_storage_manage_footer)
     val buttons = listOf(
         WindowButton(label = stringResource(R.string.translation_storage_clear_google)) {
             scope.launch {
@@ -464,15 +576,13 @@ private fun StorageWindow(hazeState: HazeState, onDismiss: () -> Unit) {
             }
         },
         WindowButton(label = stringResource(R.string.translation_storage_clear_all), destructive = true) {
-            confirmingClear = true
+            asking = cacheAsk
         },
-    )
-    val clearTitle = stringResource(R.string.translation_storage_clear_all)
-    val clearDescription = stringResource(
-        if (AppSettings.keepClaudeTranslations.value) {
-            R.string.translation_storage_clear_all_confirm
-        } else {
-            R.string.translation_storage_clear_all_confirm_claude
+        WindowButton(label = stringResource(R.string.translation_storage_clear_kept), destructive = true) {
+            asking = keptAsk
+        },
+        WindowButton(label = stringResource(R.string.translation_storage_clear_meanings), destructive = true) {
+            asking = meaningsAsk
         },
     )
     val mainState = rememberLazyListState()
@@ -482,35 +592,16 @@ private fun StorageWindow(hazeState: HazeState, onDismiss: () -> Unit) {
         title = inner?.title ?: stringResource(R.string.translation_storage),
         onBack = {
             when {
-                confirmingClear -> confirmingClear = false
+                asking != null -> asking = null
                 opened != null -> opened = null
                 else -> onDismiss()
             }
         },
         listState = if (inner != null) songState else mainState,
-        overlay = {
-            if (confirmingClear) {
-                ConfirmationAlert(
-                    hazeState = hazeState,
-                    title = clearTitle,
-                    description = clearDescription,
-                    confirmLabel = clearTitle,
-                    onConfirm = {
-                        confirmingClear = false
-                        scope.launch {
-                            val cleared = LyricsTranslation.clearCache(googleOnly = false)
-                            Toast.makeText(context, clearedText.format(cleared.files, megabytes(cleared.bytes)), Toast.LENGTH_SHORT).show()
-                            reload++
-                        }
-                    },
-                    onDismiss = { confirmingClear = false },
-                    frosted = false,
-                )
-            }
-        },
+        overlay = { DeleteWarning(hazeState, asking, frosted = false) { asking = null } },
     ) {
         if (inner != null) {
-            songStatusItems(inner, openedStatus, words, page, loading)
+            songStatusItems(inner, openedStatus, words, page, loading, deleteLabel) { asking = openedAsk }
             return@KoWindow
         }
         if (all == null || parts == null) {
@@ -524,7 +615,7 @@ private fun StorageWindow(hazeState: HazeState, onDismiss: () -> Unit) {
         windowCard(rows = limits, header = limitHeader, footer = limitFooter) { limit ->
             WindowChoice(label = "$limit MB", checked = limit == limitChosen) { AppSettings.setKeptStoreLimitMb(limit) }
         }
-        windowActions(buttons, header = manageHeader)
+        windowActions(buttons, header = manageHeader, footer = manageFooter)
         if (all == null) return@KoWindow
         if (songs.isNotEmpty()) {
             item(key = "search") {

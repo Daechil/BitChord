@@ -716,6 +716,15 @@
     <string name="floating_reset_position_done">Floating lyrics moved back to the top</string>
     <string name="translate_ahead_track_lyrics_error">Lyrics could not be fetched (timed out or no connection)</string>
     <string name="translate_ahead_summary_lyrics_error">%1$d songs whose lyrics could not be fetched: tried twice. Send them again from below.</string>
+    <string name="ko_delete">Delete</string>
+    <string name="translation_storage_clear_kept">Empty the kept store</string>
+    <string name="translation_storage_clear_kept_confirm">Every translation and pronunciation in the kept store is deleted (%1$s MB). Claude\'s cost money to get again, and downloaded songs show no translation offline until they are. Back them up first under Settings > Back up translations. This cannot be undone.</string>
+    <string name="translation_storage_clear_meanings">Delete every song meaning</string>
+    <string name="translation_storage_clear_meanings_confirm">The saved meanings of %1$d songs (%2$s MB) are deleted. Seeing one again asks Claude again, at a cost. This cannot be undone.</string>
+    <string name="translation_storage_manage_footer">The kept store and song meanings are asked about once more before they go.</string>
+    <string name="translation_song_delete">Delete this song\'s translations</string>
+    <string name="translation_song_delete_confirm">The %2$d translations, pronunciations and meanings saved for \"%1$s\" are deleted from the cache and the kept store. Claude\'s cost money to get again. This cannot be undone.</string>
+    <string name="translation_song_deleted">Deleted %1$d files for this song</string>
     <string name="ko_window_summary">Summary</string>
     <string name="ko_window_songs">Songs · %1$d</string>
     <string name="ko_window_space">Space used</string>

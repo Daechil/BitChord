@@ -521,7 +521,7 @@
     <string name="translate_ahead_expired_note">29일 안에 결과를 받지 못했습니다. 요금은 이미 청구되었습니다.</string>
     <string name="translate_ahead_cancel">이 작업 취소</string>
     <string name="translate_ahead_resend_sonnet">거절된 곡만 Sonnet으로 다시 보내기</string>
-    <string name="translate_ahead_resend_failed">실패한 곡 다시 보내기</string>
+    <string name="translate_ahead_resend_failed">실패한 곡 다시 보내기 (가사 못 가져온 곡 포함)</string>
     <string name="translate_ahead_clear">끝난 기록 지우기</string>
     <string name="translation_status">번역 상태</string>
     <string name="translation_status_view">번역 상태 보기</string>
@@ -675,6 +675,8 @@
     <string name="floating_pin_detail">끌어서 옮길 수 없게 해요. 누르면 앱이 열리고 꾹 누르면 숨겨지는 건 그대로예요. 터치를 통과시키는 \'플로팅 가사 고정\'과는 달라요.</string>
     <string name="floating_reset_position">위치 초기화 (화면 위쪽으로)</string>
     <string name="floating_reset_position_done">플로팅 가사를 화면 위쪽으로 옮겼어요</string>
+    <string name="translate_ahead_track_lyrics_error">가사를 못 가져옴 (시간 초과·연결 오류)</string>
+    <string name="translate_ahead_summary_lyrics_error">가사를 못 가져온 곡 %1$d곡: 두 번 시도했어요. 아래 버튼으로 다시 보낼 수 있어요.</string>
     <string name="ko_window_summary">요약</string>
     <string name="ko_window_songs">곡 · %1$d곡</string>
     <string name="ko_window_space">사용 공간</string>

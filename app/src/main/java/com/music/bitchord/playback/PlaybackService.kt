@@ -878,6 +878,8 @@ class PlaybackService : MediaLibraryService() {
     private var serviceLyricsJob: Job? = null
     private var serviceLyrics: List<LyricLine>? = null
     private var lastPublishedSubtitle: String? = null
+    /** How long the service's own lyrics lookup waits for the track's length. */
+    private val LYRICS_DURATION_WAIT_MS = 5_000L
     private var lyricsTickerJob: Job? = null
 
     /**
@@ -7968,6 +7970,7 @@ class PlaybackService : MediaLibraryService() {
         }
         // So a translation stored while this plays can be listed under its name.
         com.music.bitchord.download.TranslationStatus.remember(currentSong.videoId, currentSong.title, currentSong.artist)
+        com.music.bitchord.lockscreen.NowPlayingLyrics.playingNow(currentSong.videoId)
 
         if (!AppSettings.syncedLyrics.value) {
             serviceLyrics = null
@@ -7976,17 +7979,27 @@ class PlaybackService : MediaLibraryService() {
             return
         }
 
-        val trackDurationMs = (player?.duration ?: 0L).takeIf { it > 0 } ?: 0L
-
         serviceLyricsJob?.cancel()
-        serviceLyricsJob = scope.launch(Dispatchers.IO) {
+        serviceLyricsJob = scope.launch(Dispatchers.Main) {
             val localUri = currentSong.localUri
-            var lines: List<LyricLine>? = null
-            if (localUri != null) {
-                lines = EmbeddedLyrics.forUri(this@PlaybackService, localUri)
+            // The length arrives a beat after the track does. Sources match a
+            // recording by it, and without it this lookup could land on another
+            // version than the player's — or on lyrics with no timing at all,
+            // which left the floating bar stuck on one line. So it is waited for,
+            // a few seconds at most, as the player waits for it.
+            var trackDurationMs = (player?.duration ?: 0L).takeIf { it > 0 } ?: 0L
+            var waited = 0L
+            while (localUri == null && trackDurationMs <= 0L && waited < LYRICS_DURATION_WAIT_MS) {
+                delay(250L)
+                waited += 250L
+                trackDurationMs = (player?.duration ?: 0L).takeIf { it > 0 } ?: 0L
             }
-            if (lines == null) {
-                val found = LyricsRepository.lyrics(
+            val lines = withContext(Dispatchers.IO) {
+                var found: List<LyricLine>? = null
+                if (localUri != null) {
+                    found = EmbeddedLyrics.forUri(this@PlaybackService, localUri)
+                }
+                found ?: LyricsRepository.lyrics(
                     videoId = currentSong.videoId,
                     title = currentSong.title,
                     artist = currentSong.artist,
@@ -7995,15 +8008,12 @@ class PlaybackService : MediaLibraryService() {
                     sources = AppSettings.lyricsSources.value,
                     order = AppSettings.lyricsSourceOrder.value,
                     prioritizeSyllableSync = AppSettings.prioritizeSyllableSync.value,
-                )
-                lines = found?.lines
+                )?.lines
             }
-            withContext(Dispatchers.Main) {
-                serviceLyrics = lines
-                com.music.bitchord.lockscreen.NowPlayingLyrics.publish(currentSong.videoId, lines)
-                if (player?.isPlaying == true) {
-                    updateLyricSubtitle()
-                }
+            serviceLyrics = lines
+            com.music.bitchord.lockscreen.NowPlayingLyrics.publish(currentSong.videoId, lines)
+            if (player?.isPlaying == true) {
+                updateLyricSubtitle()
             }
         }
     }

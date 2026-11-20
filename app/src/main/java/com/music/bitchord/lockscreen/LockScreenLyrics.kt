@@ -16,8 +16,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * The lyrics the playback service loaded for the track it is playing, for the
- * lock screen to draw without a lookup of its own.
+ * The lyrics of the track playing, for the lock screen and the floating bar
+ * to draw without a lookup of their own.
+ *
+ * The player's own lyrics win: what the listener reads in the app — from
+ * whichever source it found or was told to use — is what the bar and the lock
+ * screen show, in step with it. The playback service's lookup only fills in
+ * while the player has not shown that track's lyrics (the app closed, say);
+ * that lookup can land on another source, or on one with no timing at all.
  */
 object NowPlayingLyrics {
     data class Entry(val videoId: String, val lines: List<LyricLine>)
@@ -25,8 +31,36 @@ object NowPlayingLyrics {
     private val _current = MutableStateFlow<Entry?>(null)
     val current: StateFlow<Entry?> = _current.asStateFlow()
 
+    /** The track the service is playing, so the player cannot put an earlier track's words up. */
+    @Volatile
+    private var playing: String? = null
+
+    /** The player's lyrics for the last track it showed. */
+    @Volatile
+    private var fromPlayer: Entry? = null
+
+    /** The service has moved to [videoId]: the player's lyrics for it, if it has already shown them, go up at once. */
+    @Synchronized
+    fun playingNow(videoId: String?) {
+        playing = videoId
+        val own = fromPlayer?.takeIf { it.videoId == videoId }
+        if (own != null) _current.value = own else if (_current.value?.videoId != videoId) _current.value = null
+    }
+
+    /** The service's own lookup: used unless the player has shown this track's lyrics. */
+    @Synchronized
     fun publish(videoId: String?, lines: List<LyricLine>?) {
+        if (videoId != null && fromPlayer?.videoId == videoId) return
         _current.value = if (videoId == null || lines.isNullOrEmpty()) null else Entry(videoId, lines)
+    }
+
+    /** The lyrics the player is showing for [videoId]. */
+    @Synchronized
+    fun publishFromPlayer(videoId: String, lines: List<LyricLine>) {
+        if (lines.isEmpty()) return
+        val entry = Entry(videoId, lines)
+        fromPlayer = entry
+        if (playing == null || playing == videoId) _current.value = entry
     }
 }
 

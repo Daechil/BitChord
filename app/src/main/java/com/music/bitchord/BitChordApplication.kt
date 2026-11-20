@@ -172,6 +172,7 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory, Configu
         // The KO translation features read the settings (style, lyric sources,
         // "keep every Claude answer") and the download record as they start:
         // both have to be in before any of them runs.
+        com.music.bitchord.download.PlayedLyrics.init(this)
         com.music.bitchord.download.DownloadTranslations.init(this)
         com.music.bitchord.download.TranslateAhead.init(this)
         com.music.bitchord.download.TranslationStatus.init(this)

@@ -101,6 +101,12 @@ object FloatingLyrics {
 
     private var trackId: String? = null
     private var lines: List<LyricLine> = emptyList()
+    /**
+     * The lines carry times. Plain lyrics — every line at 0 — cannot follow
+     * the song: the bar would sit on one line for the whole of it, so it is
+     * not shown for them.
+     */
+    private var timed = false
     /** Each line's translation, by its place in [lines]; null where none was found. */
     private var translated: List<String?>? = null
     /** Every line with words had its translation found: no need to look again. */
@@ -121,6 +127,7 @@ object FloatingLyrics {
             NowPlayingLyrics.current.collectLatest { entry ->
                 trackId = entry?.videoId
                 lines = entry?.lines.orEmpty()
+                timed = lines.asSequence().map { it.timeMs }.distinct().take(2).count() > 1
                 translated = null
                 translationComplete = false
                 lastTranslationCheck = 0L
@@ -155,7 +162,7 @@ object FloatingLyrics {
      */
     fun tick(context: Context, playing: Boolean, positionMs: Long) {
         val wanted = AppSettings.floatingLyrics.value && playing && !appInFront && !dismissed &&
-            lines.any { it.text.isNotBlank() } && Settings.canDrawOverlays(context)
+            timed && lines.any { it.text.isNotBlank() } && Settings.canDrawOverlays(context)
         if (!wanted) {
             removeView(context)
             return

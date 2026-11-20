@@ -435,6 +435,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (localUri != null) {
                 EmbeddedLyrics.forUri(getApplication(), localUri)?.let { embedded ->
                     _lyrics.value = embedded
+                    shareLyrics(videoId, null, embedded)
                     // No source to name: what the file records is the lyrics,
                     // not which of the eight services they came from months ago.
                     _lyricsSource.value = null
@@ -459,6 +460,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val selected = selectedLyricsSource?.let(lyricsProviderResults::get) ?: found
             _lyrics.value = selected?.lines
             _lyricsSource.value = selected?.source
+            shareLyrics(videoId, selected?.source, selected?.lines)
             _lyricsChecked.value = true
         }
     }
@@ -552,6 +554,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _lyrics.value = result.lines
         _lyricsSource.value = result.source
         _lyricsChecked.value = true
+        currentLyricsRequest?.let { shareLyrics(it.videoId, result.source, result.lines) }
+    }
+
+    /**
+     * What the player shows goes to the floating bar and the lock screen, so
+     * they read the same words in step, and is kept for translating ahead,
+     * which then sends exactly these lines.
+     */
+    private fun shareLyrics(videoId: String, source: LyricsSource?, lines: List<com.music.bitchord.data.lyrics.LyricLine>?) {
+        if (lines.isNullOrEmpty()) return
+        com.music.bitchord.lockscreen.NowPlayingLyrics.publishFromPlayer(videoId, lines)
+        com.music.bitchord.download.PlayedLyrics.remember(videoId, source?.name, lines)
     }
 
     private val _account = MutableStateFlow<Account?>(null)

@@ -467,6 +467,7 @@ private fun jobPageText(job: TranslateAhead.Job): JobPageText {
         status.TRANSLATED to stringResource(R.string.translate_ahead_track_translated),
         status.ALREADY to stringResource(R.string.translate_ahead_track_already),
         status.NO_LYRICS to stringResource(R.string.translate_ahead_track_no_lyrics),
+        status.LYRICS_ERROR to stringResource(R.string.translate_ahead_track_lyrics_error),
         status.SAME_LANGUAGE to stringResource(R.string.translate_ahead_track_same_language),
         status.DECLINED to stringResource(R.string.translate_ahead_track_declined),
         status.FAILED to stringResource(R.string.translate_ahead_track_failed),
@@ -501,10 +502,13 @@ private fun jobPageText(job: TranslateAhead.Job): JobPageText {
         format.money(job.costUsd()),
     )
     val expiredLine = stringResource(R.string.translate_ahead_expired_note)
+    val lyricsErrors = job.count(status.LYRICS_ERROR)
+    val lyricsErrorLine = stringResource(R.string.translate_ahead_summary_lyrics_error, lyricsErrors)
     val summary = listOfNotNull(
         headLine,
         style,
         countsLine,
+        lyricsErrorLine.takeIf { lyricsErrors > 0 },
         costLine.takeIf { job.inputTokens > 0 || job.outputTokens > 0 },
         expiredLine.takeIf { job.state == TranslateAhead.State.EXPIRED },
     ).joinToString("\n")
@@ -524,6 +528,7 @@ private fun jobPageText(job: TranslateAhead.Job): JobPageText {
         when (track.status) {
             status.TRANSLATED, status.ALREADY -> "✓"
             status.DECLINED, status.FAILED -> "✗"
+            status.LYRICS_ERROR -> "!"
             status.PENDING, status.SENT -> "…"
             else -> "–"
         }
@@ -543,7 +548,9 @@ private fun LazyListScope.jobItems(job: TranslateAhead.Job, text: JobPageText, o
     val status = TranslateAhead.TrackStatus
     windowText(text.summary)
     val anyDeclined = job.tracks.any { it.status == status.DECLINED || it.readingStatus == status.DECLINED }
-    val anyFailed = job.tracks.any { it.status == status.FAILED || it.readingStatus == status.FAILED }
+    val anyFailed = job.tracks.any {
+        it.status == status.FAILED || it.readingStatus == status.FAILED || it.status == status.LYRICS_ERROR
+    }
     windowActions(
         listOfNotNull(
             WindowButton(label = text.cancel, destructive = true) { TranslateAhead.cancel(job.id) }

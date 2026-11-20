@@ -560,7 +560,7 @@
     <string name="translate_ahead_expired_note">The results were not collected within 29 days. The batch was still billed.</string>
     <string name="translate_ahead_cancel">Cancel this job</string>
     <string name="translate_ahead_resend_sonnet">Send declined songs to Sonnet</string>
-    <string name="translate_ahead_resend_failed">Send failed songs again</string>
+    <string name="translate_ahead_resend_failed">Send failed songs again (lyrics not fetched included)</string>
     <string name="translate_ahead_clear">Clear finished jobs</string>
     <string name="translation_status">Translation status</string>
     <string name="translation_status_view">Translation status</string>
@@ -714,6 +714,8 @@
     <string name="floating_pin_detail">It can no longer be dragged; a tap still opens the app and a hold still hides it. Different from locking, which lets touches through.</string>
     <string name="floating_reset_position">Move it back to the top</string>
     <string name="floating_reset_position_done">Floating lyrics moved back to the top</string>
+    <string name="translate_ahead_track_lyrics_error">Lyrics could not be fetched (timed out or no connection)</string>
+    <string name="translate_ahead_summary_lyrics_error">%1$d songs whose lyrics could not be fetched: tried twice. Send them again from below.</string>
     <string name="ko_window_summary">Summary</string>
     <string name="ko_window_songs">Songs · %1$d</string>
     <string name="ko_window_space">Space used</string>

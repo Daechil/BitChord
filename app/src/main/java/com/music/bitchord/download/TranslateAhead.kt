@@ -68,7 +68,9 @@ object TranslateAhead {
     private const val PERIODIC_WORK = "translate_ahead_poll"
     private const val WATCH_WORK = "translate_ahead_watch"
     private const val WATCHES_FILE = "watches.json"
-    private const val LYRICS_TIMEOUT_MS = 25_000L
+    /** A song's whole lyrics lookup, the second try under its original name included. */
+    private const val LYRICS_TIMEOUT_MS = 60_000L
+    private const val DURATION_TIMEOUT_MS = 10_000L
 
     /**
      * Songs per batch. A batch goes up as soon as this many songs needing an
@@ -101,6 +103,8 @@ object TranslateAhead {
         /** Already had a Claude translation in this style. */
         const val ALREADY = "already"
         const val NO_LYRICS = "no_lyrics"
+        /** The lyrics could not be fetched: the lookup ran out of time or there was no connection. Not the same as none. */
+        const val LYRICS_ERROR = "lyrics_error"
         /** Already in the language (or, for a pronunciation, the script) asked for. */
         const val SAME_LANGUAGE = "same_language"
         const val DECLINED = "declined"
@@ -272,7 +276,8 @@ object TranslateAhead {
         fun unanswered(status: String?) = if (declined) {
             status == TrackStatus.DECLINED
         } else {
-            status == TrackStatus.FAILED || status == TrackStatus.SENT || status == TrackStatus.PENDING
+            status == TrackStatus.FAILED || status == TrackStatus.SENT || status == TrackStatus.PENDING ||
+                status == TrackStatus.LYRICS_ERROR
         }
         val songs = job.tracks
             .filter { unanswered(it.status) || unanswered(it.readingStatus) }
@@ -612,13 +617,17 @@ object TranslateAhead {
         }
         val pending = Pending()
         var stopped: ClaudeFailure? = null
+        // Every song once; then once more for those whose lyrics could not be
+        // fetched — a timeout or a dropped connection is not "no lyrics".
+        for (pass in 0..1) {
         for ((index, track) in job.tracks.withIndex()) {
             if (!stillPreparing(job.id)) return
             val current = _jobs.value.firstOrNull { it.id == job.id }?.tracks?.getOrNull(index) ?: continue
-            if (current.status != TrackStatus.PENDING) continue
-            val lines = lyricsFor(app, track, saved[track.videoId])
-            var status = TrackStatus.NO_LYRICS
-            var readingStatus: String? = if (job.reading) TrackStatus.NO_LYRICS else null
+            if (current.status != (if (pass == 0) TrackStatus.PENDING else TrackStatus.LYRICS_ERROR)) continue
+            val found = lyricsFor(app, track, saved[track.videoId])
+            val lines = (found as? LyricsLookup.Found)?.lines
+            var status = if (found is LyricsLookup.Failed) TrackStatus.LYRICS_ERROR else TrackStatus.NO_LYRICS
+            var readingStatus: String? = if (job.reading) status else null
             if (lines != null && lines.any { it.text.isNotBlank() }) {
                 val translation = LyricsTranslation.aheadRequest("t$index", track.videoId, lines, job.target, job.model, reading = false)
                 status = statusOf(translation)
@@ -631,7 +640,7 @@ object TranslateAhead {
             }
             edit(job.id, save = index % 5 == 4) { now ->
                 now.copy(
-                    prepared = now.tracks.count { it.status != TrackStatus.PENDING } + 1,
+                    prepared = (now.tracks.count { it.status != TrackStatus.PENDING } + 1).coerceAtMost(now.tracks.size),
                     tracks = now.tracks.mapIndexed { i, it ->
                         if (i == index) it.copy(status = status, readingStatus = readingStatus) else it
                     },
@@ -642,6 +651,8 @@ object TranslateAhead {
                 pending.clear()
                 if (stopped != null) break
             }
+        }
+            if (stopped != null) break
         }
         if (!stillPreparing(job.id)) return
         if (stopped == null && pending.videoIds.isNotEmpty()) {
@@ -770,26 +781,86 @@ object TranslateAhead {
      * order and with the preference set there. The translation is filed under
      * these lines, so the nearer they are to the player's the better.
      */
-    private suspend fun lyricsFor(app: Context, track: Track, savedUri: String?): List<LyricLine>? {
-        savedUri?.let { uri -> EmbeddedLyrics.forUri(app, uri)?.let { return it } }
+    /** How a song's lyrics lookup went: found, none to be had, or not fetched at all. */
+    private sealed interface LyricsLookup {
+        class Found(val lines: List<LyricLine>) : LyricsLookup
+        data object Missing : LyricsLookup
+        /** Out of time, no connection or an error: worth another try. */
+        data object Failed : LyricsLookup
+    }
+
+    private suspend fun lyricsFor(app: Context, track: Track, savedUri: String?): LyricsLookup {
+        savedUri?.let { uri -> EmbeddedLyrics.forUri(app, uri)?.let { return LyricsLookup.Found(it) } }
+        // What the player showed, from whichever source it found or was told to use.
+        PlayedLyrics.get(track.videoId)?.let { return LyricsLookup.Found(it) }
+        if (!online(app)) return LyricsLookup.Failed
         return try {
-            withTimeoutOrNull(LYRICS_TIMEOUT_MS) {
+            // A playlist row may come without a length, and sources match a recording by it.
+            val durationMs = track.durationMs.takeIf { it > 0 } ?: youTubeDurationMs(track.videoId) ?: 0L
+            val lines = withTimeoutOrNull(LYRICS_TIMEOUT_MS) {
                 LyricsRepository.lyrics(
                     videoId = track.videoId,
                     title = track.title,
                     artist = track.artist,
-                    durationMs = track.durationMs,
+                    durationMs = durationMs,
                     album = track.album,
                     sources = AppSettings.lyricsSources.value,
                     order = AppSettings.lyricsSourceOrder.value,
                     prioritizeSyllableSync = AppSettings.prioritizeSyllableSync.value,
-                )?.lines
+                )?.lines.orEmpty()
+            }
+            when {
+                lines == null -> LyricsLookup.Failed
+                lines.any { it.text.isNotBlank() } -> LyricsLookup.Found(lines)
+                // Every source answered and none had them; but with the connection
+                // gone halfway, their silence says nothing.
+                !online(app) -> LyricsLookup.Failed
+                else -> LyricsLookup.Missing
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Exception) {
-            null
+            LyricsLookup.Failed
         }
+    }
+
+    private fun online(app: Context): Boolean {
+        val manager = app.getSystemService(android.net.ConnectivityManager::class.java) ?: return true
+        val network = manager.activeNetwork ?: return false
+        val capabilities = manager.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+
+    /** The track's length from YouTube Music's own queue for it; null when it cannot be had. */
+    private suspend fun youTubeDurationMs(videoId: String): Long? = try {
+        withTimeoutOrNull(DURATION_TIMEOUT_MS) {
+            val response = com.music.bitchord.data.innertube.Innertube.next(videoId)
+            lengthText(response, videoId).durationMillis().takeIf { it > 0 }
+        }
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (_: Exception) {
+        null
+    }
+
+    /** The "4:48" of [videoId]'s row in a `next` response. */
+    private fun lengthText(element: kotlinx.serialization.json.JsonElement, videoId: String): String? = when (element) {
+        is JsonObject -> {
+            val row = element["playlistPanelVideoRenderer"] as? JsonObject
+            val own = row?.takeIf { (it["videoId"] as? kotlinx.serialization.json.JsonPrimitive)?.content == videoId }
+                ?.get("lengthText")?.let(::plainText)
+            own ?: element.values.firstNotNullOfOrNull { lengthText(it, videoId) }
+        }
+        is kotlinx.serialization.json.JsonArray -> element.firstNotNullOfOrNull { lengthText(it, videoId) }
+        else -> null
+    }
+
+    private fun plainText(element: kotlinx.serialization.json.JsonElement): String? {
+        val text = element as? JsonObject ?: return null
+        (text["simpleText"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.let { return it }
+        val runs = text["runs"] as? kotlinx.serialization.json.JsonArray ?: return null
+        return runs.joinToString("") { ((it as? JsonObject)?.get("text") as? kotlinx.serialization.json.JsonPrimitive)?.content.orEmpty() }
+            .takeIf { it.isNotBlank() }
     }
 
     /** Asks about each of [job]'s batches still out, files what has come back, and closes the job once none is left. */

@@ -853,6 +853,9 @@
     <string name="waveform_seek_bar_subtitle">Draws the seek bar as the song\'s waveform: downloaded songs (worked out once, in the background) and songs Automix has analysed. Other songs keep the plain bar.</string>
     <string name="waveform_played">Waveforms for songs I\'ve heard</string>
     <string name="waveform_played_subtitle">Songs that aren\'t downloaded get one from the cache once the player has read the whole song ahead, usually within a minute of it starting. No extra data. The latest 3,000 are kept on this phone.</string>
+    <string name="ahead_live_updates">Live Update while translating ahead</string>
+    <string name="ahead_live_updates_subtitle">Shows progress as a status bar chip and at the top of the lock screen (Android 16). Whether it appears is up to the system.</string>
+    <string name="ahead_live_updates_blocked">Live Updates are off for BitChord in the system settings. Tap to turn them on.</string>
     <string name="ko_window_summary">Summary</string>
     <string name="ko_window_songs">Songs · %1$d</string>
     <string name="ko_window_space">Space used</string>

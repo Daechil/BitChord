@@ -255,6 +255,8 @@ object TranslateAheadNotifier {
         val open: PendingIntent?,
         val deleted: PendingIntent?,
         val group: String?,
+        /** A few characters for the status bar chip a Live Update gets: "12/40". */
+        val chip: String? = null,
     )
 
     private fun preparingNotification(app: Context, job: TranslateAhead.Job, queued: Int): Pair<String, Notification> {
@@ -277,6 +279,7 @@ object TranslateAheadNotifier {
             progress = job.prepared,
             indeterminate = total == 0,
             segments = 0,
+            chip = if (total > 0) "${job.prepared}/$total" else null,
             actions = listOf(app.getString(R.string.translate_ahead_cancel_short) to action(app, ACTION_CANCEL, job.id)),
             open = openLog(app, job.id),
             deleted = action(app, ACTION_DISMISSED, job.id),
@@ -305,6 +308,7 @@ object TranslateAheadNotifier {
             progress = job.chunksOver,
             indeterminate = canceling || job.chunksSent == 0,
             segments = job.chunksSent,
+            chip = if (!canceling && job.chunksSent > 0) "${job.chunksOver}/${job.chunksSent}" else null,
             actions = if (canceling) {
                 emptyList()
             } else {
@@ -396,6 +400,13 @@ object TranslateAheadNotifier {
         content.group?.let { builder.setGroup(it) }
         content.actions.forEach { (label, intent) ->
             builder.addAction(Notification.Action.Builder(icon, label, intent).build())
+        }
+        // Asked to be a Live Update — the status bar chip and the top of the
+        // lock screen — which the system grants or not, and the listener can
+        // turn off per app. Not granted, it is the same notification as before.
+        if (com.music.bitchord.data.settings.AppSettings.aheadLiveUpdates.value) {
+            builder.setRequestPromotedOngoing(true)
+            content.chip?.let { builder.setShortCriticalText(it) }
         }
         return builder.build()
     }

@@ -938,6 +938,12 @@ fun SettingsScreen(
                         onClick = { com.music.bitchord.ui.components.KoAlerts.chunkSize.value = true },
                     )
                 }
+                if (android.os.Build.VERSION.SDK_INT >= 36) {
+                    val liveTitle = stringResource(R.string.ahead_live_updates)
+                    row(liveTitle, "live update", "notification", "status bar", "미리", "번역", "실시간", "알림", "상태바") {
+                        com.music.bitchord.ui.components.AheadLiveUpdatesRow(liveTitle)
+                    }
+                }
             }
         }
         if (shows(SettingsCategory.KO_FEATURES)) SearchableSettingsGroup(

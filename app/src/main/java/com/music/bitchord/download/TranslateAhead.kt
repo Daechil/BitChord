@@ -535,7 +535,14 @@ object TranslateAhead {
             }
             val hours = AppSettings.aheadWatchHours.value.coerceAtLeast(1).toLong()
             val request = PeriodicWorkRequestBuilder<TranslateAheadWatchWorker>(hours, TimeUnit.HOURS)
-                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                // As PlaylistSync's: a check can end in a paid batch, and neither
+                // is worth the last few percent of the battery.
+                .setConstraints(
+                    Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .setRequiresBatteryNotLow(true)
+                        .build(),
+                )
                 .build()
             manager.enqueueUniquePeriodicWork(
                 WATCH_WORK,

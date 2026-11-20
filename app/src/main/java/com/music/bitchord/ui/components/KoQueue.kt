@@ -1,6 +1,7 @@
 package com.music.bitchord.ui.components
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 import com.music.bitchord.data.model.Song
@@ -103,5 +104,52 @@ fun WaveformPlayedRow(title: String) {
             )
         },
         onClick = { com.music.bitchord.data.settings.AppSettings.setWaveformPlayed(!on) },
+    )
+}
+
+/**
+ * Settings' "Live Update" switch for translating ahead (Android 16+). When it
+ * is on but the system has Live Updates off for this app, it says so, and a
+ * tap opens the page where they are turned on.
+ */
+@androidx.annotation.RequiresApi(36)
+@androidx.compose.runtime.Composable
+fun AheadLiveUpdatesRow(title: String) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val on by com.music.bitchord.data.settings.AppSettings.aheadLiveUpdates.collectAsStateWithLifecycle()
+    // Asked again each time the screen comes back: the listener may have just
+    // changed it on the system's page.
+    var resumed by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
+        resumed++
+        onPauseOrDispose { }
+    }
+    val allowed = androidx.compose.runtime.remember(resumed) {
+        runCatching {
+            context.getSystemService(android.app.NotificationManager::class.java).canPostPromotedNotifications()
+        }.getOrDefault(true)
+    }
+    val openSystemPage = {
+        runCatching {
+            context.startActivity(
+                android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_PROMOTION_SETTINGS)
+                    .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }
+        Unit
+    }
+    com.music.bitchord.ui.screens.SettingsRow(
+        icon = com.music.bitchord.ui.icons.SfIcons.AutoAwesome,
+        title = title,
+        subtitle = androidx.compose.ui.res.stringResource(
+            if (on && !allowed) com.music.bitchord.R.string.ahead_live_updates_blocked else com.music.bitchord.R.string.ahead_live_updates_subtitle,
+        ),
+        trailing = {
+            IosSwitch(checked = on, onCheckedChange = com.music.bitchord.data.settings.AppSettings::setAheadLiveUpdates)
+        },
+        onClick = {
+            if (on && !allowed) openSystemPage() else com.music.bitchord.data.settings.AppSettings.setAheadLiveUpdates(!on)
+        },
     )
 }

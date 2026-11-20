@@ -156,14 +156,31 @@ object ClaudeRecommend {
     /** The first song result that is this title by this artist; null when YouTube Music has none. */
     private suspend fun find(title: String, artist: String): Song? {
         val rows = YtMusicRepository.search("$title $artist".trim(), SearchFilter.SONGS).getOrNull().orEmpty()
-        return rows.asSequence()
+        val songs = rows.asSequence()
             .mapNotNull { (it as? SearchResult.Track)?.song ?: (it as? SearchResult.TopTrack)?.song }
+            .filter { it.videoId.isNotBlank() }
             .take(SEARCH_DEPTH)
-            .firstOrNull { song ->
-                song.videoId.isNotBlank() &&
-                    SongMatch.sameSong(title, artist, 0L, song.title, song.artist, song.durationMillis().takeIf { it > 0 }?.div(1000.0))
-            }
+            .toList()
+        return songs.firstOrNull { song ->
+            SongMatch.sameSong(title, artist, 0L, song.title, song.artist, song.durationMillis().takeIf { it > 0 }?.div(1000.0))
+        } ?: songs.take(TRUSTED_RANKS).firstOrNull { song -> topHitIsSong(title, song.title) }
     }
+
+    /**
+     * YouTube Music writes artists in the app's language ("아이유", "요네즈 켄시")
+     * where Claude may write them otherwise ("IU", "Kenshi Yonezu"), and with no
+     * length to go on [SongMatch] can't tell those apart from two artists. A hit
+     * near the top of a search for this very title and artist, with the same
+     * title and the same version, is taken as the song: a cover rarely ranks
+     * that high for its original's name.
+     */
+    internal fun topHitIsSong(title: String, foundTitle: String): Boolean =
+        normalizedTitle(title).isNotEmpty() &&
+            normalizedTitle(title) == normalizedTitle(foundTitle) &&
+            SongMatch.versionOf(title) == SongMatch.versionOf(foundTitle)
+
+    private fun normalizedTitle(value: String): String =
+        java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFKC).lowercase().filter { it.isLetterOrDigit() }
 
     private fun key(title: String, artist: String): String =
         (title + "\u0000" + artist).lowercase().filter { it.isLetterOrDigit() || it == '\u0000' }
@@ -173,6 +190,8 @@ object ClaudeRecommend {
     const val MAX_MOOD_CHARS = 200
     private const val LOOKUPS_AT_ONCE = 4
     private const val SEARCH_DEPTH = 5
+    /** How far down a search a same-titled hit is trusted without its artist; see [topHitIsSong]. */
+    private const val TRUSTED_RANKS = 2
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -209,7 +228,7 @@ object ClaudeRecommend {
         - "novelty": "familiar" = mostly the seeds' own artists and artists very close to them; "mixed" = about half and half; "new" = mostly artists not among the seeds.
         - "reason_language": the language to write each reason in.
         Return "songs": up to "count" items of {"title","artist","reason"}.
-        - Only real, officially released songs you are confident exist, as they are titled on streaming services, with the title in its original script (日本語, 한국어, English…) and the main artist only. Never invent songs. Fewer songs is better than a made-up one.
+        - Only real, officially released songs you are confident exist, as they are titled on streaming services, with the title and the main artist written exactly as the original release credits them (for example 米津玄師, IU, YOASOBI), and the main artist only. Never invent songs. Fewer songs is better than a made-up one.
         - No song from "seeds" or "avoid", and no song twice. Vary the artists: at most two songs by one artist unless "novelty" is "familiar".
         - Prefer the original studio recording; no live, remix, cover or sped-up versions unless the mood asks for them.
         - "reason": one short sentence, under 80 characters, on why it fits — the sound, the mood, a connection to a seed. No quotes from lyrics.

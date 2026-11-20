@@ -918,6 +918,9 @@ object AppSettings {
     /** The seek bar drawn as the song's waveform, where one is known. Off unless chosen. */
     val waveformSeekBar = MutableStateFlow(false)
 
+    /** Translating ahead asks Android 16 to show its progress as a Live Update. */
+    val aheadLiveUpdates = MutableStateFlow(true)
+
     /** Also songs heard but not downloaded, from the cache once read ahead whole. */
     val waveformPlayed = MutableStateFlow(true)
 
@@ -1461,6 +1464,7 @@ object AppSettings {
         keepDownloadTranslations.value = prefs.getBoolean(KEY_KEEP_DOWNLOAD_TRANSLATIONS, true)
         lockScreenLyrics.value = prefs.getBoolean(KEY_LOCK_SCREEN_LYRICS, false)
         waveformSeekBar.value = prefs.getBoolean(KEY_WAVEFORM_SEEK_BAR, false)
+        aheadLiveUpdates.value = prefs.getBoolean(KEY_AHEAD_LIVE_UPDATES, true)
         waveformPlayed.value = prefs.getBoolean(KEY_WAVEFORM_PLAYED, true)
         lyricsSources.value = readLyricsSources()
         lyricsSourceOrder.value = readLyricsSourceOrder()
@@ -2327,6 +2331,11 @@ object AppSettings {
         prefs.edit().putBoolean(KEY_WAVEFORM_PLAYED, value).apply()
     }
 
+    fun setAheadLiveUpdates(value: Boolean) {
+        aheadLiveUpdates.value = value
+        prefs.edit().putBoolean(KEY_AHEAD_LIVE_UPDATES, value).apply()
+    }
+
     fun setWaveformSeekBar(value: Boolean) {
         waveformSeekBar.value = value
         prefs.edit().putBoolean(KEY_WAVEFORM_SEEK_BAR, value).apply()
@@ -3166,6 +3175,7 @@ object AppSettings {
     private const val KEY_KEEP_DOWNLOAD_TRANSLATIONS = "ko_keep_download_translations"
     private const val KEY_LOCK_SCREEN_LYRICS = "ko_lock_screen_lyrics"
     private const val KEY_WAVEFORM_SEEK_BAR = "ko_waveform_seek_bar"
+    private const val KEY_AHEAD_LIVE_UPDATES = "ko_ahead_live_updates"
     private const val KEY_WAVEFORM_PLAYED = "ko_waveform_played"
     private const val KEY_LYRICS_SOURCES = "lyrics_sources"
     private const val KEY_LYRICS_SOURCES_SEEN = "lyrics_sources_seen"

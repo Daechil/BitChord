@@ -76,7 +76,14 @@ object BiniLyrics {
         val body = lyricsGet(url.toString()) ?: return@withContext null
         val response = runCatching { lyricsJson.decodeFromString<Response>(body) }.getOrNull()
             ?: return@withContext null
-        response.results?.firstOrNull()
+        val results = response.results.orEmpty()
+        // Asked by recording, the answer is that recording. Asked by name, the
+        // answer is a guess, and its ISRC is about to be handed to every source
+        // that trusts one — so it has to be this song by name first.
+        if (!isrc.isNullOrBlank()) return@withContext results.firstOrNull()
+        results.firstOrNull { hit ->
+            SongMatch.sameSong(title, artist, durationMs, hit.trackName, hit.artistName, hit.duration?.let { if (it > 10_000) it / 1000.0 else it.toDouble() })
+        }
     }
 
     /**

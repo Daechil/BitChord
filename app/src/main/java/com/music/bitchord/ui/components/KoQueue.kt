@@ -85,3 +85,23 @@ fun WaveformSeekBarRow(title: String) {
         onClick = { com.music.bitchord.data.settings.AppSettings.setWaveformSeekBar(!on) },
     )
 }
+
+/** "Also songs I've heard": waveforms worked out from the cache. Greyed out while the waveform is off. */
+@androidx.compose.runtime.Composable
+fun WaveformPlayedRow(title: String) {
+    val waveform by com.music.bitchord.data.settings.AppSettings.waveformSeekBar.collectAsStateWithLifecycle()
+    val on by com.music.bitchord.data.settings.AppSettings.waveformPlayed.collectAsStateWithLifecycle()
+    com.music.bitchord.ui.screens.SettingsRow(
+        icon = com.music.bitchord.ui.icons.SfIcons.AutoAwesome,
+        title = title,
+        subtitle = androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.waveform_played_subtitle),
+        enabled = waveform,
+        trailing = {
+            IosSwitch(
+                checked = on && waveform,
+                onCheckedChange = if (waveform) com.music.bitchord.data.settings.AppSettings::setWaveformPlayed else null,
+            )
+        },
+        onClick = { com.music.bitchord.data.settings.AppSettings.setWaveformPlayed(!on) },
+    )
+}

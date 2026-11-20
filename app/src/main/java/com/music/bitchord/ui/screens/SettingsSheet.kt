@@ -1059,6 +1059,10 @@ fun SettingsScreen(
             row(waveformTitle, "waveform", "seek bar", "progress", "음파", "재생 막대", "파형") {
                 com.music.bitchord.ui.components.WaveformSeekBarRow(waveformTitle)
             }
+            val waveformPlayedTitle = stringResource(R.string.waveform_played)
+            row(waveformPlayedTitle, "waveform", "played", "cache", "음파", "들은 곡", "캐시") {
+                com.music.bitchord.ui.components.WaveformPlayedRow(waveformPlayedTitle)
+            }
         }
         if (shows(SettingsCategory.KO_FEATURES)) SearchableSettingsGroup(
             search,

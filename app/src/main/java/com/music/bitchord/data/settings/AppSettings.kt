@@ -918,6 +918,9 @@ object AppSettings {
     /** The seek bar drawn as the song's waveform, where one is known. Off unless chosen. */
     val waveformSeekBar = MutableStateFlow(false)
 
+    /** Also songs heard but not downloaded, from the cache once read ahead whole. */
+    val waveformPlayed = MutableStateFlow(true)
+
     /** The databases [syncedLyrics] may ask. Empty is the same as off. */
     val lyricsSources = MutableStateFlow(LyricsSource.offered.toSet())
 
@@ -1458,6 +1461,7 @@ object AppSettings {
         keepDownloadTranslations.value = prefs.getBoolean(KEY_KEEP_DOWNLOAD_TRANSLATIONS, true)
         lockScreenLyrics.value = prefs.getBoolean(KEY_LOCK_SCREEN_LYRICS, false)
         waveformSeekBar.value = prefs.getBoolean(KEY_WAVEFORM_SEEK_BAR, false)
+        waveformPlayed.value = prefs.getBoolean(KEY_WAVEFORM_PLAYED, true)
         lyricsSources.value = readLyricsSources()
         lyricsSourceOrder.value = readLyricsSourceOrder()
         prioritizeSyllableSync.value = prefs.getBoolean(KEY_PRIORITIZE_SYLLABLE_SYNC, false)
@@ -2318,6 +2322,11 @@ object AppSettings {
         prefs.edit().putBoolean(KEY_KEEP_DOWNLOAD_TRANSLATIONS, value).apply()
     }
 
+    fun setWaveformPlayed(value: Boolean) {
+        waveformPlayed.value = value
+        prefs.edit().putBoolean(KEY_WAVEFORM_PLAYED, value).apply()
+    }
+
     fun setWaveformSeekBar(value: Boolean) {
         waveformSeekBar.value = value
         prefs.edit().putBoolean(KEY_WAVEFORM_SEEK_BAR, value).apply()
@@ -3157,6 +3166,7 @@ object AppSettings {
     private const val KEY_KEEP_DOWNLOAD_TRANSLATIONS = "ko_keep_download_translations"
     private const val KEY_LOCK_SCREEN_LYRICS = "ko_lock_screen_lyrics"
     private const val KEY_WAVEFORM_SEEK_BAR = "ko_waveform_seek_bar"
+    private const val KEY_WAVEFORM_PLAYED = "ko_waveform_played"
     private const val KEY_LYRICS_SOURCES = "lyrics_sources"
     private const val KEY_LYRICS_SOURCES_SEEN = "lyrics_sources_seen"
     private const val KEY_LYRICS_SOURCE_ORDER = "lyrics_source_order"

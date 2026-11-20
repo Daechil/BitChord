@@ -851,6 +851,8 @@
     <string name="recommend_clear_history_confirm">Delete all %1$d past suggestions? This can\'t be undone.</string>
     <string name="waveform_seek_bar">Waveform seek bar</string>
     <string name="waveform_seek_bar_subtitle">Draws the seek bar as the song\'s waveform: downloaded songs (worked out once, in the background) and songs Automix has analysed. Other songs keep the plain bar.</string>
+    <string name="waveform_played">Waveforms for songs I\'ve heard</string>
+    <string name="waveform_played_subtitle">Songs that aren\'t downloaded get one from the cache once the player has read the whole song ahead, usually within a minute of it starting. No extra data. The latest 3,000 are kept on this phone.</string>
     <string name="ko_window_summary">Summary</string>
     <string name="ko_window_songs">Songs · %1$d</string>
     <string name="ko_window_space">Space used</string>

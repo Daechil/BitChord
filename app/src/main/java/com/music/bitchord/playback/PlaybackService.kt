@@ -1019,6 +1019,9 @@ class PlaybackService : MediaLibraryService() {
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            // The seek bar's waveform for a song heard but not downloaded: worked
+            // out from the cache once the song has been read ahead whole.
+            com.music.bitchord.download.Waveforms.playing(mediaItem?.mediaId)
             // The player this fired on, which is by definition the one the
             // session is currently pointed at.
             val exoPlayer = player ?: return

@@ -2122,6 +2122,23 @@ object AudioCache {
      * from a different source and can be a different cut of the same song,
      * where a shared beat grid would put every anchor seconds off.
      */
+    /**
+     * A disk-only reader over the lightest complete rendition of [videoId], for
+     * the seek bar's waveform; null until one is whole. Never reaches the
+     * network: a span gone missing fails the read rather than fetching.
+     * Callers must [MediaDataSource.close] it.
+     */
+    fun completeAudioSource(videoId: String): MediaDataSource? {
+        if (!::cache.isInitialized || videoId.isBlank()) return null
+        val rendition = renditionKeysFor(videoId)
+            .filterNot { it.endsWith("#watch") }
+            .mapNotNull(::renditionFor)
+            .filter { it.isComplete }
+            .minByOrNull { it.contentLength }
+            ?: return null
+        return renditionDataSource(Uri.parse("bitchord-cache://waveform/$videoId"), rendition)
+    }
+
     fun renditionsOf(uri: Uri): List<Rendition> {
         if (!::cache.isInitialized) return emptyList()
         val videoId = uri.getQueryParameter("v")

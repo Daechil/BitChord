@@ -812,6 +812,8 @@
     <string name="recommend_clear_history_confirm">추천 기록 %1$d개를 모두 지울까요? 되돌릴 수 없어요.</string>
     <string name="waveform_seek_bar">음파 모양 재생 막대</string>
     <string name="waveform_seek_bar_subtitle">재생 막대를 곡의 음파 모양으로 보여줘요. 다운로드한 곡(백그라운드에서 한 번 분석)과 Automix가 분석한 곡에 나오고, 나머지 곡은 지금처럼 얇은 막대예요.</string>
+    <string name="waveform_played">들은 곡도 음파 보기</string>
+    <string name="waveform_played_subtitle">다운로드하지 않은 곡도, 재생하면서 곡 전체가 캐시에 받아지면(보통 시작 후 1분 안) 음파를 만들어요. 데이터를 더 쓰지 않아요. 최근 3,000곡까지 이 기기에 보관해요.</string>
     <string name="ko_window_summary">요약</string>
     <string name="ko_window_songs">곡 · %1$d곡</string>
     <string name="ko_window_space">사용 공간</string>

@@ -59,10 +59,11 @@ object SongMatch {
         val found = artistsOf(foundArtist.orEmpty())
         if (wanted.isEmpty() || found.isEmpty()) return true
         if (wanted.any { w -> found.any { f -> w == f || w.contains(f) || f.contains(w) } }) return true
-        // An artist written in another script (Kenshi Yonezu / 米津玄師) can't be
-        // compared by its letters, so the length stands in for it. Two names in
-        // the same script that differ are two artists: a cover.
-        if (sameScript(artist, foundArtist.orEmpty())) return false
+        // An artist written in another script (Kenshi Yonezu / 米津玄師,
+        // Official Hige Dandism / Official髭男dism, 周杰倫 / 周杰伦) can't be
+        // compared by its letters, so the length stands in for it. Two names
+        // both in plain Latin letters that differ are two artists: a cover.
+        if (plainLatin(artist) && plainLatin(foundArtist.orEmpty())) return false
         return gap != null && gap <= NEAR_SECONDS
     }
 
@@ -95,16 +96,10 @@ object SongMatch {
             .split(' ').filter { it in VERSION_WORDS }.toSet()
     }
 
-    /** Whether both names are written mostly in Latin letters, or both mostly not. */
-    private fun sameScript(a: String, b: String): Boolean {
-        fun latin(value: String): Boolean? {
-            val letters = value.filter { it.isLetter() }
-            if (letters.isEmpty()) return null
-            return letters.count { it.code < 0x250 } * 2 >= letters.length
-        }
-        val left = latin(a) ?: return false
-        val right = latin(b) ?: return false
-        return left == right
+    /** Letters, every one of them Latin. */
+    private fun plainLatin(value: String): Boolean {
+        val letters = value.filter { it.isLetter() }
+        return letters.isNotEmpty() && letters.all { it.code < 0x250 }
     }
 
     /** Words in brackets that make it a different recording; see [LrcRed]. */
@@ -112,6 +107,8 @@ object SongMatch {
         "live", "remix", "remixed", "mix", "acoustic", "unplugged", "instrumental",
         "karaoke", "cappella", "acapella", "demo", "cover", "sped", "slowed", "nightcore",
         "lofi", "orchestral", "extended", "jam", "inst",
+        // Another language's recording, or a shorter one: other words, other timings.
+        "ver", "japanese", "korean", "english", "chinese", "tv",
     )
 
     private fun artistsOf(artist: String): Set<String> =

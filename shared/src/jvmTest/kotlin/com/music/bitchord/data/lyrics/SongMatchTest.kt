@@ -51,4 +51,11 @@ class SongMatchTest {
         assertTrue(SongMatch.sameArtists("Billie Eilish", "Billie Eilish"))
         assertFalse(SongMatch.sameArtists("Billie Eilish", "Billie Eilish, Justin Bieber"))
     }
+
+    @Test
+    fun namesInMixedOrOtherScriptsFallBackOnTheLength() {
+        assertTrue(same("Pretender", "Official Hige Dandism", 327_000, "Pretender", "Official髭男dism", 326.0))
+        assertTrue(same("晴天", "周杰倫", 270_000, "晴天", "周杰伦", 269.0))
+        assertFalse(same("Spring Day", "BTS", 275_000, "Spring Day (Japanese ver.)", "BTS", 274.0))
+    }
 }

@@ -90,11 +90,16 @@ class LiveLyricsCheck {
         return (if (best >= 0.35) "✓" else "✗") + (best * 100).toInt()
     }
 
-    private suspend fun fetchAll(w: Wanted, title: String, artist: String, isrc: String?): List<Set<String>?> =
+    /** [bini] stands in for the Bini source when given: the old code took its search's first hit as it came. */
+    private suspend fun fetchAll(w: Wanted, title: String, artist: String, isrc: String?, bini: BiniLyrics.Hit? = null): List<Set<String>?> =
         kotlinx.coroutines.coroutineScope {
-            sources.map { (_, fetch) ->
+            sources.map { (name, fetch) ->
                 async(Dispatchers.IO) {
-                    withTimeoutOrNull(30_000) { runCatching { fetch(w, title, artist, isrc) }.getOrNull() }
+                    withTimeoutOrNull(60_000) {
+                        runCatching {
+                            if (name == "Bini" && SongMatch.bypass) bini?.let { BiniLyrics.lyricsFor(it)?.lines } else fetch(w, title, artist, isrc)
+                        }.getOrNull()
+                    }
                         ?.takeIf { lines -> lines.any { it.text.isNotBlank() } }
                         ?.let(::grams)
                 }
@@ -122,11 +127,19 @@ class LiveLyricsCheck {
                 val raw = runCatching { BiniLyrics.search(title, artist, w.durationMs) }.getOrDefault(emptyList())
                 val first = raw.firstOrNull()
                 val used = runCatching { BiniLyrics.identify(title, artist, w.durationMs) }.getOrNull()
-                SongMatch.bypass = false
+                // A first, unchecked pass warms the sources' own caches (LRCLIB can
+                // take most of a minute on a song it hasn't been asked about), so a
+                // slow first answer isn't mistaken for the check turning one away.
+                SongMatch.bypass = true
+                try {
+                    fetchAll(w, title, artist, first?.isrc?.takeIf { it.isNotBlank() }, first)
+                } finally {
+                    SongMatch.bypass = false
+                }
                 val on = fetchAll(w, title, artist, used?.isrc?.takeIf { it.isNotBlank() })
                 SongMatch.bypass = true
                 val off = try {
-                    fetchAll(w, title, artist, first?.isrc?.takeIf { it.isNotBlank() })
+                    fetchAll(w, title, artist, first?.isrc?.takeIf { it.isNotBlank() }, first)
                 } finally {
                     SongMatch.bypass = false
                 }

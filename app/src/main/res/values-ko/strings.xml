@@ -810,6 +810,8 @@
     <string name="recommend_delete_entry_confirm">이 추천 기록을 지울까요? 곡과 플레이리스트에는 영향이 없어요.</string>
     <string name="recommend_clear_history">추천 기록 전체 지우기</string>
     <string name="recommend_clear_history_confirm">추천 기록 %1$d개를 모두 지울까요? 되돌릴 수 없어요.</string>
+    <string name="waveform_seek_bar">음파 모양 재생 막대</string>
+    <string name="waveform_seek_bar_subtitle">재생 막대를 곡의 음파 모양으로 보여줘요. 다운로드한 곡(백그라운드에서 한 번 분석)과 Automix가 분석한 곡에 나오고, 나머지 곡은 지금처럼 얇은 막대예요.</string>
     <string name="ko_window_summary">요약</string>
     <string name="ko_window_songs">곡 · %1$d곡</string>
     <string name="ko_window_space">사용 공간</string>

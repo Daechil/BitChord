@@ -915,6 +915,9 @@ object AppSettings {
     /** Show the full-screen lyrics over the lock screen. See LockScreenLyrics. */
     val lockScreenLyrics = MutableStateFlow(false)
 
+    /** The seek bar drawn as the song's waveform, where one is known. Off unless chosen. */
+    val waveformSeekBar = MutableStateFlow(false)
+
     /** The databases [syncedLyrics] may ask. Empty is the same as off. */
     val lyricsSources = MutableStateFlow(LyricsSource.offered.toSet())
 
@@ -1454,6 +1457,7 @@ object AppSettings {
         resumeOnHeadphones.value = prefs.getBoolean(KEY_RESUME_ON_HEADPHONES, true)
         keepDownloadTranslations.value = prefs.getBoolean(KEY_KEEP_DOWNLOAD_TRANSLATIONS, true)
         lockScreenLyrics.value = prefs.getBoolean(KEY_LOCK_SCREEN_LYRICS, false)
+        waveformSeekBar.value = prefs.getBoolean(KEY_WAVEFORM_SEEK_BAR, false)
         lyricsSources.value = readLyricsSources()
         lyricsSourceOrder.value = readLyricsSourceOrder()
         prioritizeSyllableSync.value = prefs.getBoolean(KEY_PRIORITIZE_SYLLABLE_SYNC, false)
@@ -2314,6 +2318,11 @@ object AppSettings {
         prefs.edit().putBoolean(KEY_KEEP_DOWNLOAD_TRANSLATIONS, value).apply()
     }
 
+    fun setWaveformSeekBar(value: Boolean) {
+        waveformSeekBar.value = value
+        prefs.edit().putBoolean(KEY_WAVEFORM_SEEK_BAR, value).apply()
+    }
+
     fun setLockScreenLyrics(value: Boolean) {
         lockScreenLyrics.value = value
         prefs.edit().putBoolean(KEY_LOCK_SCREEN_LYRICS, value).apply()
@@ -3147,6 +3156,7 @@ object AppSettings {
     private const val KEY_RESUME_ON_HEADPHONES = "ko_resume_on_headphones"
     private const val KEY_KEEP_DOWNLOAD_TRANSLATIONS = "ko_keep_download_translations"
     private const val KEY_LOCK_SCREEN_LYRICS = "ko_lock_screen_lyrics"
+    private const val KEY_WAVEFORM_SEEK_BAR = "ko_waveform_seek_bar"
     private const val KEY_LYRICS_SOURCES = "lyrics_sources"
     private const val KEY_LYRICS_SOURCES_SEEN = "lyrics_sources_seen"
     private const val KEY_LYRICS_SOURCE_ORDER = "lyrics_source_order"

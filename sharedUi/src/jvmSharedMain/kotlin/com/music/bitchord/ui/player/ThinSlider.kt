@@ -93,6 +93,12 @@ fun ThinSlider(
      * unplayed bar so the mix is visible before it arrives.
      */
     transitionWindow: ClosedFloatingPointRange<Float>? = null,
+    /**
+     * The song's loudness from start to end, 0..1: the bar is drawn as its
+     * waveform instead, played bars bright and the rest dim. Null for the
+     * plain bar. A wait for a version switch still draws the plain bar's sheen.
+     */
+    levels: FloatArray? = null,
     idleHeight: Dp = 7.dp,
     activeHeight: Dp = 12.dp,
     activeColor: Color = Color.White.copy(alpha = 0.92f),
@@ -181,11 +187,26 @@ fun ThinSlider(
             },
         contentAlignment = Alignment.Center,
     ) {
+        val wave = levels?.takeIf { it.size >= 4 && !sheenVisible }
         Canvas(
             Modifier
                 .fillMaxWidth()
-                .height(height),
+                .height(if (wave != null) WAVE_HEIGHT else height),
         ) {
+            if (wave != null) {
+                val cover = if (dragging) 0f else mixPulse?.cover ?: 0f
+                val base = value.coerceIn(0f, 1f)
+                val alpha = if (dragging) activeColor.alpha else mixPulse?.alpha(activeColor.alpha) ?: activeColor.alpha
+                drawWaveform(
+                    levels = wave,
+                    fraction = base + (1f - base) * cover,
+                    played = activeColor.copy(alpha = alpha),
+                    unplayed = inactiveColor,
+                    window = shownWindow?.takeIf { windowAlpha > 0f },
+                    marker = markerColor.copy(alpha = markerColor.alpha * windowAlpha),
+                )
+                return@Canvas
+            }
             val radius = CornerRadius(size.height / 2f)
             drawRoundRect(color = inactiveColor, cornerRadius = radius)
             // Between the two track colours, and drawn *under* the played fill:
@@ -489,3 +510,52 @@ private fun MixSheen(height: Dp, color: Color) {
         )
     }
 }
+
+/** How tall the waveform is drawn; it fits inside the slider's touch target. */
+private val WAVE_HEIGHT = 24.dp
+
+/** One bar per this much width, so a phone and a tablet both get evenly spaced bars. */
+private val WAVE_SLOT = 4.dp
+
+/**
+ * [levels] as vertical bars, centred, at least a dot tall: those before
+ * [fraction] in [played], those after in [unplayed], and those inside an
+ * upcoming Automix [window] in [marker].
+ */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawWaveform(
+    levels: FloatArray,
+    fraction: Float,
+    played: Color,
+    unplayed: Color,
+    window: ClosedFloatingPointRange<Float>?,
+    marker: Color,
+) {
+    val count = (size.width / WAVE_SLOT.toPx()).toInt().coerceIn(8, 400)
+    val slot = size.width / count
+    val barWidth = (slot * 0.6f).coerceAtLeast(1f)
+    val minHeight = barWidth
+    val corner = CornerRadius(barWidth / 2f)
+    for (bar in 0 until count) {
+        // The loudest of the values this bar covers.
+        val from = bar * levels.size / count
+        val to = ((bar + 1) * levels.size / count).coerceAtLeast(from + 1).coerceAtMost(levels.size)
+        var level = 0f
+        for (i in from until to) if (levels[i] > level) level = levels[i]
+        val height = (level * size.height).coerceAtLeast(minHeight)
+        val centre = (bar + 0.5f) / count
+        val color = when {
+            centre <= fraction -> played
+            window != null && centre in window -> unplayed.compositeOverOrSelf(marker)
+            else -> unplayed
+        }
+        drawRoundRect(
+            color = color,
+            topLeft = androidx.compose.ui.geometry.Offset(bar * slot + (slot - barWidth) / 2f, (size.height - height) / 2f),
+            size = Size(barWidth, height),
+            cornerRadius = corner,
+        )
+    }
+}
+
+/** [marker] where it shows, else this colour: a window's bars stand out from the rest of the unplayed ones. */
+private fun Color.compositeOverOrSelf(marker: Color): Color = if (marker.alpha > alpha) marker else this

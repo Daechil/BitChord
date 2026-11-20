@@ -1055,6 +1055,10 @@ fun SettingsScreen(
                     },
                 )
             }
+            val waveformTitle = stringResource(R.string.waveform_seek_bar)
+            row(waveformTitle, "waveform", "seek bar", "progress", "음파", "재생 막대", "파형") {
+                com.music.bitchord.ui.components.WaveformSeekBarRow(waveformTitle)
+            }
         }
         if (shows(SettingsCategory.KO_FEATURES)) SearchableSettingsGroup(
             search,

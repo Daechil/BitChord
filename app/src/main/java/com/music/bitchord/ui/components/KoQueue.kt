@@ -1,5 +1,8 @@
 package com.music.bitchord.ui.components
 
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
 import com.music.bitchord.data.model.Song
 
 /**
@@ -66,4 +69,19 @@ fun KoQueueHost(
             KoQueue.savePlaylist = null
         }
     }
+}
+
+/** Settings' "waveform seek bar" switch: its own composable, so Settings' long body gains a call rather than the row. */
+@androidx.compose.runtime.Composable
+fun WaveformSeekBarRow(title: String) {
+    val on by com.music.bitchord.data.settings.AppSettings.waveformSeekBar.collectAsStateWithLifecycle()
+    com.music.bitchord.ui.screens.SettingsRow(
+        icon = com.music.bitchord.ui.icons.SfIcons.AutoAwesome,
+        title = title,
+        subtitle = androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.waveform_seek_bar_subtitle),
+        trailing = {
+            IosSwitch(checked = on, onCheckedChange = com.music.bitchord.data.settings.AppSettings::setWaveformSeekBar)
+        },
+        onClick = { com.music.bitchord.data.settings.AppSettings.setWaveformSeekBar(!on) },
+    )
 }

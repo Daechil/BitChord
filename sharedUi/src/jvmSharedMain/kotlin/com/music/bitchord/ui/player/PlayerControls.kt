@@ -213,8 +213,15 @@ internal fun PlayerScrubber(
     transitionWindow: ClosedFloatingPointRange<Float>?,
     onScrub: (Float) -> Unit,
     onScrubFinished: () -> Unit,
+    /** The song playing: its waveform is drawn as the bar when the setting is on and one is known. */
+    waveformId: String? = null,
     centerLabel: @Composable BoxScope.() -> Unit = {},
 ) {
+    val waveOn by com.music.bitchord.playback.PlayerWaveforms.enabled.collectAsStateWithLifecycle()
+    val waveRevision by com.music.bitchord.playback.PlayerWaveforms.revision.collectAsStateWithLifecycle()
+    val levels by androidx.compose.runtime.produceState<FloatArray?>(null, waveformId, waveOn, waveRevision) {
+        value = if (waveOn && !waveformId.isNullOrBlank()) com.music.bitchord.playback.PlayerWaveforms.load(waveformId) else null
+    }
     val shown = shown()
     // Held as a State and read only inside the bar's draw: the blend republishes
     // every fade tick, and collecting it by value here would recompose the
@@ -233,6 +240,7 @@ internal fun PlayerScrubber(
             mixing = mixing,
             mixPulse = mixPulse,
             transitionWindow = transitionWindow,
+            levels = levels,
         )
         Box(
             modifier = Modifier

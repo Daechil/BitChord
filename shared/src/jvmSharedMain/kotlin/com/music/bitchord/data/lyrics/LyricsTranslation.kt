@@ -1742,9 +1742,13 @@ object LyricsTranslation {
         if (fromAhead(trackId, prefix, target, slots, report = false) != null) {
             return AheadRequest(null, null, AheadSkip.ALREADY_TRANSLATED)
         }
-        // A batch has no second try with the other schema, so the per-line one
-        // is used wherever the player would have tried it first.
-        val keyed = slots.size <= MAX_KEYED_LINES
+        // A batch has no second try. The player asks with one key per line
+        // first and, when the API refuses that schema as an invalid request
+        // (as it does for a song of ordinary length), asks again with the
+        // array; a batch sent with the per-line schema came back refused for
+        // every song. So a batch asks the way the player's request succeeds:
+        // the array, with [parseTranslation]'s repair for a line split in two.
+        val keyed = false
         val params = claudeBody(
             model = model,
             system = if (reading) readingInstruction(target, slots.size, keyed) else translationInstruction(target, slots.size, keyed),
@@ -2095,7 +2099,10 @@ object LyricsTranslation {
                 linesGot = filed,
                 inputTokens = outcomes.sumOf { it.inputTokens },
                 outputTokens = outcomes.sumOf { it.outputTokens },
-                detail = "batch ended: $filed filed, $declined declined, ${outcomes.size - filed - declined} failed",
+                // The first error's own words: "failed" alone told nothing of why.
+                detail = "batch ended: $filed filed, $declined declined, ${outcomes.size - filed - declined} failed" +
+                    (outcomes.firstOrNull { it.failure != null && it.failure != ClaudeFailure.REFUSAL }?.detail
+                        ?.let { " · first error: " + it.take(160) } ?: ""),
             ),
         )
         return outcomes

@@ -52,6 +52,11 @@ object ExchangeRates {
     var lastError: String? = null
         private set
 
+    /** When the last automatic fetch was tried; "fetch now" is not held back by it. */
+    @Volatile
+    private var lastAutoTry = 0L
+    private const val RETRY_GAP_MS = 30L * 60L * 1000L
+
     fun init(context: Context) {
         if (started) return
         started = true
@@ -77,6 +82,10 @@ object ExchangeRates {
             ""
         }
         if (fetchedDay == today() && last.krw > 0) return
+        // A failed day is not asked again every time the app comes to the front.
+        val now = System.currentTimeMillis()
+        if (now - lastAutoTry < RETRY_GAP_MS) return
+        lastAutoTry = now
         refresh()
     }
 

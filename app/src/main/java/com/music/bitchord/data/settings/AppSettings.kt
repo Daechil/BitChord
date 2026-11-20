@@ -2921,6 +2921,13 @@ object AppSettings {
         KEY_LOCAL_MUSIC_FOLDER_URI,
         KEY_LAST_VERSION_CODE,
         KEY_ONBOARDING_COMPLETE,
+        // What this device has spent on Claude and the rate it last fetched: an
+        // older settings file brought in must not roll the month's spending back
+        // and let the limits through again.
+        KEY_CLAUDE_USAGE,
+        KEY_CLAUDE_USAGE_HISTORY,
+        KEY_CLAUDE_TODAY,
+        KEY_FETCHED_RATE,
     )
 
     const val DEFAULT_CACHE_LIMIT_BYTES = 512L * 1024 * 1024

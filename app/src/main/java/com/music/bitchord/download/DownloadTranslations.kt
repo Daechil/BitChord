@@ -142,11 +142,14 @@ object DownloadTranslations {
     private suspend fun flush(app: Context): Unit = flushing.withLock {
         // Taken off the list as they are read, so no other flush can send them too;
         // put back if the job could not start.
-        val songs = synchronized(gatherLock) {
+        val taken = synchronized(gatherLock) {
             val list = readWaiting(app)
             writeWaiting(app, emptyList())
             list
         }
+        // Songs found to have no lyrics have nothing to send: dropped here, or a
+        // list of only them could never start a job and would be put back for good.
+        val songs = taken.filterNot { PlayedLyrics.isMissing(it.videoId) }
         if (songs.isEmpty()) return@withLock
         val title = app.getString(
             com.music.bitchord.R.string.translate_ahead_download_job,

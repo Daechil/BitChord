@@ -108,6 +108,8 @@ fun requestTranslateAhead(
     }
     val model = AppSettings.translateAheadModel.value
     val reading = AppSettings.translateAheadReading.value
+    // The screen that asked may be gone by the time the statuses are read.
+    val context = context.applicationContext
     requestScope.launch {
         val ids = songs.map { it.videoId }.distinct()
         val plan = aheadPlan(com.music.bitchord.download.TranslationStatus.statusOf(context, ids), ids, reading)

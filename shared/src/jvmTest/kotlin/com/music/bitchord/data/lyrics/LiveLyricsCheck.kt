@@ -27,7 +27,7 @@ class LiveLyricsCheck {
 
     private val queries = listOf(
         // Japanese, including several by one artist: the case that went wrong.
-        "ピースサイン 米津玄師", "Lemon 米津玄師", "KICK BACK 米津玄師", "馬と鹿 米津玄師", "感電 米津玄師",
+        "ピースサイン Kenshi Yonezu", "Peace Sign Kenshi Yonezu", "Lemon 米津玄師", "KICK BACK 米津玄師", "馬と鹿 米津玄師", "感電 米津玄師",
         "アイドル YOASOBI", "夜に駆ける YOASOBI", "Pretender Official髭男dism", "Subtitle Official髭男dism",
         "マリーゴールド あいみょん", "紅蓮華 LiSA", "うっせぇわ Ado", "新時代 Ado", "ドライフラワー 優里",
         // Korean.
@@ -83,18 +83,37 @@ class LiveLyricsCheck {
 
     private fun cell(text: String?) = (text ?: "").replace("|", "/").take(40)
 
+    private fun mark(mine: Set<String>?, others: List<Set<String>>): String {
+        if (mine == null) return "–"
+        if (others.isEmpty()) return "?"
+        val best = others.maxOf { similarity(mine, it) }
+        return (if (best >= 0.35) "✓" else "✗") + (best * 100).toInt()
+    }
+
+    private suspend fun fetchAll(w: Wanted, title: String, artist: String, isrc: String?): List<Set<String>?> =
+        kotlinx.coroutines.coroutineScope {
+            sources.map { (_, fetch) ->
+                async(Dispatchers.IO) {
+                    withTimeoutOrNull(30_000) { runCatching { fetch(w, title, artist, isrc) }.getOrNull() }
+                        ?.takeIf { lines -> lines.any { it.text.isNotBlank() } }
+                        ?.let(::grams)
+                }
+            }.awaitAll()
+        }
+
     @Test
     fun liveCheck() {
         if (System.getenv("LIVE_LYRICS") != "1") return
         val report = StringBuilder()
         val names = sources.map { it.first }
         report.append("# Lyrics match check\n\n")
-        report.append("Per source: ✓ same words as the others · ✗ different words (wrong song?) · ? only source · – nothing.\n")
-        report.append("Number = how much of its words the closest other source shares (0–100).\n\n")
+        report.append("Each cell: with the name check / without it. ✓ same words as the other sources · ✗ different words · ? no other source to compare · – nothing.\n")
+        report.append("Number = how much of its words the closest other source shares (0–100). `–/✗` = the check stopped a wrong song; `–/✓` = the check dropped a right one.\n\n")
         report.append("| # | YouTube Music | Bini first hit | Bini used | " + names.joinToString(" | ") + " |\n")
         report.append("|" + "---|".repeat(4 + names.size) + "\n")
-        var suspects = 0
-        var rejectedBini = 0
+        var wrongKept = 0
+        var wrongStopped = 0
+        var rightDropped = 0
         queries.forEachIndexed { index, query ->
             val w = wanted(query)
             val title = w.title.forLyricsSearch()
@@ -102,39 +121,39 @@ class LiveLyricsCheck {
             val row = runBlocking(Dispatchers.IO) {
                 val raw = runCatching { BiniLyrics.search(title, artist, w.durationMs) }.getOrDefault(emptyList())
                 val first = raw.firstOrNull()
-                val used = raw.firstOrNull { BiniLyrics.accepts(it, title, artist, w.durationMs) }
-                if (first != null && used == null) rejectedBini++
-                val isrc = used?.isrc?.takeIf { it.isNotBlank() }
-                val found = sources.map { (_, fetch) ->
-                    async {
-                        withTimeoutOrNull(30_000) { runCatching { fetch(w, title, artist, isrc) }.getOrNull() }
-                            ?.takeIf { lines -> lines.any { it.text.isNotBlank() } }
-                    }
-                }.awaitAll()
-                val sets = found.map { it?.let(::grams) }
-                val cells = sets.mapIndexed { i, mine ->
-                    if (mine == null) return@mapIndexed "–"
-                    val others = sets.filterIndexed { j, s -> j != i && s != null }.filterNotNull()
-                    if (others.isEmpty()) return@mapIndexed "?"
-                    val best = others.maxOf { similarity(mine, it) }
-                    val agree = best >= 0.35
-                    if (!agree) suspects++
-                    (if (agree) "✓" else "✗") + " " + (best * 100).toInt()
+                val used = runCatching { BiniLyrics.identify(title, artist, w.durationMs) }.getOrNull()
+                SongMatch.bypass = false
+                val on = fetchAll(w, title, artist, used?.isrc?.takeIf { it.isNotBlank() })
+                SongMatch.bypass = true
+                val off = try {
+                    fetchAll(w, title, artist, first?.isrc?.takeIf { it.isNotBlank() })
+                } finally {
+                    SongMatch.bypass = false
+                }
+                val cells = names.indices.map { i ->
+                    val othersOn = on.filterIndexed { j, g -> j != i && g != null }.filterNotNull()
+                    val reference = othersOn.ifEmpty { off.filterIndexed { j, g -> j != i && g != null }.filterNotNull() }
+                    val a = mark(on[i], reference)
+                    val b = mark(off[i], reference)
+                    if (a.startsWith("✗")) wrongKept++
+                    if (a == "–" && b.startsWith("✗")) wrongStopped++
+                    if (a == "–" && b.startsWith("✓")) rightDropped++
+                    if (a == b) a else "$a/$b"
                 }
                 val youtube = if (w.fromYouTube) "${w.title} — ${w.artist} (${w.durationMs / 1000}s)" else "(search failed) $query"
                 val firstText = first?.let { "${it.trackName} — ${it.artistName} (${it.duration}s)" } ?: "–"
                 val usedText = when {
                     first == null -> "–"
                     used == null -> "rejected"
-                    used === first -> "same"
-                    else -> "${used.trackName}"
+                    used.isrc == first.isrc -> "same"
+                    else -> "${used.trackName} — ${used.artistName} (${used.duration}s)"
                 }
                 "| ${index + 1} | ${cell(youtube)} | ${cell(firstText)} | ${cell(usedText)} | " + cells.joinToString(" | ") + " |"
             }
             report.append(row).append('\n')
             println(row)
         }
-        report.append("\nSuspect answers (✗): $suspects · Bini first hits refused by the name check: $rejectedBini\n")
+        report.append("\nWrong words still shown (✗ with the check): $wrongKept · wrong songs the check stopped: $wrongStopped · right songs the check dropped: $rightDropped\n")
         val out = File(System.getenv("LIVE_LYRICS_REPORT") ?: "build/live-lyrics.md")
         out.parentFile?.mkdirs()
         out.writeText(report.toString())

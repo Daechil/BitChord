@@ -60,7 +60,18 @@ object BiniLyrics {
         // answer is a guess, and its ISRC is about to be handed to every source
         // that trusts one — so it has to be this song by name first.
         if (!isrc.isNullOrBlank()) return results.firstOrNull()
-        return results.firstOrNull { accepts(it, title, artist, durationMs) }
+        // Of the ones that are this song, the one by these very artists and
+        // nearest in length: "bad guy" alone before "bad guy" with Justin Bieber.
+        val seconds = durationMs / 1000.0
+        return results.withIndex()
+            .filter { accepts(it.value, title, artist, durationMs) }
+            .minWithOrNull(
+                compareBy<IndexedValue<Hit>>(
+                    { if (SongMatch.sameArtists(artist, it.value.artistName.orEmpty())) 0 else 1 },
+                    { if (durationMs > 0 && it.value.duration != null) kotlin.math.abs(it.value.duration!! - seconds) else 0.0 },
+                    { it.index },
+                ),
+            )?.value
     }
 
     /** Whether [hit] is the song asked about by name; see [identify]. */

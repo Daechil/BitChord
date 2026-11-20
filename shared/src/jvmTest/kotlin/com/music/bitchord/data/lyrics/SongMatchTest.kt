@@ -33,4 +33,22 @@ class SongMatchTest {
     fun aFarLengthIsAnotherRecording() {
         assertFalse(same("Bohemian Rhapsody", "Queen", 355_000, "Bohemian Rhapsody", "Queen", 65.0))
     }
+
+    @Test
+    fun aRemixOrLiveCutIsAnotherRecording() {
+        assertFalse(same("Dynamite", "BTS", 200_000, "Dynamite (Slow Jam Remix)", "BTS", 200.0))
+        assertFalse(same("Subtitle", "Official HIGE DANDism", 306_000, "Subtitle (Live at Tokyo Dome)", "Official HIGE DANDism", 306.0))
+        assertTrue(same("Dynamite", "BTS", 200_000, "Dynamite (Remastered)", "BTS", 200.0))
+    }
+
+    @Test
+    fun aCoverByAnotherArtistIsRefused() {
+        assertFalse(same("Pretender", "Official Hige Dandism", 327_000, "Pretender", "Tokyo Arrow", 325.0))
+    }
+
+    @Test
+    fun theSameArtistsExactly() {
+        assertTrue(SongMatch.sameArtists("Billie Eilish", "Billie Eilish"))
+        assertFalse(SongMatch.sameArtists("Billie Eilish", "Billie Eilish, Justin Bieber"))
+    }
 }

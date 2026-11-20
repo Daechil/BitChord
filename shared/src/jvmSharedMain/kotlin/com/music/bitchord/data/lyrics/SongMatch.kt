@@ -21,6 +21,10 @@ import kotlin.math.abs
  */
 object SongMatch {
 
+    /** Off only in the live check, to see what the check takes away. */
+    @Volatile
+    internal var bypass = false
+
     /** Lengths further apart than this are different recordings, whatever they are called. */
     private const val FAR_SECONDS = 10.0
 
@@ -39,8 +43,12 @@ object SongMatch {
         foundArtist: String?,
         foundSeconds: Double?,
     ): Boolean {
+        if (bypass) return true
         if (foundTitle.isNullOrBlank()) return false
         if (!sameTitle(title, foundTitle)) return false
+        // "Dynamite" is not "Dynamite (Slow Jam Remix)": the same words, sung to
+        // other timings. Labels like "Remastered" are not a different recording.
+        if (versionOf(title) != versionOf(foundTitle)) return false
         val gap = if (durationMs > 0 && foundSeconds != null && foundSeconds > 0) {
             abs(durationMs / 1000.0 - foundSeconds)
         } else {
@@ -51,11 +59,16 @@ object SongMatch {
         val found = artistsOf(foundArtist.orEmpty())
         if (wanted.isEmpty() || found.isEmpty()) return true
         if (wanted.any { w -> found.any { f -> w == f || w.contains(f) || f.contains(w) } }) return true
+        // An artist written in another script (Kenshi Yonezu / 米津玄師) can't be
+        // compared by its letters, so the length stands in for it. Two names in
+        // the same script that differ are two artists: a cover.
+        if (sameScript(artist, foundArtist.orEmpty())) return false
         return gap != null && gap <= NEAR_SECONDS
     }
 
     /** Any part of one title — outside or inside its brackets, either side of " - " or "/" — is a part of the other. */
     fun sameTitle(a: String, b: String): Boolean {
+        if (bypass) return true
         val left = partsOf(a)
         val right = partsOf(b)
         if (left.isEmpty() || right.isEmpty()) return false
@@ -70,6 +83,36 @@ object SongMatch {
             .filter { it.isNotEmpty() && it !in NOT_A_TITLE }
             .toSet()
     }
+
+    /** The same credited artists on both sides, no more and no fewer. */
+    fun sameArtists(a: String, b: String): Boolean = artistsOf(a) == artistsOf(b)
+
+    /** The version words of a title, from its brackets and after a " - ". */
+    fun versionOf(title: String): Set<String> {
+        val extras = BRACKETED.findAll(title).joinToString(" ") { it.value } + " " + title.substringAfter(" - ", "")
+        return Normalizer.normalize(extras, Normalizer.Form.NFKD).lowercase(Locale.ROOT)
+            .map { if (it.isLetterOrDigit()) it else ' ' }.joinToString("")
+            .split(' ').filter { it in VERSION_WORDS }.toSet()
+    }
+
+    /** Whether both names are written mostly in Latin letters, or both mostly not. */
+    private fun sameScript(a: String, b: String): Boolean {
+        fun latin(value: String): Boolean? {
+            val letters = value.filter { it.isLetter() }
+            if (letters.isEmpty()) return null
+            return letters.count { it.code < 0x250 } * 2 >= letters.length
+        }
+        val left = latin(a) ?: return false
+        val right = latin(b) ?: return false
+        return left == right
+    }
+
+    /** Words in brackets that make it a different recording; see [LrcRed]. */
+    private val VERSION_WORDS = setOf(
+        "live", "remix", "remixed", "mix", "acoustic", "unplugged", "instrumental",
+        "karaoke", "cappella", "acapella", "demo", "cover", "sped", "slowed", "nightcore",
+        "lofi", "orchestral", "extended", "jam", "inst",
+    )
 
     private fun artistsOf(artist: String): Set<String> =
         artist.split(ARTIST_SEPARATORS).map(::normalized).filter { it.isNotEmpty() }.toSet()

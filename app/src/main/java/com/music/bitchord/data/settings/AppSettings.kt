@@ -185,6 +185,14 @@ object AppSettings {
 
     private lateinit var prefs: SharedPreferences
 
+    /**
+     * Credentials — API keys and tokens, the [SECRETS] — in an encrypted store
+     * of their own, kept out of the system's backups (see backup_rules.xml):
+     * the settings file is backed up to the cloud and copied in a device
+     * transfer as it is, in clear text.
+     */
+    private lateinit var secrets: SharedPreferences
+
     /** Only for the Discord, WebDAV and SMB secrets — everything else on here is plain prefs. */
     private lateinit var authStore: AuthStore
 
@@ -1221,6 +1229,8 @@ object AppSettings {
      */
     fun init(context: Context, authStore: AuthStore) {
         prefs = context.getSharedPreferences("bitchord_settings", Context.MODE_PRIVATE)
+        secrets = com.music.bitchord.auth.EncryptedPrefs.open(context, "bitchord_secrets", "bitchord_secrets_plain")
+        moveSecrets()
         this.authStore = authStore
         com.music.bitchord.data.spotify.LocalPlaylistStore.init(context)
         com.music.bitchord.data.OfflinePlaylists.init(
@@ -1338,7 +1348,7 @@ object AppSettings {
         lyricsOffsetMs.value = prefs.getInt(KEY_LYRICS_OFFSET_MS, 0)
             .coerceIn(MIN_LYRICS_OFFSET_MS, MAX_LYRICS_OFFSET_MS)
         translationLanguage.value = prefs.getString(KEY_TRANSLATION_LANGUAGE, "").orEmpty()
-        claudeApiKey.value = prefs.getString(KEY_CLAUDE_API_KEY, "").orEmpty()
+        claudeApiKey.value = secrets.getString(KEY_CLAUDE_API_KEY, "").orEmpty()
         claudeTranslation.value = prefs.getBoolean(KEY_CLAUDE_TRANSLATION, false)
         com.music.bitchord.data.lyrics.LyricsTranslation.claudeApiKey = claudeApiKey.value
         com.music.bitchord.data.lyrics.LyricsTranslation.claudeEnabled = claudeTranslation.value
@@ -1377,7 +1387,7 @@ object AppSettings {
         krwRateMode.value = prefs.getString(KEY_KRW_RATE_MODE, null)?.takeIf { it == RATE_AUTO || it == RATE_MANUAL } ?: RATE_AUTO
         krwRateSource.value = prefs.getString(KEY_KRW_RATE_SOURCE, null)
             ?.takeIf { it == RATE_SOURCE_ECB || it == RATE_SOURCE_EXIM } ?: RATE_SOURCE_ECB
-        eximApiKey.value = prefs.getString(KEY_EXIM_API_KEY, "").orEmpty()
+        eximApiKey.value = secrets.getString(KEY_EXIM_API_KEY, "").orEmpty()
         cardFeePercent.value = prefs.getFloat(KEY_CARD_FEE_PERCENT, 0f).toDouble().coerceIn(0.0, 5.0)
         fetchedRate.value = prefs.getString(KEY_FETCHED_RATE, null)?.let { raw ->
             runCatching {
@@ -1447,15 +1457,15 @@ object AppSettings {
         lyricsSources.value = readLyricsSources()
         lyricsSourceOrder.value = readLyricsSourceOrder()
         prioritizeSyllableSync.value = prefs.getBoolean(KEY_PRIORITIZE_SYLLABLE_SYNC, false)
-        paxSenixApiKey.value = prefs.getString(KEY_PAXSENIX_API_KEY, "").orEmpty()
+        paxSenixApiKey.value = secrets.getString(KEY_PAXSENIX_API_KEY, "").orEmpty()
         com.music.bitchord.data.lyrics.PaxSenix.setApiKey(paxSenixApiKey.value)
         audioCacheLimitBytes.value = clampCacheLimit(prefs.getLong(KEY_CACHE_LIMIT, DEFAULT_CACHE_LIMIT_BYTES))
         showCacheFolder.value = prefs.getBoolean(KEY_SHOW_CACHE_FOLDER, false)
         lastfmEnabled.value = prefs.getBoolean(KEY_LASTFM_ENABLED, false)
         lastfmUsername.value = prefs.getString(KEY_LASTFM_USERNAME, "").orEmpty()
-        lastfmSessionKey.value = prefs.getString(KEY_LASTFM_SESSION_KEY, "").orEmpty()
-        lastfmApiKey.value = prefs.getString(KEY_LASTFM_API_KEY, "").orEmpty().ifBlank { BuildConfig.LASTFM_API_KEY }
-        lastfmSecret.value = prefs.getString(KEY_LASTFM_SECRET, "").orEmpty().ifBlank { BuildConfig.LASTFM_SECRET }
+        lastfmSessionKey.value = secrets.getString(KEY_LASTFM_SESSION_KEY, "").orEmpty()
+        lastfmApiKey.value = secrets.getString(KEY_LASTFM_API_KEY, "").orEmpty().ifBlank { BuildConfig.LASTFM_API_KEY }
+        lastfmSecret.value = secrets.getString(KEY_LASTFM_SECRET, "").orEmpty().ifBlank { BuildConfig.LASTFM_SECRET }
         lastfmEndpoint.value = prefs.getString(KEY_LASTFM_ENDPOINT, "").orEmpty()
         lastfmScrobbleEnabled.value = prefs.getBoolean(KEY_LASTFM_SCROBBLE_ENABLED, false)
         lastfmNowPlaying.value = prefs.getBoolean(KEY_LASTFM_NOW_PLAYING, false) && lastfmScrobbleEnabled.value
@@ -1464,9 +1474,9 @@ object AppSettings {
         scrobbleDelayPercent.value = prefs.getFloat(KEY_SCROBBLE_DELAY_PERCENT, 0.5f)
         scrobbleDelaySeconds.value = prefs.getInt(KEY_SCROBBLE_DELAY_SECONDS, 180)
         listenBrainzEnabled.value = prefs.getBoolean(KEY_LISTENBRAINZ_ENABLED, false)
-        listenBrainzToken.value = prefs.getString(KEY_LISTENBRAINZ_TOKEN, "").orEmpty()
+        listenBrainzToken.value = secrets.getString(KEY_LISTENBRAINZ_TOKEN, "").orEmpty()
         listenBrainzPrimaryArtistOnly.value = prefs.getBoolean(KEY_LISTENBRAINZ_PRIMARY_ARTIST_ONLY, false)
-        spotifySpdcToken.value = prefs.getString(KEY_SPOTIFY_SPDC_TOKEN, "").orEmpty()
+        spotifySpdcToken.value = secrets.getString(KEY_SPOTIFY_SPDC_TOKEN, "").orEmpty()
         replayGenres.value = prefs.getBoolean(KEY_REPLAY_GENRES, true)
         filterNonMusicAudio.value = prefs.getBoolean(KEY_FILTER_NON_MUSIC_AUDIO, true)
         localMusicSort.value = readLocalMusicSort(KEY_LOCAL_MUSIC_SORT)
@@ -1945,7 +1955,7 @@ object AppSettings {
     fun setClaudeApiKey(value: String) {
         val normalized = value.trim()
         claudeApiKey.value = normalized
-        prefs.edit().putString(KEY_CLAUDE_API_KEY, normalized).apply()
+        secrets.edit().putString(KEY_CLAUDE_API_KEY, normalized).apply()
         com.music.bitchord.data.lyrics.LyricsTranslation.claudeApiKey = normalized
     }
 
@@ -2000,7 +2010,7 @@ object AppSettings {
     fun setEximApiKey(value: String) {
         val key = value.trim()
         eximApiKey.value = key
-        prefs.edit().putString(KEY_EXIM_API_KEY, key).apply()
+        secrets.edit().putString(KEY_EXIM_API_KEY, key).apply()
     }
 
     fun setCardFeePercent(value: Double) {
@@ -2397,7 +2407,7 @@ object AppSettings {
     fun setPaxSenixApiKey(value: String) {
         val normalized = com.music.bitchord.data.lyrics.normalizePaxSenixApiKey(value)
         paxSenixApiKey.value = normalized
-        prefs.edit().putString(KEY_PAXSENIX_API_KEY, normalized).apply()
+        secrets.edit().putString(KEY_PAXSENIX_API_KEY, normalized).apply()
         com.music.bitchord.data.lyrics.PaxSenix.setApiKey(normalized)
     }
 
@@ -2496,17 +2506,17 @@ object AppSettings {
 
     fun setLastfmSessionKey(value: String) {
         lastfmSessionKey.value = value
-        prefs.edit().putString(KEY_LASTFM_SESSION_KEY, value).apply()
+        secrets.edit().putString(KEY_LASTFM_SESSION_KEY, value).apply()
     }
 
     fun setLastfmApiKey(value: String) {
         lastfmApiKey.value = value
-        prefs.edit().putString(KEY_LASTFM_API_KEY, value).apply()
+        secrets.edit().putString(KEY_LASTFM_API_KEY, value).apply()
     }
 
     fun setLastfmSecret(value: String) {
         lastfmSecret.value = value
-        prefs.edit().putString(KEY_LASTFM_SECRET, value).apply()
+        secrets.edit().putString(KEY_LASTFM_SECRET, value).apply()
     }
 
     fun setLastfmEndpoint(value: String) {
@@ -2516,7 +2526,7 @@ object AppSettings {
 
     fun setSpotifySpdcToken(value: String) {
         spotifySpdcToken.value = value
-        prefs.edit().putString(KEY_SPOTIFY_SPDC_TOKEN, value).apply()
+        secrets.edit().putString(KEY_SPOTIFY_SPDC_TOKEN, value).apply()
         SpotifyToken.invalidate()
     }
 
@@ -2607,7 +2617,7 @@ object AppSettings {
 
     fun setListenBrainzToken(value: String) {
         listenBrainzToken.value = value
-        prefs.edit().putString(KEY_LISTENBRAINZ_TOKEN, value).apply()
+        secrets.edit().putString(KEY_LISTENBRAINZ_TOKEN, value).apply()
     }
 
     fun setListenBrainzPrimaryArtistOnly(value: Boolean) {
@@ -2934,6 +2944,23 @@ object AppSettings {
             }
         }.apply()
         reload()
+    }
+
+    /**
+     * Credentials kept in the settings file before they had a store of their
+     * own: moved over once, and taken out of the settings file only after the
+     * copy reads back, so a failure part-way leaves them where they were.
+     */
+    private fun moveSecrets() {
+        val stale = SECRETS.filter { prefs.contains(it) }
+        if (stale.isEmpty()) return
+        val edit = secrets.edit()
+        stale.forEach { key ->
+            if (!secrets.contains(key)) edit.putString(key, prefs.getString(key, null))
+        }
+        if (!edit.commit()) return
+        val moved = stale.filter { secrets.contains(it) }
+        prefs.edit().apply { moved.forEach { remove(it) } }.commit()
     }
 
     /**

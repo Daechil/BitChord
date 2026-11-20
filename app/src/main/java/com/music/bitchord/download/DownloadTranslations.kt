@@ -151,6 +151,10 @@ object DownloadTranslations {
         // list of only them could never start a job and would be put back for good.
         val songs = taken.filterNot { PlayedLyrics.isMissing(it.videoId) }
         if (songs.isEmpty()) return@withLock
+        // Already on their way in a job: nothing to put back.
+        if (TranslateAhead.isDuplicate(songs.map { it.videoId }, LyricsTranslation.claudeModel, AppSettings.translateAheadReading.value)) {
+            return@withLock
+        }
         val title = app.getString(
             com.music.bitchord.R.string.translate_ahead_download_job,
             java.text.SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(java.util.Date()),

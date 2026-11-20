@@ -232,15 +232,27 @@ internal fun <T> LazyListScope.windowCard(
 }
 
 /** A card with one block of text in it: a summary, an explanation. */
-internal fun LazyListScope.windowText(text: String, header: String? = null, footer: String? = null, style: (@Composable () -> TextStyle)? = null) {
+internal fun LazyListScope.windowText(
+    text: String,
+    header: String? = null,
+    footer: String? = null,
+    style: (@Composable () -> TextStyle)? = null,
+    error: Boolean = false,
+) {
     windowCard(rows = listOf(text), header = header, footer = footer) {
         Text(
             text = it,
             modifier = Modifier.padding(horizontal = ROW_INSET, vertical = 12.dp),
             style = style?.invoke() ?: MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = if (error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
         )
     }
+}
+
+/** Something could not be read: says so in a card, with a button to try again. */
+internal fun LazyListScope.windowError(message: String, retry: String, header: String? = null, onRetry: () -> Unit) {
+    windowText(message, header = header, error = true)
+    windowActions(listOf(WindowButton(label = retry, onClick = onRetry)))
 }
 
 /**

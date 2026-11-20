@@ -754,6 +754,15 @@
     <string name="instructions_for_meaning_detail">노래 해석을 받을 때도 지시문을 함께 보내요.</string>
     <string name="instructions_none">없음</string>
     <string name="instructions_set">있음</string>
+    <string name="translate_ahead_duplicate">이 곡들은 이미 미리 번역 중이거나 방금 보냈어요. 진행 상황은 설정에서 볼 수 있어요.</string>
+    <string name="ko_load_failed">불러오지 못했어요. 저장된 번역은 그대로예요.</string>
+    <string name="ko_retry">다시 시도</string>
+    <string name="ko_delete_failed">지우지 못했어요. 다시 시도해 주세요.</string>
+    <string name="ko_unsaved_title">저장하지 않고 나갈까요?</string>
+    <string name="ko_unsaved_description">입력한 내용이 아직 저장되지 않았어요.</string>
+    <string name="ko_unsaved_save">저장하고 나가기</string>
+    <string name="ko_unsaved_discard">저장 안 하고 나가기</string>
+    <string name="ko_unsaved_stay">계속 쓰기</string>
     <string name="ko_window_summary">요약</string>
     <string name="ko_window_songs">곡 · %1$d곡</string>
     <string name="ko_window_space">사용 공간</string>

@@ -235,9 +235,40 @@ object TranslateAhead {
     /** Whether [songs] can be asked for at all: Claude set up, and something in the list to ask about. */
     fun available(): Boolean = AppSettings.claudeTranslation.value && LyricsTranslation.claudeKeyUsable
 
+    /** A job asked for again within this long — a second tap, say — is the same job. */
+    private const val SAME_JOB_WINDOW_MS = 30_000L
+    private val startLock = Any()
+
+    /** Unique even for two jobs made in the same millisecond. */
+    private fun newJobId(now: Long): String =
+        now.toString(36) + "-" + java.util.UUID.randomUUID().toString().take(6)
+
+    /**
+     * Whether a job for exactly [videoIds], with [model] and [reading], is
+     * still under way or was made a moment ago: sending it again would only
+     * pay for the same answers twice.
+     */
+    fun isDuplicate(videoIds: Collection<String>, model: String, reading: Boolean): Boolean {
+        val wanted = videoIds.filterNot { PlayedLyrics.isMissing(it) }.toSet()
+        if (wanted.isEmpty()) return false
+        val now = System.currentTimeMillis()
+        return _jobs.value.any { job ->
+            job.model == model && job.reading == reading &&
+                (job.active || now - job.createdAt < SAME_JOB_WINDOW_MS) &&
+                job.tracks.map { it.videoId }.toSet() == wanted
+        }
+    }
+
     /** Starts a job for [songs]; its progress and outcome are in [jobs] from here on. False when it could not start. */
-    fun start(title: String, songs: List<Song>, model: String, reading: Boolean): Boolean {
+    fun start(title: String, songs: List<Song>, model: String, reading: Boolean): Boolean = synchronized(startLock) {
+        startLocked(title, songs, model, reading)
+    }
+
+    private fun startLocked(title: String, songs: List<Song>, model: String, reading: Boolean): Boolean {
         val app = context ?: return false
+        // The same songs sent again while their job is under way, or a moment
+        // after: a second tap, not a second job to pay for.
+        if (isDuplicate(songs.map { it.videoId }, model, reading)) return false
         // Songs found to have no lyrics are left out: there is nothing to send for them.
         val tracks = songs.distinctBy { it.videoId }.filterNot { PlayedLyrics.isMissing(it.videoId) }.map { song ->
             Track(
@@ -251,7 +282,7 @@ object TranslateAhead {
         if (tracks.isEmpty()) return false
         val now = System.currentTimeMillis()
         val job = Job(
-            id = now.toString(36),
+            id = newJobId(now),
             title = title,
             createdAt = now,
             model = model,
@@ -272,7 +303,11 @@ object TranslateAhead {
      * Claude declined, with Sonnet, when [declined]; otherwise the ones that
      * failed or were never answered, with the same model.
      */
-    fun resend(jobId: String, declined: Boolean) {
+    fun resend(jobId: String, declined: Boolean) = synchronized(startLock) {
+        resendLocked(jobId, declined)
+    }
+
+    private fun resendLocked(jobId: String, declined: Boolean) {
         val job = _jobs.value.firstOrNull { it.id == jobId } ?: return
         fun unanswered(status: String?) = if (declined) {
             status == TrackStatus.DECLINED
@@ -287,8 +322,10 @@ object TranslateAhead {
         if (songs.isEmpty()) return
         val app = context ?: return
         val now = System.currentTimeMillis()
+        // The same resend asked twice — a second tap on the button — makes one job.
+        if (isDuplicate(songs.map { it.videoId }, if (declined) LyricsTranslation.CLAUDE_SONNET else job.model, job.reading)) return
         val next = Job(
-            id = now.toString(36),
+            id = newJobId(now),
             title = job.title,
             createdAt = now,
             model = if (declined) LyricsTranslation.CLAUDE_SONNET else job.model,

@@ -146,7 +146,8 @@ internal fun TranslationStatusRow(song: Song, accent: Color, onOpen: () -> Unit)
     var status by remember(song.videoId) { mutableStateOf<TranslationStatus.SongStatus?>(null) }
     LaunchedEffect(song.videoId) {
         TranslationStatus.remember(song.videoId, song.title, song.artist)
-        status = TranslationStatus.statusOf(context, listOf(song.videoId))[song.videoId]
+        // Unreadable: the row just shows no status.
+        status = orNull { TranslationStatus.statusOf(context, listOf(song.videoId)) }?.get(song.videoId)
     }
     val words = statusWords()
     val current = status
@@ -190,16 +191,36 @@ fun TranslationStatusAlerts(hazeState: HazeState) {
     }
 }
 
-/** [song]'s status, looked up again whenever another song is asked for, or [reload] changes; null while it is read. */
+/**
+ * [block]'s answer, or null when it failed: a store that cannot be read is
+ * said so on the screen with a way to try again, not a crash or a spinner
+ * that never ends. Being cancelled is not failing.
+ */
+private suspend fun <T> orNull(block: suspend () -> T): T? = try {
+    block()
+} catch (cancelled: kotlinx.coroutines.CancellationException) {
+    throw cancelled
+} catch (_: Exception) {
+    null
+}
+
+/** A song's status as it is being read: null [status] while it is, or when it could not be ([failed]). */
+private class SongLoad(val status: TranslationStatus.SongStatus?, val failed: Boolean)
+
+/** [song]'s status, looked up again whenever another song is asked for, or [reload] changes. */
 @Composable
-private fun rememberSongStatus(song: Song?, reload: Int = 0): TranslationStatus.SongStatus? {
+private fun rememberSongStatus(song: Song?, reload: Int = 0): SongLoad {
     val context = LocalContext.current
     var status by remember(song?.videoId) { mutableStateOf<TranslationStatus.SongStatus?>(null) }
+    var failed by remember(song?.videoId) { mutableStateOf(false) }
     LaunchedEffect(song?.videoId, reload) {
         val id = song?.videoId ?: return@LaunchedEffect
-        status = TranslationStatus.statusOf(context, listOf(id))[id]
+        failed = false
+        val read = orNull { TranslationStatus.statusOf(context, listOf(id)) }
+        failed = read == null
+        status = read?.get(id) ?: status
     }
-    return status
+    return SongLoad(status, failed)
 }
 
 /** A delete waiting on its warning's answer: what to say, and what to do on yes. */
@@ -220,6 +241,8 @@ private val deleteScope = kotlinx.coroutines.MainScope()
 @Composable
 private fun DeleteWarning(hazeState: HazeState, ask: DeleteAsk?, frosted: Boolean, onDone: () -> Unit) {
     if (ask == null) return
+    val context = LocalContext.current.applicationContext
+    val failedText = stringResource(R.string.ko_delete_failed)
     ConfirmationAlert(
         hazeState = hazeState,
         title = ask.title,
@@ -227,7 +250,10 @@ private fun DeleteWarning(hazeState: HazeState, ask: DeleteAsk?, frosted: Boolea
         confirmLabel = stringResource(R.string.ko_delete),
         onConfirm = {
             onDone()
-            deleteScope.launch { ask.then(ask.run()) }
+            deleteScope.launch {
+                val cleared = orNull { ask.run() }
+                if (cleared != null) ask.then(cleared) else Toast.makeText(context, failedText, Toast.LENGTH_LONG).show()
+            }
         },
         onDismiss = onDone,
         frosted = frosted,
@@ -253,7 +279,19 @@ private fun songDeleteAsk(song: Song, count: Int, then: () -> Unit): DeleteAsk {
 }
 
 /** The words a song's own page shows above its answers: who sings it, where it stands. */
-private class SongPageWords(val nothing: String, val otherNote: String, val noLyricsNote: String, val lookAgain: String, val lookAgainDone: String)
+private class SongPageWords(
+    val nothing: String,
+    val otherNote: String,
+    val noLyricsNote: String,
+    val lookAgain: String,
+    val lookAgainDone: String,
+    val loadFailed: String,
+    val retry: String,
+    /** The song's status could not be read: say so, with a way to try again. */
+    val failed: Boolean = false,
+) {
+    fun failing(failed: Boolean) = SongPageWords(nothing, otherNote, noLyricsNote, lookAgain, lookAgainDone, loadFailed, retry, failed)
+}
 
 @Composable
 private fun songPageWords() = SongPageWords(
@@ -262,6 +300,8 @@ private fun songPageWords() = SongPageWords(
     noLyricsNote = stringResource(R.string.translation_status_no_lyrics_note),
     lookAgain = stringResource(R.string.translation_status_look_again),
     lookAgainDone = stringResource(R.string.translation_status_look_again_done),
+    loadFailed = stringResource(R.string.ko_load_failed),
+    retry = stringResource(R.string.ko_retry),
 )
 
 private fun songHeading(song: Song, status: TranslationStatus.SongStatus?, words: StatusWords, page: SongPageWords): String =
@@ -282,7 +322,10 @@ private fun songLines(status: TranslationStatus.SongStatus?, words: StatusWords)
 private fun SongStatusAlert(hazeState: HazeState, song: Song, onBack: () -> Unit) {
     var reload by remember(song.videoId) { mutableIntStateOf(0) }
     var asking by remember(song.videoId) { mutableStateOf(false) }
-    val current = rememberSongStatus(song, reload)
+    val load = rememberSongStatus(song, reload)
+    val current = load.status
+    val loadFailed = stringResource(R.string.ko_load_failed)
+    val retryLabel = stringResource(R.string.ko_retry)
     val ask = songDeleteAsk(song, current?.answers?.size ?: 0) { reload++ }
     if (asking) {
         DeleteWarning(hazeState, ask, frosted = true) { asking = false }
@@ -301,7 +344,12 @@ private fun SongStatusAlert(hazeState: HazeState, song: Song, onBack: () -> Unit
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp),
         ) {
-            (if (current != null && lines.isEmpty()) listOf(page.nothing) else lines).forEach { line ->
+            val shown = when {
+                current == null && load.failed -> listOf(loadFailed)
+                current != null && lines.isEmpty() -> listOf(page.nothing)
+                else -> lines
+            }
+            shown.forEach { line ->
                 Text(
                     text = line,
                     modifier = Modifier.padding(vertical = 4.dp),
@@ -309,6 +357,10 @@ private fun SongStatusAlert(hazeState: HazeState, song: Song, onBack: () -> Unit
                     color = MaterialTheme.colorScheme.onSurface,
                 )
             }
+        }
+        if (current == null && load.failed) {
+            AlertRule()
+            AlertAction(label = retryLabel, emphasised = true, onClick = { reload++ })
         }
         if (!current?.answers.isNullOrEmpty()) {
             AlertRule()
@@ -336,6 +388,10 @@ private fun LazyListScope.songStatusItems(
     onDelete: () -> Unit,
 ) {
     val heading = songHeading(song, status, words, page)
+    if (status == null && page.failed) {
+        windowError(page.loadFailed, page.retry, onRetry = onLookAgain)
+        return
+    }
     windowText(if (status == null) loading else heading.ifBlank { song.title })
     if (status == null) return
     if (status.state == TranslationStatus.State.NO_LYRICS) {
@@ -370,12 +426,17 @@ private fun ReleaseStatusWindow(hazeState: HazeState, release: AheadAsk, onDismi
     var statuses by remember(release) { mutableStateOf<Map<String, TranslationStatus.SongStatus>?>(null) }
     var reload by remember(release) { mutableIntStateOf(0) }
     var asking by remember(release) { mutableStateOf<DeleteAsk?>(null) }
+    var failed by remember(release) { mutableStateOf(false) }
     LaunchedEffect(release, reload) {
         songs.forEach { TranslationStatus.remember(it.videoId, it.title, it.artist) }
-        statuses = TranslationStatus.statusOf(context, songs.map { it.videoId })
+        failed = false
+        val read = orNull { TranslationStatus.statusOf(context, songs.map { it.videoId }) }
+        failed = read == null
+        statuses = read ?: statuses
     }
     var opened by remember(release) { mutableStateOf<Song?>(null) }
-    val openedStatus = rememberSongStatus(opened, reload)
+    val openedLoad = rememberSongStatus(opened, reload)
+    val openedStatus = openedLoad.status
     val deleteLabel = stringResource(R.string.translation_song_delete)
     val openedAsk = opened?.let { song -> songDeleteAsk(song, openedStatus?.answers?.size ?: 0) { reload++ } }
     val words = statusWords()
@@ -432,7 +493,11 @@ private fun ReleaseStatusWindow(hazeState: HazeState, release: AheadAsk, onDismi
         overlay = { DeleteWarning(hazeState, asking, frosted = false) { asking = null } },
     ) {
         if (inner != null) {
-            songStatusItems(inner, openedStatus, words, page, loading, deleteLabel, onLookAgain = { reload++ }) { asking = openedAsk }
+            songStatusItems(inner, openedStatus, words, page.failing(openedLoad.failed), loading, deleteLabel, onLookAgain = { reload++ }) { asking = openedAsk }
+            return@KoWindow
+        }
+        if (failed && all == null) {
+            windowError(page.loadFailed, page.retry, header = summaryHeader) { reload++ }
             return@KoWindow
         }
         windowText(summary, header = summaryHeader)
@@ -481,11 +546,17 @@ private fun StorageWindow(hazeState: HazeState, onDismiss: () -> Unit) {
     var reload by remember { mutableIntStateOf(0) }
     var asking by remember { mutableStateOf<DeleteAsk?>(null) }
     var opened by remember { mutableStateOf<Song?>(null) }
+    var failed by remember { mutableStateOf(false) }
     LaunchedEffect(reload) {
-        answers = LyricsTranslation.storedAnswers()
-        breakdown = LyricsTranslation.storageBreakdown()
+        failed = false
+        val readAnswers = orNull { LyricsTranslation.storedAnswers() }
+        val readBreakdown = orNull { LyricsTranslation.storageBreakdown() }
+        failed = readAnswers == null || readBreakdown == null
+        answers = readAnswers ?: answers
+        breakdown = readBreakdown ?: breakdown
     }
-    val openedStatus = rememberSongStatus(opened, reload)
+    val openedLoad = rememberSongStatus(opened, reload)
+    val openedStatus = openedLoad.status
     val deleteLabel = stringResource(R.string.translation_song_delete)
     val openedAsk = opened?.let { song -> songDeleteAsk(song, openedStatus?.answers?.size ?: 0) { reload++ } }
     val keptLimitMb by AppSettings.keptStoreLimitMb.collectAsStateWithLifecycle()
@@ -493,6 +564,7 @@ private fun StorageWindow(hazeState: HazeState, onDismiss: () -> Unit) {
     val page = songPageWords()
     val all = answers
     val clearedText = stringResource(R.string.translation_storage_cleared)
+    val deleteFailed = stringResource(R.string.ko_delete_failed)
 
     // One row per song, newest first: the answers of a song together.
     val songs = remember(all) {
@@ -591,8 +663,12 @@ private fun StorageWindow(hazeState: HazeState, onDismiss: () -> Unit) {
     val buttons = listOf(
         WindowButton(label = stringResource(R.string.translation_storage_clear_google)) {
             scope.launch {
-                val cleared = LyricsTranslation.clearCache(googleOnly = true)
-                Toast.makeText(context, clearedText.format(cleared.files, megabytes(cleared.bytes)), Toast.LENGTH_SHORT).show()
+                val cleared = orNull { LyricsTranslation.clearCache(googleOnly = true) }
+                if (cleared == null) {
+                    Toast.makeText(context, deleteFailed, Toast.LENGTH_LONG).show()
+                } else {
+                    Toast.makeText(context, clearedText.format(cleared.files, megabytes(cleared.bytes)), Toast.LENGTH_SHORT).show()
+                }
                 reload++
             }
         },
@@ -622,10 +698,12 @@ private fun StorageWindow(hazeState: HazeState, onDismiss: () -> Unit) {
         overlay = { DeleteWarning(hazeState, asking, frosted = false) { asking = null } },
     ) {
         if (inner != null) {
-            songStatusItems(inner, openedStatus, words, page, loading, deleteLabel, onLookAgain = { reload++ }) { asking = openedAsk }
+            songStatusItems(inner, openedStatus, words, page.failing(openedLoad.failed), loading, deleteLabel, onLookAgain = { reload++ }) { asking = openedAsk }
             return@KoWindow
         }
-        if (all == null || parts == null) {
+        if (failed && (all == null || parts == null)) {
+            windowError(page.loadFailed, page.retry, header = spaceHeader) { reload++ }
+        } else if (all == null || parts == null) {
             windowText(loading, header = spaceHeader)
         } else {
             windowCard(rows = meters, header = spaceHeader, footer = warnings) { (label, value, fraction) ->

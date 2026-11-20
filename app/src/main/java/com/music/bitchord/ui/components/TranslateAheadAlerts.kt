@@ -110,28 +110,59 @@ fun requestTranslateAhead(
     val reading = AppSettings.translateAheadReading.value
     // The screen that asked may be gone by the time the statuses are read.
     val context = context.applicationContext
-    requestScope.launch {
-        val ids = songs.map { it.videoId }.distinct()
-        val plan = aheadPlan(com.music.bitchord.download.TranslationStatus.statusOf(context, ids), ids, reading)
-        if (plan.requests == 0) {
-            Toast.makeText(context, context.getString(R.string.translate_ahead_nothing), Toast.LENGTH_LONG).show()
-            return@launch
-        }
-        val estimate = TranslateAhead.estimateUsd(plan.requests, model)
-        val remaining = remainingCapUsd()
-        if (remaining != null && estimate > remaining) {
-            Toast.makeText(
-                context,
-                KoFormat(context).let { format ->
-                    context.getString(R.string.translate_ahead_over_cap, format.money(estimate), format.money(remaining))
-                },
-                Toast.LENGTH_LONG,
-            ).show()
-            return@launch
-        }
-        TranslateAhead.start(title, songs, model, reading)
-        Toast.makeText(context, context.getString(R.string.translate_ahead_started, title), Toast.LENGTH_LONG).show()
+    // A second tap while the first is still looking at what is stored: one request.
+    if (requesting) return
+    if (TranslateAhead.isDuplicate(songs.map { it.videoId }, model, reading)) {
+        Toast.makeText(context, context.getString(R.string.translate_ahead_duplicate), Toast.LENGTH_LONG).show()
+        return
     }
+    requesting = true
+    requestScope.launch {
+        try {
+            sendFromMenu(context, title, songs, model, reading)
+        } finally {
+            requesting = false
+        }
+    }
+}
+
+/** A menu request on its way: set from the tap until its job has started or been refused. */
+@Volatile
+private var requesting = false
+
+private suspend fun sendFromMenu(context: Context, title: String, songs: List<Song>, model: String, reading: Boolean) {
+    val ids = songs.map { it.videoId }.distinct()
+    // A store that cannot be read is no reason not to send: every song is counted then.
+    val statuses = try {
+        com.music.bitchord.download.TranslationStatus.statusOf(context, ids)
+    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+        throw cancelled
+    } catch (_: Exception) {
+        emptyMap()
+    }
+    val plan = aheadPlan(statuses, ids, reading)
+    if (plan.requests == 0) {
+        Toast.makeText(context, context.getString(R.string.translate_ahead_nothing), Toast.LENGTH_LONG).show()
+        return
+    }
+    val estimate = TranslateAhead.estimateUsd(plan.requests, model)
+    val remaining = remainingCapUsd()
+    if (remaining != null && estimate > remaining) {
+        Toast.makeText(
+            context,
+            KoFormat(context).let { format ->
+                context.getString(R.string.translate_ahead_over_cap, format.money(estimate), format.money(remaining))
+            },
+            Toast.LENGTH_LONG,
+        ).show()
+        return
+    }
+    val started = TranslateAhead.start(title, songs, model, reading)
+    Toast.makeText(
+        context,
+        context.getString(if (started) R.string.translate_ahead_started else R.string.translate_ahead_duplicate, title),
+        Toast.LENGTH_LONG,
+    ).show()
 }
 
 /** Where a request from a menu runs: it looks at what is stored before sending. */
@@ -191,7 +222,18 @@ private fun TranslateAheadAskAlert(hazeState: HazeState, ask: AheadAsk, onDismis
     val ids = remember(ask) { ask.songs.map { it.videoId }.distinct() }
     val count = ids.size
     var statuses by remember(ask) { mutableStateOf<Map<String, com.music.bitchord.download.TranslationStatus.SongStatus>?>(null) }
-    LaunchedEffect(ask) { statuses = com.music.bitchord.download.TranslationStatus.statusOf(context, ids) }
+    LaunchedEffect(ask) {
+        // A store that cannot be read: every song is counted, as before the statuses were looked at.
+        statuses = try {
+            com.music.bitchord.download.TranslationStatus.statusOf(context, ids)
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            emptyMap()
+        }
+    }
+    // Locked from the first tap: a second one is not a second batch to pay for.
+    var sending by remember { mutableStateOf(false) }
     // While the statuses are read, every song is counted, as before.
     val plan = statuses?.let { aheadPlan(it, ids, reading) }
     val requests = plan?.requests ?: (count * if (reading) 2 else 1)
@@ -279,12 +321,16 @@ private fun TranslateAheadAskAlert(hazeState: HazeState, ask: AheadAsk, onDismis
             label = stringResource(R.string.translate_ahead_send),
             emphasised = true,
             // Nothing to send can still be a playlist to start watching for new songs.
-            enabled = !overCap && (plan?.requests != 0 || (ask.browseId != null && watch != TranslateAhead.isWatched(ask.browseId))),
-            onClick = {
+            enabled = !sending && !overCap && (plan?.requests != 0 || (ask.browseId != null && watch != TranslateAhead.isWatched(ask.browseId))),
+            onClick = onClick@{
+                if (sending) return@onClick
+                sending = true
                 AppSettings.setTranslateAheadChoice(model, reading)
                 if (dontShow) AppSettings.setTranslateAheadIntro(false)
                 askNotifications()
-                if (plan?.requests != 0) TranslateAhead.start(ask.title, ask.songs, model, reading)
+                val wanted = plan?.requests != 0
+                val duplicate = wanted && TranslateAhead.isDuplicate(ask.songs.map { it.videoId }, model, reading)
+                if (wanted && !duplicate) TranslateAhead.start(ask.title, ask.songs, model, reading)
                 ask.browseId?.let { id ->
                     if (watch) {
                         TranslateAhead.watch(id, ask.title, ask.allSongs, model, reading)
@@ -292,7 +338,9 @@ private fun TranslateAheadAskAlert(hazeState: HazeState, ask: AheadAsk, onDismis
                         TranslateAhead.unwatch(id)
                     }
                 }
-                if (plan?.requests != 0) {
+                if (duplicate) {
+                    Toast.makeText(context, context.getString(R.string.translate_ahead_duplicate, ask.title), Toast.LENGTH_LONG).show()
+                } else if (wanted) {
                     Toast.makeText(context, context.getString(R.string.translate_ahead_started, ask.title), Toast.LENGTH_LONG).show()
                 }
                 onDismiss()

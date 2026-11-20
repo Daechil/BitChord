@@ -567,6 +567,7 @@ private fun ClaudeLogWindow(onDismiss: () -> Unit) {
     }
     val copyLabel = stringResource(R.string.claude_log_copy)
     val clearLabel = stringResource(R.string.claude_log_clear)
+    val deleteFailedText = stringResource(R.string.ko_delete_failed)
     val mono = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 15.sp)
     KoWindow(title = stringResource(R.string.claude_log), onBack = onDismiss) {
         windowText(subtitle)
@@ -580,7 +581,17 @@ private fun ClaudeLogWindow(onDismiss: () -> Unit) {
                             ?.setPrimaryClip(ClipData.newPlainText("Claude log", text))
                         Toast.makeText(context, copiedText, Toast.LENGTH_SHORT).show()
                     },
-                    WindowButton(label = clearLabel, destructive = true) { scope.launch { ClaudeDiagnostics.clear() } },
+                    WindowButton(label = clearLabel, destructive = true) {
+                        scope.launch {
+                            try {
+                                ClaudeDiagnostics.clear()
+                            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                                throw cancelled
+                            } catch (error: Exception) {
+                                Toast.makeText(context.applicationContext, deleteFailedText, Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    },
                 ),
             )
             windowCard(rows = lines) { (head, body) -> WindowLine(title = head, detail = body, detailStyle = mono) }
@@ -746,11 +757,37 @@ private fun ClaudeCostWindow(onDismiss: () -> Unit) {
         if (value != null && AppSettings.setKrwPerUsd(value)) {
             rateText = value.toString()
             Toast.makeText(context, rateSaved.format(java.text.NumberFormat.getIntegerInstance().format(value)), Toast.LENGTH_SHORT).show()
+            true
         } else {
             Toast.makeText(context, rateInvalid, Toast.LENGTH_SHORT).show()
+            false
         }
     }
-    KoWindow(title = stringResource(R.string.claude_cost_settings), onBack = onDismiss) {
+    // Only what is on screen counts: the rate when it is typed by hand, the key when the Eximbank is chosen.
+    val rateUnsaved = rateMode == AppSettings.RATE_MANUAL && rateText.isNotBlank() && rateText != rate.toString()
+    val keyUnsaved = rateMode == AppSettings.RATE_AUTO && rateSource == AppSettings.RATE_SOURCE_EXIM && keyText.isNotBlank()
+    var leaving by remember { mutableStateOf(false) }
+    KoWindow(
+        title = stringResource(R.string.claude_cost_settings),
+        onBack = { if ((rateUnsaved || keyUnsaved) && !leaving) leaving = true else onDismiss() },
+        overlay = {
+            UnsavedWarning(
+                shown = leaving,
+                onSave = {
+                    leaving = false
+                    val rateOk = if (rateUnsaved) saveRate() else true
+                    if (keyUnsaved) saveKey()
+                    // A rate out of range stays on screen to be fixed.
+                    if (rateOk) onDismiss()
+                },
+                onDiscard = {
+                    leaving = false
+                    onDismiss()
+                },
+                onStay = { leaving = false },
+            )
+        },
+    ) {
         windowText(summary)
         windowCard(rows = displays, header = displayHeader) { option ->
             WindowChoice(

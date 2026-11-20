@@ -793,6 +793,15 @@
     <string name="instructions_for_meaning_detail">Send the instructions with the song explanations too.</string>
     <string name="instructions_none">none</string>
     <string name="instructions_set">set</string>
+    <string name="translate_ahead_duplicate">These songs are already being translated ahead, or were just sent. Progress is in Settings.</string>
+    <string name="ko_load_failed">Couldn\'t read this. Your stored translations are untouched.</string>
+    <string name="ko_retry">Try again</string>
+    <string name="ko_delete_failed">Couldn\'t delete it. Please try again.</string>
+    <string name="ko_unsaved_title">Leave without saving?</string>
+    <string name="ko_unsaved_description">What you typed hasn\'t been saved yet.</string>
+    <string name="ko_unsaved_save">Save and leave</string>
+    <string name="ko_unsaved_discard">Leave without saving</string>
+    <string name="ko_unsaved_stay">Keep editing</string>
     <string name="ko_window_summary">Summary</string>
     <string name="ko_window_songs">Songs · %1$d</string>
     <string name="ko_window_space">Space used</string>

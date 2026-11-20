@@ -67,7 +67,33 @@ internal fun LyricsAdvancedWindow(onDismiss: () -> Unit) {
     val meaningTitle = stringResource(R.string.instructions_for_meaning)
     val meaningDetail = stringResource(R.string.instructions_for_meaning_detail)
     val placeholderColor = MaterialTheme.colorScheme.onSurfaceVariant
-    KoWindow(title = stringResource(R.string.lyrics_advanced), onBack = onDismiss) {
+    var leaving by remember { mutableStateOf(false) }
+    val unsaved = text.trim() != saved
+    val save = {
+        AppSettings.setClaudeInstructions(text)
+        text = AppSettings.claudeInstructions.value
+        Toast.makeText(context, savedToast, Toast.LENGTH_SHORT).show()
+    }
+    KoWindow(
+        title = stringResource(R.string.lyrics_advanced),
+        // Typed and not saved: asked first, rather than lost to a back press.
+        onBack = { if (unsaved && !leaving) leaving = true else onDismiss() },
+        overlay = {
+            UnsavedWarning(
+                shown = leaving,
+                onSave = {
+                    leaving = false
+                    save()
+                    onDismiss()
+                },
+                onDiscard = {
+                    leaving = false
+                    onDismiss()
+                },
+                onStay = { leaving = false },
+            )
+        },
+    ) {
         windowCard(rows = modes, header = modeHeader, footer = modeFooter) { option ->
             WindowChoice(label = modeLabels[option].orEmpty(), detail = modeDetails[option], checked = option == mode) {
                 AppSettings.setPronunciationMode(option)
@@ -105,11 +131,7 @@ internal fun LyricsAdvancedWindow(onDismiss: () -> Unit) {
         }
         windowActions(
             listOfNotNull(
-                WindowButton(label = saveLabel, enabled = text.trim() != saved) {
-                    AppSettings.setClaudeInstructions(text)
-                    text = AppSettings.claudeInstructions.value
-                    Toast.makeText(context, savedToast, Toast.LENGTH_SHORT).show()
-                },
+                WindowButton(label = saveLabel, enabled = unsaved) { save() },
                 WindowButton(label = clearLabel, destructive = true) {
                     text = ""
                     AppSettings.setClaudeInstructions("")

@@ -88,6 +88,7 @@ fun LyricsSidePanel(
                         showingRomanization = lyricsTranslation.showingRomanization,
                         enabled = !lyrics.isNullOrEmpty(),
                         onClick = lyricsTranslation.toggleRomanization,
+                        onLongClick = lyricsTranslation.reromanize,
                     )
                 },
                 translationToggle = {

@@ -118,6 +118,7 @@
     <string name="claude_fail_bad_answer">잘못된 답</string>
     <string name="claude_fail_error">알 수 없는 오류</string>
     <string name="lyrics_retranslating">Claude에게 다시 번역을 요청합니다…</string>
+    <string name="lyrics_rereading_with_claude">Claude에게 이 곡의 발음을 받는 중…</string>
     <string name="song_meaning">이 노래 해석</string>
     <string name="song_meaning_loading">가사를 읽는 중…</string>
     <string name="song_meaning_unavailable">지금은 해석을 불러올 수 없습니다.</string>

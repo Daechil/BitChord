@@ -1546,6 +1546,8 @@ internal fun RomanizationToggleButton(
     showingRomanization: Boolean,
     enabled: Boolean,
     onClick: () -> Unit,
+    /** A long press asks Claude for the reading of this song, whatever Settings reads with. */
+    onLongClick: (() -> Unit)? = null,
 ) {
     val active = showingRomanization || state is LyricsTranslationUiState.Loading
     val chrome = LocalPlayerChrome.current
@@ -1564,11 +1566,12 @@ internal fun RomanizationToggleButton(
             .clip(CircleShape)
             .additiveChrome(chrome)
             .background(Color.White.copy(alpha = discAlpha))
-            .clickable(
+            .combinedClickable(
                 enabled = enabled,
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = onClick,
+                onLongClick = onLongClick,
             ),
         contentAlignment = Alignment.Center,
     ) {
@@ -3090,6 +3093,8 @@ internal class LyricsTranslationUi(
     val byClaude: Boolean = false,
     /** Asks for the translation again, skipping what is cached. */
     val retranslate: () -> Unit = {},
+    /** A long press on the romanize disc: Claude's reading of this song. */
+    val reromanize: () -> Unit = {},
 )
 
 /**
@@ -3174,6 +3179,7 @@ internal fun rememberLyricsTranslation(
     }
     val translationScope = rememberCoroutineScope()
     val retranslatingMessage = stringResource(Res.string.lyrics_retranslating)
+    val rereadingMessage = stringResource(Res.string.lyrics_rereading_with_claude)
     fun requestTranslation(fresh: Boolean) {
         val source = lyrics.orEmpty()
         if (source.isEmpty()) return
@@ -3237,8 +3243,46 @@ internal fun rememberLyricsTranslation(
             requestTranslation(fresh = true)
         }
     }
-    val toggleRomanization: () -> Unit = toggleRomanization@{
-        when (val state = romanizationState) {
+    // The romanize request itself, for the disc's tap and for its long press,
+    // which asks Claude for this song's reading whatever Settings reads with.
+    val requestRomanization: (Boolean) -> Unit = requestRomanization@{ preferClaude ->
+        val source = lyrics.orEmpty()
+        if (source.isEmpty()) return@requestRomanization
+        haptics.play(Haptic.Tap)
+        romanizationState = LyricsTranslationUiState.Loading
+        translationJob?.cancel()
+        if (translationState is LyricsTranslationUiState.Loading) {
+            translationState = LyricsTranslationUiState.Idle
+        }
+        romanizationJob?.cancel()
+        romanizationJob = translationScope.launch {
+            when (
+                val result = PlayerPlatform.host.romanizeLyrics(
+                    trackId = trackId,
+                    lines = source,
+                    targetLanguageTag = translationLanguage,
+                    preferClaude = preferClaude,
+                )
+            ) {
+                is LyricsRomanizationResult.Romanized -> {
+                    romanizationState = LyricsTranslationUiState.Ready(result.lines, byClaude = result.byClaude)
+                    lyricsDisplayMode = LyricsDisplayMode.Romanized
+                    translationTransition++
+                    haptics.play(Haptic.ToggleOn)
+                }
+                LyricsRomanizationResult.AlreadyRomanized -> {
+                    romanizationState = LyricsTranslationUiState.SameLanguage
+                    PlayerPlatform.host.showMessage(alreadyRomanizedMessage)
+                }
+                LyricsRomanizationResult.Unavailable -> {
+                    romanizationState = LyricsTranslationUiState.Idle
+                    PlayerPlatform.host.showMessage(romanizationUnavailableMessage)
+                }
+            }
+        }
+    }
+    val toggleRomanization: () -> Unit = {
+        when (romanizationState) {
             is LyricsTranslationUiState.Ready -> {
                 lyricsDisplayMode = if (showingRomanization) {
                     LyricsDisplayMode.Original
@@ -3253,41 +3297,13 @@ internal fun rememberLyricsTranslation(
                 haptics.play(Haptic.Tap)
                 PlayerPlatform.host.showMessage(alreadyRomanizedMessage)
             }
-            LyricsTranslationUiState.Idle -> {
-                val source = lyrics.orEmpty()
-                if (source.isEmpty()) return@toggleRomanization
-                haptics.play(Haptic.Tap)
-                romanizationState = LyricsTranslationUiState.Loading
-                translationJob?.cancel()
-                if (translationState is LyricsTranslationUiState.Loading) {
-                    translationState = LyricsTranslationUiState.Idle
-                }
-                romanizationJob?.cancel()
-                romanizationJob = translationScope.launch {
-                    when (
-                        val result = PlayerPlatform.host.romanizeLyrics(
-                            trackId = trackId,
-                            lines = source,
-                            targetLanguageTag = translationLanguage,
-                        )
-                    ) {
-                        is LyricsRomanizationResult.Romanized -> {
-                            romanizationState = LyricsTranslationUiState.Ready(result.lines, byClaude = result.byClaude)
-                            lyricsDisplayMode = LyricsDisplayMode.Romanized
-                            translationTransition++
-                            haptics.play(Haptic.ToggleOn)
-                        }
-                        LyricsRomanizationResult.AlreadyRomanized -> {
-                            romanizationState = LyricsTranslationUiState.SameLanguage
-                            PlayerPlatform.host.showMessage(alreadyRomanizedMessage)
-                        }
-                        LyricsRomanizationResult.Unavailable -> {
-                            romanizationState = LyricsTranslationUiState.Idle
-                            PlayerPlatform.host.showMessage(romanizationUnavailableMessage)
-                        }
-                    }
-                }
-            }
+            LyricsTranslationUiState.Idle -> requestRomanization(false)
+        }
+    }
+    val reromanize: () -> Unit = {
+        if (romanizationState !is LyricsTranslationUiState.Loading && !lyrics.isNullOrEmpty()) {
+            PlayerPlatform.host.showMessage(rereadingMessage)
+            requestRomanization(true)
         }
     }
     // The one line that sits above the scrubber while the lyrics are open: which
@@ -3351,6 +3367,7 @@ internal fun rememberLyricsTranslation(
         status = status,
         toggleTranslation = toggleTranslation,
         toggleRomanization = toggleRomanization,
+        reromanize = reromanize,
         targetLanguage = translationLanguage,
         byClaude = (translationState as? LyricsTranslationUiState.Ready)?.byClaude == true,
         retranslate = retranslate,

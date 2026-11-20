@@ -209,16 +209,53 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
         trackId: String,
         lines: List<LyricLine>,
         targetLanguageTag: String,
+        preferClaude: Boolean,
     ): LyricsRomanizationResult {
-        // Claude's reading in the reader's own script first, where it is set
-        // up and the lyrics are in another script; Google's romanisation for
-        // everything else, as before.
-        (LyricsTranslation.claudeReading(trackId, lines, targetLanguageTag) as? LyricsTranslation.RomanizationResult.Romanized)
-            ?.let { return LyricsRomanizationResult.Romanized(it.lines, byClaude = true) }
+        val mode = AppSettings.pronunciationMode.value
+        // Claude's reading in the reader's own script where Settings asks for it,
+        // or this one song was long-pressed for it; Google's romanisation otherwise.
+        if (preferClaude || mode == AppSettings.PRONOUNCE_CLAUDE) {
+            (LyricsTranslation.claudeReading(trackId, lines, targetLanguageTag, force = preferClaude) as? LyricsTranslation.RomanizationResult.Romanized)
+                ?.let { return LyricsRomanizationResult.Romanized(it.lines, byClaude = true) }
+        } else if (mode == AppSettings.PRONOUNCE_FREE) {
+            // A reading Claude already wrote for this song — paid for once, or
+            // translated ahead — is better than the free one, and costs nothing now.
+            (LyricsTranslation.claudeReading(trackId, lines, targetLanguageTag, storedOnly = true) as? LyricsTranslation.RomanizationResult.Romanized)
+                ?.let { return LyricsRomanizationResult.Romanized(it.lines, byClaude = true) }
+        }
         return when (val result = LyricsTranslation.romanize(trackId, lines, targetLanguageTag)) {
-            is LyricsTranslation.RomanizationResult.Romanized -> LyricsRomanizationResult.Romanized(result.lines)
+            is LyricsTranslation.RomanizationResult.Romanized -> {
+                val korean = targetLanguageTag.trim().lowercase().substringBefore('-').substringBefore('_') == "ko"
+                LyricsRomanizationResult.Romanized(
+                    if (mode == AppSettings.PRONOUNCE_FREE && korean) inHangul(lines, result) else result.lines,
+                )
+            }
             LyricsTranslation.RomanizationResult.AlreadyRomanized -> LyricsRomanizationResult.AlreadyRomanized
             LyricsTranslation.RomanizationResult.Unavailable -> LyricsRomanizationResult.Unavailable
+        }
+    }
+
+    /**
+     * Google's romanisation of [original], line for line, written in Hangul —
+     * the free reading. A line already in Hangul keeps its own words; a
+     * language the reading cannot write keeps the romanisation.
+     */
+    private fun inHangul(original: List<LyricLine>, result: LyricsTranslation.RomanizationResult.Romanized): List<LyricLine> {
+        fun read(romanized: String, source: String): String {
+            if (source.any { it in '\uAC00'..'\uD7A3' } && source.none { it in '\u3040'..'\u30FF' || it in '\u4E00'..'\u9FFF' }) {
+                return source
+            }
+            return com.music.bitchord.data.lyrics.HangulReading.convert(romanized, source, result.sourceLanguage) ?: romanized
+        }
+        return result.lines.mapIndexed { index, line ->
+            val source = original.getOrNull(index) ?: return@mapIndexed line
+            line.copy(
+                text = if (line.text.isBlank()) line.text else read(line.text, source.text),
+                background = line.background?.let { back ->
+                    val sourceBack = source.background?.text.orEmpty()
+                    if (back.text.isBlank()) back else back.copy(text = read(back.text, sourceBack))
+                },
+            )
         }
     }
 

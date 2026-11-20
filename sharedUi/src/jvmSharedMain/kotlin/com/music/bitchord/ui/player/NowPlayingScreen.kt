@@ -2288,6 +2288,7 @@ fun NowPlayingScreen(
                                     showingRomanization = lyricsTranslation.showingRomanization,
                                     enabled = !lyrics.isNullOrEmpty(),
                                     onClick = lyricsTranslation.toggleRomanization,
+                                    onLongClick = lyricsTranslation.reromanize,
                                 )
                             },
                             translationToggle = {
@@ -3928,6 +3929,7 @@ fun NowPlayingScreen(
                                         showingRomanization = lyricsTranslation.showingRomanization,
                                         enabled = translateShown && !lyrics.isNullOrEmpty(),
                                         onClick = lyricsTranslation.toggleRomanization,
+                                        onLongClick = lyricsTranslation.reromanize,
                                     )
                                 }
                                 Row(

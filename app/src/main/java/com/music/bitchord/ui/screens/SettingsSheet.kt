@@ -273,7 +273,6 @@ fun SettingsScreen(
     val lockScreenLyrics by AppSettings.lockScreenLyrics.collectAsStateWithLifecycle()
     val floatingLyrics by AppSettings.floatingLyrics.collectAsStateWithLifecycle()
     val floatingLyricsLocked by AppSettings.floatingLyricsLocked.collectAsStateWithLifecycle()
-    val claudeReading by AppSettings.claudeReading.collectAsStateWithLifecycle()
     val claudeMonthlyCap by AppSettings.claudeMonthlyCap.collectAsStateWithLifecycle()
     val claudeSonnetStandIn by AppSettings.claudeSonnetStandIn.collectAsStateWithLifecycle()
     // Read again each time the sheet comes back to the front, which is how a
@@ -764,19 +763,17 @@ fun SettingsScreen(
                         onClick = onClaudeMode,
                     )
                 }
-                val claudeReadingTitle = stringResource(R.string.claude_reading)
-                row(claudeReadingTitle, "claude", "pronunciation", "romanize", "reading", "발음", "독음", "로마자") {
+                val lyricsAdvancedTitle = stringResource(R.string.lyrics_advanced)
+                row(
+                    lyricsAdvancedTitle, "claude", "pronunciation", "romanize", "reading", "instructions", "prompt",
+                    "발음", "독음", "로마자", "지시문", "프롬프트", "번역 규칙",
+                ) {
                     SettingsRow(
                         icon = SfIcons.Translate,
-                        title = claudeReadingTitle,
-                        subtitle = stringResource(R.string.claude_reading_subtitle),
-                        trailing = {
-                            IosSwitch(
-                                checked = claudeReading,
-                                onCheckedChange = AppSettings::setClaudeReading,
-                            )
-                        },
-                        onClick = { AppSettings.setClaudeReading(!claudeReading) },
+                        title = lyricsAdvancedTitle,
+                        subtitleContent = { com.music.bitchord.ui.components.LyricsAdvancedSubtitle() },
+                        trailing = { Chevron() },
+                        onClick = { com.music.bitchord.ui.components.KoAlerts.lyricsAdvanced.value = true },
                     )
                 }
                 val claudeSonnetStandInTitle = stringResource(R.string.claude_sonnet_stand_in)

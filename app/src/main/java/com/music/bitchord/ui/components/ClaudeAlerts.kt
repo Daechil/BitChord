@@ -77,6 +77,9 @@ object KoAlerts {
 
     /** The floating bar's window of looks, timing and position. */
     val floatingSettings = MutableStateFlow(false)
+
+    /** The window of the romanize button's reading and the listener's own instructions for Claude. */
+    val lyricsAdvanced = MutableStateFlow(false)
 }
 
 /** The batch sizes offered, in songs. */
@@ -160,6 +163,10 @@ fun ClaudeAlerts(
             },
             onDismiss = { KoAlerts.chunkSize.value = false },
         )
+    }
+    val showLyricsAdvanced by KoAlerts.lyricsAdvanced.collectAsStateWithLifecycle()
+    if (showLyricsAdvanced) {
+        LyricsAdvancedWindow(onDismiss = { KoAlerts.lyricsAdvanced.value = false })
     }
     val showFloating by KoAlerts.floatingSettings.collectAsStateWithLifecycle()
     if (showFloating) {

@@ -112,6 +112,8 @@ interface PlayerHost {
         trackId: String,
         lines: List<LyricLine>,
         targetLanguageTag: String,
+        /** Claude's reading for this song, whatever Settings reads with — a long press on the romanize disc. */
+        preferClaude: Boolean = false,
     ): LyricsRomanizationResult
 
     /**

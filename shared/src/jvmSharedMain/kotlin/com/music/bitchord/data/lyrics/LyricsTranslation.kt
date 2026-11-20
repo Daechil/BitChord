@@ -484,6 +484,29 @@ object LyricsTranslation {
     @Volatile
     var claudeReadingEnabled: Boolean = true
 
+    /**
+     * The listener's own instructions for Claude's translations and readings
+     * ("keep names as they are", "no formal speech"…), from Settings; blank
+     * for none. Appended to the instruction in a block of its own, after the
+     * rules that fix the answer's form, which the structured output enforces.
+     */
+    @Volatile
+    var listenerInstructions: String = ""
+
+    /** The listener's instructions also go with the song explanations. */
+    @Volatile
+    var listenerInstructionsForMeaning: Boolean = false
+
+    private fun StringBuilder.appendListenerInstructions() {
+        val extra = listenerInstructions.trim()
+        if (extra.isEmpty()) return
+        appendLine()
+        appendLine("The listener has added their own instructions. Follow them wherever they apply, as long as the answer keeps the form and the line count set out above:")
+        appendLine("<listener_instructions>")
+        appendLine(extra)
+        appendLine("</listener_instructions>")
+    }
+
     /** Told what every Claude answer cost in tokens, so the app can keep a tally. */
     @Volatile
     var usageSink: ((model: String, inputTokens: Long, outputTokens: Long) -> Unit)? = null
@@ -659,6 +682,7 @@ object LyricsTranslation {
             appendLine("7. Output only the translated text. No quotes around lines, no notes, no romanisation, no explanations.")
             appendLine("8. Set \"source_language\" to the ISO 639-1 code of the song's main original language.")
             appendLine("9. Leave \"declined_reason\" as an empty string. Only if you will not translate this song, write the reason there in one short sentence and leave every translation empty. Never write a refusal, a warning or a note in place of a translation.")
+            appendListenerInstructions()
         }
     }
 
@@ -692,6 +716,7 @@ object LyricsTranslation {
             appendLine("5. Output only the reading. No quotes, no notes, no translation.")
             appendLine("6. Set \"source_language\" to the ISO 639-1 code of the song's main original language.")
             appendLine("7. Leave \"declined_reason\" as an empty string. Only if you will not do this, write the reason there in one short sentence and leave every value empty. Never write a refusal in place of a reading.")
+            appendListenerInstructions()
         }
     }
 
@@ -1600,8 +1625,12 @@ object LyricsTranslation {
         trackId: String,
         lines: List<LyricLine>,
         targetLanguageTag: String,
+        /** Asked for this one song even though Settings reads with the free reading: "ask Claude instead". */
+        force: Boolean = false,
+        /** Only a reading already stored or translated ahead, which costs nothing: never a request. */
+        storedOnly: Boolean = false,
     ): RomanizationResult? {
-        if (!claudeEnabled || !claudeReadingEnabled || cleanClaudeKey().isEmpty()) return null
+        if (!storedOnly && (!claudeEnabled || (!claudeReadingEnabled && !force) || cleanClaudeKey().isEmpty())) return null
         val target = targetLanguageTag.trim()
         if (target.isBlank() || lines.isEmpty()) return null
         val slots = flatten(lines)
@@ -1621,6 +1650,7 @@ object LyricsTranslation {
             noteStored(cacheKey, trackId, KIND_READING, ahead, target, model = null, kept = keepDir != null, via = VIA_AHEAD)
             return RomanizationResult.Romanized(rebuild(lines, slots, ahead.texts), ahead.sourceLanguage, fromCache = true)
         }
+        if (storedOnly) return null
         val model = claudeModel
         var reply = requestClaudeTranslation(slots, target, model, reading = true)
         var readingModel = model
@@ -2911,6 +2941,7 @@ object LyricsTranslation {
             appendLine()
             appendLine("Base everything on the lyrics given. Mention background about the artist or the song only if you are certain it is true. Never invent facts, chart records, interviews or quotes.")
             appendLine("Plain text only: no markdown, no bullet characters, no emojis.")
+            if (listenerInstructionsForMeaning) appendListenerInstructions()
         }
     }
 

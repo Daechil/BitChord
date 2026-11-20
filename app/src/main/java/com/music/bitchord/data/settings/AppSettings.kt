@@ -630,6 +630,26 @@ object AppSettings {
     /** The romanize button shows Claude's reading in the reader's own script. See [LyricsTranslation.claudeReading]. */
     val claudeReading = MutableStateFlow(true)
 
+    /**
+     * What the romanize button shows: [PRONOUNCE_FREE], Google's romanisation
+     * written in Hangul on the phone; [PRONOUNCE_CLAUDE], Claude's reading;
+     * or [PRONOUNCE_ROMAJI], Google's romanisation as it is. A long press on
+     * the button asks Claude for one song whatever is chosen.
+     */
+    val pronunciationMode = MutableStateFlow(PRONOUNCE_FREE)
+
+    const val PRONOUNCE_FREE = "free"
+    const val PRONOUNCE_CLAUDE = "claude"
+    const val PRONOUNCE_ROMAJI = "romaji"
+
+    /** The listener's own instructions for Claude's translations. See [LyricsTranslation.listenerInstructions]. */
+    val claudeInstructions = MutableStateFlow("")
+
+    /** The instructions go with the song explanations too. */
+    val claudeInstructionsForMeaning = MutableStateFlow(false)
+
+    const val MAX_INSTRUCTIONS_CHARS = 500
+
     /** A small bar of the current lyric line over other apps while playing. See FloatingLyrics. */
     val floatingLyrics = MutableStateFlow(false)
 
@@ -1388,7 +1408,14 @@ object AppSettings {
             ?: com.music.bitchord.data.lyrics.LyricsTranslation.CLAUDE_HAIKU
         translateAheadReading.value = prefs.getBoolean(KEY_TRANSLATE_AHEAD_READING, false)
         com.music.bitchord.data.lyrics.LyricsTranslation.sonnetStandInEnabled = claudeSonnetStandIn.value
+        pronunciationMode.value = prefs.getString(KEY_PRONUNCIATION_MODE, null)
+            ?.takeIf { it == PRONOUNCE_FREE || it == PRONOUNCE_CLAUDE || it == PRONOUNCE_ROMAJI } ?: PRONOUNCE_FREE
+        claudeReading.value = pronunciationMode.value == PRONOUNCE_CLAUDE
         com.music.bitchord.data.lyrics.LyricsTranslation.claudeReadingEnabled = claudeReading.value
+        claudeInstructions.value = prefs.getString(KEY_CLAUDE_INSTRUCTIONS, "").orEmpty().take(MAX_INSTRUCTIONS_CHARS)
+        claudeInstructionsForMeaning.value = prefs.getBoolean(KEY_CLAUDE_INSTRUCTIONS_MEANING, false)
+        com.music.bitchord.data.lyrics.LyricsTranslation.listenerInstructions = claudeInstructions.value
+        com.music.bitchord.data.lyrics.LyricsTranslation.listenerInstructionsForMeaning = claudeInstructionsForMeaning.value
         com.music.bitchord.data.lyrics.LyricsTranslation.claudeOverBudget = ::claudeOverBudget
         if (highPerformanceMode.value) {
             reduceAnimation.value = false
@@ -2044,10 +2071,31 @@ object AppSettings {
         com.music.bitchord.data.lyrics.LyricsTranslation.sonnetStandInEnabled = value
     }
 
+    fun setPronunciationMode(value: String) {
+        pronunciationMode.value = value
+        prefs.edit().putString(KEY_PRONUNCIATION_MODE, value).apply()
+        claudeReading.value = value == PRONOUNCE_CLAUDE
+        com.music.bitchord.data.lyrics.LyricsTranslation.claudeReadingEnabled = claudeReading.value
+    }
+
+    /** Control characters out, at most [MAX_INSTRUCTIONS_CHARS]. */
+    fun setClaudeInstructions(value: String) {
+        val clean = value.filter { it == '\n' || !it.isISOControl() }.trim().take(MAX_INSTRUCTIONS_CHARS)
+        claudeInstructions.value = clean
+        prefs.edit().putString(KEY_CLAUDE_INSTRUCTIONS, clean).apply()
+        com.music.bitchord.data.lyrics.LyricsTranslation.listenerInstructions = clean
+    }
+
+    fun setClaudeInstructionsForMeaning(value: Boolean) {
+        claudeInstructionsForMeaning.value = value
+        prefs.edit().putBoolean(KEY_CLAUDE_INSTRUCTIONS_MEANING, value).apply()
+        com.music.bitchord.data.lyrics.LyricsTranslation.listenerInstructionsForMeaning = value
+    }
+
+    /** The old on/off for Claude's reading: on is [PRONOUNCE_CLAUDE], off the free reading. */
     fun setClaudeReading(value: Boolean) {
-        claudeReading.value = value
         prefs.edit().putBoolean(KEY_CLAUDE_READING, value).apply()
-        com.music.bitchord.data.lyrics.LyricsTranslation.claudeReadingEnabled = value
+        setPronunciationMode(if (value) PRONOUNCE_CLAUDE else PRONOUNCE_FREE)
     }
 
     fun setFloatingLyrics(value: Boolean) {
@@ -3027,6 +3075,9 @@ object AppSettings {
     private const val KEY_FLOATING_LYRICS_EDGE = "ko_floating_lyrics_edge"
     private const val KEY_FLOATING_LYRICS_COLOR = "ko_floating_lyrics_color"
     private const val KEY_FLOATING_LYRICS_OFFSET = "ko_floating_lyrics_offset"
+    private const val KEY_PRONUNCIATION_MODE = "ko_pronunciation_mode"
+    private const val KEY_CLAUDE_INSTRUCTIONS = "ko_claude_instructions"
+    private const val KEY_CLAUDE_INSTRUCTIONS_MEANING = "ko_claude_instructions_meaning"
     private const val KEY_KRW_RATE_MODE = "ko_krw_rate_mode"
     private const val KEY_KRW_RATE_SOURCE = "ko_krw_rate_source"
     private const val KEY_EXIM_API_KEY = "ko_exim_api_key"

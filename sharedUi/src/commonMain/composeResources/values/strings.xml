@@ -118,6 +118,7 @@
     <string name="claude_fail_bad_answer">unreadable answer</string>
     <string name="claude_fail_error">unknown error</string>
     <string name="lyrics_retranslating">Asking Claude for a fresh translation…</string>
+    <string name="lyrics_rereading_with_claude">Asking Claude for this song’s reading…</string>
     <string name="song_meaning">What this song means</string>
     <string name="song_meaning_loading">Reading the song…</string>
     <string name="song_meaning_unavailable">Couldn’t explain this song right now</string>

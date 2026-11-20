@@ -180,7 +180,10 @@ object Genius {
             val titleMatches = normTitle.isNotBlank() && (title == normTitle || title.contains(normTitle) || normTitle.contains(title))
             val artistMatches = normArtist.isNotBlank() && (artist == normArtist || artist.contains(normArtist) || normArtist.contains(artist))
 
-            if (!titleMatches && !artistMatches) return@mapNotNull null
+            // Another song by the same artist is the wrong lyrics, however
+            // well the artist matches: the title has to be this one.
+            val rawTitle = item["title"]?.jsonPrimitive?.contentOrNull.orEmpty()
+            if (!titleMatches && !SongMatch.sameTitle(targetTitle, rawTitle)) return@mapNotNull null
 
             if (title == normTitle) score += 50
             else if (titleMatches) score += 25

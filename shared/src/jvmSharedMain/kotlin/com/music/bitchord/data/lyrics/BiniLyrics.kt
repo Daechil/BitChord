@@ -54,7 +54,27 @@ object BiniLyrics {
         durationMs: Long,
         album: String? = null,
         isrc: String? = null,
-    ): Hit? = withContext(Dispatchers.IO) {
+    ): Hit? {
+        val results = search(title, artist, durationMs, album, isrc)
+        // Asked by recording, the answer is that recording. Asked by name, the
+        // answer is a guess, and its ISRC is about to be handed to every source
+        // that trusts one — so it has to be this song by name first.
+        if (!isrc.isNullOrBlank()) return results.firstOrNull()
+        return results.firstOrNull { accepts(it, title, artist, durationMs) }
+    }
+
+    /** Whether [hit] is the song asked about by name; see [identify]. */
+    internal fun accepts(hit: Hit, title: String, artist: String, durationMs: Long): Boolean =
+        SongMatch.sameSong(title, artist, durationMs, hit.trackName, hit.artistName, hit.duration?.let { if (it > 10_000) it / 1000.0 else it.toDouble() })
+
+    /** Everything the search answered, best guess first, unchecked. */
+    internal suspend fun search(
+        title: String,
+        artist: String,
+        durationMs: Long,
+        album: String? = null,
+        isrc: String? = null,
+    ): List<Hit> = withContext(Dispatchers.IO) {
         val url = BASE.toHttpUrl().newBuilder()
             .apply {
                 if (!isrc.isNullOrBlank()) {
@@ -73,17 +93,8 @@ object BiniLyrics {
 
         // A miss is a 404 here rather than an empty result set, which
         // [lyricsGet] already turns into a null.
-        val body = lyricsGet(url.toString()) ?: return@withContext null
-        val response = runCatching { lyricsJson.decodeFromString<Response>(body) }.getOrNull()
-            ?: return@withContext null
-        val results = response.results.orEmpty()
-        // Asked by recording, the answer is that recording. Asked by name, the
-        // answer is a guess, and its ISRC is about to be handed to every source
-        // that trusts one — so it has to be this song by name first.
-        if (!isrc.isNullOrBlank()) return@withContext results.firstOrNull()
-        results.firstOrNull { hit ->
-            SongMatch.sameSong(title, artist, durationMs, hit.trackName, hit.artistName, hit.duration?.let { if (it > 10_000) it / 1000.0 else it.toDouble() })
-        }
+        val body = lyricsGet(url.toString()) ?: return@withContext emptyList()
+        runCatching { lyricsJson.decodeFromString<Response>(body) }.getOrNull()?.results.orEmpty()
     }
 
     /**

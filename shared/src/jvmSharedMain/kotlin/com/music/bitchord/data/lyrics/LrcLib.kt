@@ -66,6 +66,19 @@ object LrcLib {
         val hits = json.parseToJsonElement(body) as? JsonArray ?: return null
         return hits.mapNotNull { it as? JsonObject }
             .filter { it["syncedLyrics"]?.jsonPrimitive?.contentOrNull?.isNotBlank() == true }
+            // Closest in length among *this song's* entries: a search answers
+            // with anything that shares a word, and the nearest length among
+            // those can be another song altogether.
+            .filter {
+                SongMatch.sameSong(
+                    title,
+                    artist,
+                    seconds * 1000L,
+                    it["trackName"]?.jsonPrimitive?.contentOrNull,
+                    it["artistName"]?.jsonPrimitive?.contentOrNull,
+                    it["duration"]?.jsonPrimitive?.doubleOrNull,
+                )
+            }
             .minByOrNull {
                 val d = it["duration"]?.jsonPrimitive?.doubleOrNull ?: 0.0
                 abs(d - seconds)

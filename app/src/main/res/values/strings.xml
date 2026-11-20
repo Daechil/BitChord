@@ -725,6 +725,38 @@
     <string name="translation_song_delete">Delete this song\'s translations</string>
     <string name="translation_song_delete_confirm">The %2$d translations, pronunciations and meanings saved for \"%1$s\" are deleted from the cache and the kept store. Claude\'s cost money to get again. This cannot be undone.</string>
     <string name="translation_song_deleted">Deleted %1$d files for this song</string>
+    <string name="krw_rate_mode_auto">Automatic, once a day</string>
+    <string name="krw_rate_mode_auto_detail">Fetched when the app opens on a new day; the last rate is kept when it cannot be.</string>
+    <string name="krw_rate_mode_manual">Entered by hand</string>
+    <string name="krw_rate_mode_manual_detail">The rate below, as you type it.</string>
+    <string name="krw_rate_source">Rate from</string>
+    <string name="krw_rate_source_ecb">European Central Bank reference rate</string>
+    <string name="krw_rate_source_ecb_detail">No key needed. Changes once each business day.</string>
+    <string name="krw_rate_source_exim">Korea Eximbank base rate</string>
+    <string name="krw_rate_source_exim_detail">Needs a free key. Changes on business days, around 11 a.m. Korean time.</string>
+    <string name="krw_rate_source_open_er">ExchangeRate-API (rates by Exchange Rate API)</string>
+    <string name="krw_rate_status">$1 = ₩%1$s · as of %2$s · %3$s</string>
+    <string name="krw_rate_stale">(old)</string>
+    <string name="krw_rate_fetched_at">Fetched %1$s</string>
+    <string name="krw_rate_none">No rate fetched yet. Until one is, the rate typed by hand (₩%1$s) is used.</string>
+    <string name="krw_rate_error">Last try failed: %1$s</string>
+    <string name="krw_rate_fetch_now">Fetch now</string>
+    <string name="krw_rate_fetching">Fetching…</string>
+    <string name="krw_rate_fetched">Rate fetched: $1 = ₩%1$s</string>
+    <string name="krw_rate_fetch_failed">Could not fetch the rate. The last one is still used.</string>
+    <string name="exim_key">Korea Eximbank key</string>
+    <string name="exim_key_hint">Paste the key</string>
+    <string name="exim_key_footer">Issued free from the Open API menu of the Korea Eximbank website. Kept on this device only, never in a settings export or a backup. Without a key, or when the Eximbank cannot be reached, the ECB rate is used.</string>
+    <string name="exim_key_saved">Key saved</string>
+    <string name="exim_key_save">Save key</string>
+    <string name="exim_key_remove">Remove key</string>
+    <string name="exim_key_set">Key saved: ••••%1$s</string>
+    <string name="card_fee">Card\'s overseas fee</string>
+    <string name="card_fee_none">None added</string>
+    <string name="card_fee_option">+%1$s%%</string>
+    <string name="card_fee_footer">Anthropic charges your card in dollars, so the won taken is usually 1–2% more than the base rate. Pick your card\'s overseas fee to add it to amounts in won.</string>
+    <string name="krw_rate_applied">Rate used: $1 = ₩%1$s</string>
+    <string name="krw_rate_applied_fee">Rate used: $1 = ₩%1$s (base ₩%2$s + card fee %3$s%%)</string>
     <string name="ko_window_summary">Summary</string>
     <string name="ko_window_songs">Songs · %1$d</string>
     <string name="ko_window_space">Space used</string>

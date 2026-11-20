@@ -686,6 +686,38 @@
     <string name="translation_song_delete">이 곡의 번역 모두 지우기</string>
     <string name="translation_song_delete_confirm">\"%1$s\"에 저장된 번역·발음 표기·노래 해석 %2$d개를 캐시와 보관함에서 모두 지워요. Claude로 받은 것은 다시 받으려면 요금이 들어요. 되돌릴 수 없어요.</string>
     <string name="translation_song_deleted">이 곡의 번역 파일 %1$d개를 지웠어요</string>
+    <string name="krw_rate_mode_auto">자동 (하루 1번 가져오기)</string>
+    <string name="krw_rate_mode_auto_detail">앱을 열 때 날짜가 바뀌었으면 새 환율을 받아요. 못 받으면 마지막 값을 써요.</string>
+    <string name="krw_rate_mode_manual">직접 입력</string>
+    <string name="krw_rate_mode_manual_detail">아래에 넣은 환율을 그대로 써요.</string>
+    <string name="krw_rate_source">환율 출처</string>
+    <string name="krw_rate_source_ecb">유럽중앙은행 기준환율</string>
+    <string name="krw_rate_source_ecb_detail">키 없이 써요. 영업일마다 하루 1번 바뀌어요.</string>
+    <string name="krw_rate_source_exim">한국수출입은행 매매기준율</string>
+    <string name="krw_rate_source_exim_detail">무료 인증키가 필요해요. 영업일 오전 11시쯤 바뀌어요.</string>
+    <string name="krw_rate_source_open_er">ExchangeRate-API (Rates By Exchange Rate API)</string>
+    <string name="krw_rate_status">1달러 = %1$s원 · %2$s 기준 · %3$s</string>
+    <string name="krw_rate_stale">(오래됨)</string>
+    <string name="krw_rate_fetched_at">%1$s에 가져옴</string>
+    <string name="krw_rate_none">아직 환율을 가져오지 못했어요. 그동안은 직접 넣은 환율(%1$s원)을 써요.</string>
+    <string name="krw_rate_error">마지막 시도 실패: %1$s</string>
+    <string name="krw_rate_fetch_now">지금 가져오기</string>
+    <string name="krw_rate_fetching">가져오는 중…</string>
+    <string name="krw_rate_fetched">환율을 가져왔어요: 1달러 = %1$s원</string>
+    <string name="krw_rate_fetch_failed">환율을 못 가져왔어요. 마지막 값을 계속 써요.</string>
+    <string name="exim_key">수출입은행 인증키</string>
+    <string name="exim_key_hint">인증키 붙여넣기</string>
+    <string name="exim_key_footer">한국수출입은행 홈페이지의 Open API 메뉴에서 무료로 발급받을 수 있어요. 키는 이 기기에만 저장되고, 설정 내보내기와 백업에는 들어가지 않아요. 키가 없거나 수출입은행에 연결이 안 되면 유럽중앙은행 환율을 써요.</string>
+    <string name="exim_key_saved">인증키를 저장했어요</string>
+    <string name="exim_key_save">인증키 저장</string>
+    <string name="exim_key_remove">인증키 지우기</string>
+    <string name="exim_key_set">저장된 키: ••••%1$s</string>
+    <string name="card_fee">카드 해외결제 수수료</string>
+    <string name="card_fee_none">더하지 않음</string>
+    <string name="card_fee_option">+%1$s%%</string>
+    <string name="card_fee_footer">Anthropic은 달러로 카드 결제를 해서, 실제로 빠져나가는 원화는 기준환율보다 보통 1~2% 많아요. 쓰는 카드의 해외 이용 수수료를 고르면 원화 금액에 더해서 보여줘요.</string>
+    <string name="krw_rate_applied">적용 환율: 1달러 = %1$s원</string>
+    <string name="krw_rate_applied_fee">적용 환율: 1달러 = %1$s원 (기준 %2$s원 + 카드 수수료 %3$s%%)</string>
     <string name="ko_window_summary">요약</string>
     <string name="ko_window_songs">곡 · %1$d곡</string>
     <string name="ko_window_space">사용 공간</string>

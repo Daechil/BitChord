@@ -29,7 +29,8 @@ import kotlin.math.roundToLong
 class KoFormat(
     private val context: Context,
     private val display: String = AppSettings.moneyDisplay.value,
-    private val krwPerUsd: Int = AppSettings.krwPerUsd.value,
+    /** Won to the dollar, the card's fee included: [AppSettings.krwRate]. */
+    private val krwPerUsd: Double = AppSettings.krwRate.value,
 ) {
     private val locale: Locale get() = Locale.getDefault()
 
@@ -99,6 +100,6 @@ fun koFormat(): KoFormat {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
     val display by AppSettings.moneyDisplay.collectAsStateWithLifecycle()
-    val rate by AppSettings.krwPerUsd.collectAsStateWithLifecycle()
+    val rate by AppSettings.krwRate.collectAsStateWithLifecycle()
     return remember(context, configuration, display, rate) { KoFormat(context, display, rate) }
 }

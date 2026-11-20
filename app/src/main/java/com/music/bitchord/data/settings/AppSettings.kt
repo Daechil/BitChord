@@ -555,6 +555,50 @@ object AppSettings {
     /** Won to the dollar, as the user set it, for showing amounts in won. */
     val krwPerUsd = MutableStateFlow(DEFAULT_KRW_PER_USD)
 
+    /** Where the rate comes from: [RATE_AUTO], fetched once a day, or [RATE_MANUAL], [krwPerUsd]. */
+    val krwRateMode = MutableStateFlow(RATE_AUTO)
+
+    /** Which service an automatic rate is fetched from: [RATE_SOURCE_ECB] or [RATE_SOURCE_EXIM]. */
+    val krwRateSource = MutableStateFlow(RATE_SOURCE_ECB)
+
+    /** The Korea Eximbank Open API key, for [RATE_SOURCE_EXIM]. A secret: never exported. */
+    val eximApiKey = MutableStateFlow("")
+
+    /** The card's overseas fee, in percent, added on top of the rate. */
+    val cardFeePercent = MutableStateFlow(0.0)
+
+    /** The last rate fetched, and what it was: 0 when none has been. */
+    val fetchedRate = MutableStateFlow(FetchedRate())
+
+    data class FetchedRate(
+        val krw: Double = 0.0,
+        /** "2026-11-19": the day the rate is for. */
+        val date: String = "",
+        /** [RATE_SOURCE_ECB], [RATE_SOURCE_EXIM] or [RATE_SOURCE_OPEN_ER]. */
+        val source: String = "",
+        /** When it was fetched, epoch millis. */
+        val at: Long = 0L,
+    )
+
+    /** The rate amounts are shown at: the fetched or the typed one, with the card's fee on top. */
+    val krwRate = MutableStateFlow(DEFAULT_KRW_PER_USD.toDouble())
+
+    /** The rate before the fee: what [krwRate] is built from. */
+    fun baseKrwRate(): Double {
+        val fetched = fetchedRate.value.krw
+        return if (krwRateMode.value == RATE_AUTO && fetched > 0.0) fetched else krwPerUsd.value.toDouble()
+    }
+
+    private fun recomputeKrwRate() {
+        krwRate.value = baseKrwRate() * (1.0 + cardFeePercent.value / 100.0)
+    }
+
+    const val RATE_AUTO = "auto"
+    const val RATE_MANUAL = "manual"
+    const val RATE_SOURCE_ECB = "ecb"
+    const val RATE_SOURCE_EXIM = "exim"
+    const val RATE_SOURCE_OPEN_ER = "open_er"
+
     /** The share of the monthly limit, in percent, at which a notification says so; 0 for none. */
     val claudeCapWarnPercent = MutableStateFlow(80)
 
@@ -1310,6 +1354,18 @@ object AppSettings {
             }.getOrNull()
         } ?: DayUsage()
         translateAheadChunk.value = prefs.getInt(KEY_TRANSLATE_AHEAD_CHUNK, 20).takeIf { it in 5..50 } ?: 20
+        krwRateMode.value = prefs.getString(KEY_KRW_RATE_MODE, null)?.takeIf { it == RATE_AUTO || it == RATE_MANUAL } ?: RATE_AUTO
+        krwRateSource.value = prefs.getString(KEY_KRW_RATE_SOURCE, null)
+            ?.takeIf { it == RATE_SOURCE_ECB || it == RATE_SOURCE_EXIM } ?: RATE_SOURCE_ECB
+        eximApiKey.value = prefs.getString(KEY_EXIM_API_KEY, "").orEmpty()
+        cardFeePercent.value = prefs.getFloat(KEY_CARD_FEE_PERCENT, 0f).toDouble().coerceIn(0.0, 5.0)
+        fetchedRate.value = prefs.getString(KEY_FETCHED_RATE, null)?.let { raw ->
+            runCatching {
+                val (krw, date, source, at) = raw.split('|', limit = 4)
+                FetchedRate(krw.toDouble(), date, source, at.toLong())
+            }.getOrNull()
+        }?.takeIf { it.krw in MIN_KRW_PER_USD.toDouble()..MAX_KRW_PER_USD.toDouble() } ?: FetchedRate()
+        recomputeKrwRate()
         com.music.bitchord.data.lyrics.LyricsTranslation.claudeOverDailyBudget = ::claudeOverDailyBudget
         claudeSonnetStandIn.value = prefs.getBoolean(KEY_CLAUDE_SONNET_STAND_IN, true)
         claudeReading.value = prefs.getBoolean(KEY_CLAUDE_READING, true)
@@ -1899,7 +1955,39 @@ object AppSettings {
         if (value !in MIN_KRW_PER_USD..MAX_KRW_PER_USD) return false
         krwPerUsd.value = value
         prefs.edit().putInt(KEY_KRW_PER_USD, value).apply()
+        recomputeKrwRate()
         return true
+    }
+
+    fun setKrwRateMode(value: String) {
+        krwRateMode.value = value
+        prefs.edit().putString(KEY_KRW_RATE_MODE, value).apply()
+        recomputeKrwRate()
+    }
+
+    fun setKrwRateSource(value: String) {
+        krwRateSource.value = value
+        prefs.edit().putString(KEY_KRW_RATE_SOURCE, value).apply()
+    }
+
+    fun setEximApiKey(value: String) {
+        val key = value.trim()
+        eximApiKey.value = key
+        prefs.edit().putString(KEY_EXIM_API_KEY, key).apply()
+    }
+
+    fun setCardFeePercent(value: Double) {
+        cardFeePercent.value = value.coerceIn(0.0, 5.0)
+        prefs.edit().putFloat(KEY_CARD_FEE_PERCENT, cardFeePercent.value.toFloat()).apply()
+        recomputeKrwRate()
+    }
+
+    /** A rate just fetched; ignored when it is out of the sane range. */
+    fun setFetchedRate(rate: FetchedRate) {
+        if (rate.krw !in MIN_KRW_PER_USD.toDouble()..MAX_KRW_PER_USD.toDouble()) return
+        fetchedRate.value = rate
+        prefs.edit().putString(KEY_FETCHED_RATE, "${rate.krw}|${rate.date}|${rate.source}|${rate.at}").apply()
+        recomputeKrwRate()
     }
 
     fun setClaudeCapWarnPercent(value: Int) {
@@ -2812,6 +2900,7 @@ object AppSettings {
         KEY_SPOTIFY_SPDC_TOKEN,
         KEY_PAXSENIX_API_KEY,
         KEY_CLAUDE_API_KEY,
+        KEY_EXIM_API_KEY,
     )
 
     /**
@@ -2931,6 +3020,11 @@ object AppSettings {
     private const val KEY_FLOATING_LYRICS_EDGE = "ko_floating_lyrics_edge"
     private const val KEY_FLOATING_LYRICS_COLOR = "ko_floating_lyrics_color"
     private const val KEY_FLOATING_LYRICS_OFFSET = "ko_floating_lyrics_offset"
+    private const val KEY_KRW_RATE_MODE = "ko_krw_rate_mode"
+    private const val KEY_KRW_RATE_SOURCE = "ko_krw_rate_source"
+    private const val KEY_EXIM_API_KEY = "ko_exim_api_key"
+    private const val KEY_CARD_FEE_PERCENT = "ko_card_fee_percent"
+    private const val KEY_FETCHED_RATE = "ko_fetched_rate"
     private const val KEY_MONEY_DISPLAY = "ko_money_display"
     private const val KEY_KRW_PER_USD = "ko_krw_per_usd"
     private const val KEY_CLAUDE_CAP_WARN = "ko_claude_cap_warn"

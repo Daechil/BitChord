@@ -591,6 +591,16 @@ private fun ClaudeCostWindow(onDismiss: () -> Unit) {
     val context = LocalContext.current
     val display by AppSettings.moneyDisplay.collectAsStateWithLifecycle()
     val rate by AppSettings.krwPerUsd.collectAsStateWithLifecycle()
+    val appliedRate by AppSettings.krwRate.collectAsStateWithLifecycle()
+    val rateMode by AppSettings.krwRateMode.collectAsStateWithLifecycle()
+    val rateSource by AppSettings.krwRateSource.collectAsStateWithLifecycle()
+    val eximKey by AppSettings.eximApiKey.collectAsStateWithLifecycle()
+    val fee by AppSettings.cardFeePercent.collectAsStateWithLifecycle()
+    val fetched by AppSettings.fetchedRate.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+    var keyText by remember { mutableStateOf("") }
+    var fetchingNow by remember { mutableStateOf(false) }
+    var fetchError by remember { mutableStateOf(com.music.bitchord.download.ExchangeRates.lastError) }
     val monthlyCap by AppSettings.claudeMonthlyCap.collectAsStateWithLifecycle()
     val warnAt by AppSettings.claudeCapWarnPercent.collectAsStateWithLifecycle()
     val dailyCap by AppSettings.claudeDailyCap.collectAsStateWithLifecycle()
@@ -621,7 +631,7 @@ private fun ClaudeCostWindow(onDismiss: () -> Unit) {
         AppSettings.MONEY_USD to stringResource(R.string.money_display_usd),
     )
     val sample = 0.42
-    val displaySamples = displays.associateWith { KoFormat(context, it, rate).money(sample) }
+    val displaySamples = displays.associateWith { KoFormat(context, it, appliedRate).money(sample) }
     val displayHeader = stringResource(R.string.money_display)
     val rateHeader = stringResource(R.string.krw_rate)
     val rateFooter = stringResource(R.string.krw_rate_footer, AppSettings.MIN_KRW_PER_USD, AppSettings.MAX_KRW_PER_USD)
@@ -639,6 +649,91 @@ private fun ClaudeCostWindow(onDismiss: () -> Unit) {
     val dailyHeader = stringResource(R.string.daily_cap)
     val dailyFooter = stringResource(R.string.daily_cap_footer)
     val dailyNone = stringResource(R.string.daily_cap_none)
+    val won = { value: Double ->
+        java.text.NumberFormat.getNumberInstance().apply { maximumFractionDigits = 1 }.format(value)
+    }
+    val modeHeader = stringResource(R.string.krw_rate)
+    val modes = listOf(AppSettings.RATE_AUTO, AppSettings.RATE_MANUAL)
+    val modeLabels = mapOf(
+        AppSettings.RATE_AUTO to stringResource(R.string.krw_rate_mode_auto),
+        AppSettings.RATE_MANUAL to stringResource(R.string.krw_rate_mode_manual),
+    )
+    val modeDetails = mapOf(
+        AppSettings.RATE_AUTO to stringResource(R.string.krw_rate_mode_auto_detail),
+        AppSettings.RATE_MANUAL to stringResource(R.string.krw_rate_mode_manual_detail),
+    )
+    val sourceHeader = stringResource(R.string.krw_rate_source)
+    val sources = listOf(AppSettings.RATE_SOURCE_ECB, AppSettings.RATE_SOURCE_EXIM)
+    val sourceLabels = mapOf(
+        AppSettings.RATE_SOURCE_ECB to stringResource(R.string.krw_rate_source_ecb),
+        AppSettings.RATE_SOURCE_EXIM to stringResource(R.string.krw_rate_source_exim),
+        AppSettings.RATE_SOURCE_OPEN_ER to stringResource(R.string.krw_rate_source_open_er),
+    )
+    val sourceDetails = mapOf(
+        AppSettings.RATE_SOURCE_ECB to stringResource(R.string.krw_rate_source_ecb_detail),
+        AppSettings.RATE_SOURCE_EXIM to stringResource(R.string.krw_rate_source_exim_detail),
+    )
+    val stale = fetched.date.isNotBlank() && runCatching {
+        java.time.LocalDate.parse(fetched.date).isBefore(java.time.LocalDate.now().minusDays(4))
+    }.getOrDefault(false)
+    val fetchedLines = if (fetched.krw > 0.0) {
+        listOfNotNull(
+            stringResource(
+                R.string.krw_rate_status,
+                won(fetched.krw),
+                runCatching { format.time(java.time.LocalDate.parse(fetched.date).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli(), withTime = false) }
+                    .getOrDefault(fetched.date),
+                sourceLabels[fetched.source] ?: fetched.source,
+            ) + if (stale) " " + stringResource(R.string.krw_rate_stale) else "",
+            stringResource(R.string.krw_rate_fetched_at, format.time(fetched.at)).takeIf { fetched.at > 0 },
+        )
+    } else {
+        listOf(stringResource(R.string.krw_rate_none, won(rate.toDouble())))
+    }
+    val statusText = (fetchedLines + listOfNotNull(fetchError?.let { stringResource(R.string.krw_rate_error, it) }))
+        .joinToString("\n")
+    val fetchLabel = stringResource(if (fetchingNow) R.string.krw_rate_fetching else R.string.krw_rate_fetch_now)
+    val fetchedToast = stringResource(R.string.krw_rate_fetched)
+    val fetchFailedToast = stringResource(R.string.krw_rate_fetch_failed)
+    val keyHeader = stringResource(R.string.exim_key)
+    val keyHint = stringResource(R.string.exim_key_hint)
+    val keyFooter = stringResource(R.string.exim_key_footer)
+    val keySaved = stringResource(R.string.exim_key_saved)
+    val keySave = stringResource(R.string.exim_key_save)
+    val keyRemove = stringResource(R.string.exim_key_remove)
+    val keyNow = if (eximKey.isBlank()) null else stringResource(R.string.exim_key_set, eximKey.takeLast(4))
+    val feeHeader = stringResource(R.string.card_fee)
+    val feeFooter = stringResource(R.string.card_fee_footer)
+    val feeNone = stringResource(R.string.card_fee_none)
+    val feeOption = stringResource(R.string.card_fee_option)
+    val fees = listOf(0.0, 1.0, 1.5, 2.0, 2.5, 3.0)
+    val feeText = { value: Double -> java.text.NumberFormat.getNumberInstance().apply { maximumFractionDigits = 1 }.format(value) }
+    val appliedText = if (fee > 0.0) {
+        stringResource(R.string.krw_rate_applied_fee, won(appliedRate), won(AppSettings.baseKrwRate()), feeText(fee))
+    } else {
+        stringResource(R.string.krw_rate_applied, won(appliedRate))
+    }
+    val fetchNow = {
+        if (!fetchingNow) {
+            fetchingNow = true
+            scope.launch {
+                val ok = com.music.bitchord.download.ExchangeRates.refresh()
+                fetchingNow = false
+                fetchError = com.music.bitchord.download.ExchangeRates.lastError
+                Toast.makeText(
+                    context,
+                    if (ok) fetchedToast.format(won(AppSettings.fetchedRate.value.krw)) else fetchFailedToast,
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
+        }
+    }
+    val saveKey = {
+        AppSettings.setEximApiKey(keyText)
+        keyText = ""
+        Toast.makeText(context, keySaved, Toast.LENGTH_SHORT).show()
+        fetchNow()
+    }
     val saveRate = {
         val value = rateText.filter { it.isDigit() }.toIntOrNull()
         if (value != null && AppSettings.setKrwPerUsd(value)) {
@@ -657,30 +752,92 @@ private fun ClaudeCostWindow(onDismiss: () -> Unit) {
                 checked = option == display,
             ) { AppSettings.setMoneyDisplay(option) }
         }
-        windowCard(rows = listOf(Unit), header = rateHeader, footer = rateFooter) {
-            androidx.compose.foundation.layout.Column(
-                Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            ) {
-                Text(
-                    text = rateValue,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
-                PillTextField(
-                    value = rateText,
-                    onValueChange = { typed -> rateText = typed.filter { it.isDigit() }.take(4) },
-                    placeholder = AppSettings.DEFAULT_KRW_PER_USD.toString(),
-                    container = MaterialTheme.colorScheme.background,
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
-                        imeAction = androidx.compose.ui.text.input.ImeAction.Done,
-                    ),
-                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { saveRate() }),
-                    modifier = Modifier.padding(top = 8.dp),
-                )
+        windowCard(rows = modes, header = modeHeader) { mode ->
+            WindowChoice(label = modeLabels[mode].orEmpty(), detail = modeDetails[mode], checked = mode == rateMode) {
+                AppSettings.setKrwRateMode(mode)
+                if (mode == AppSettings.RATE_AUTO) fetchNow()
             }
         }
-        windowActions(listOf(WindowButton(label = rateSave) { saveRate() }))
+        if (rateMode == AppSettings.RATE_AUTO) {
+            windowCard(rows = sources, header = sourceHeader) { source ->
+                WindowChoice(label = sourceLabels[source].orEmpty(), detail = sourceDetails[source], checked = source == rateSource) {
+                    AppSettings.setKrwRateSource(source)
+                    fetchNow()
+                }
+            }
+            windowText(statusText)
+            windowActions(listOf(WindowButton(label = fetchLabel, enabled = !fetchingNow) { fetchNow() }))
+            if (rateSource == AppSettings.RATE_SOURCE_EXIM) {
+                windowCard(rows = listOf(Unit), header = keyHeader, footer = keyFooter) {
+                    androidx.compose.foundation.layout.Column(
+                        Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    ) {
+                        if (keyNow != null) {
+                            Text(
+                                text = keyNow,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onBackground,
+                            )
+                        }
+                        PillTextField(
+                            value = keyText,
+                            onValueChange = { keyText = it.trim() },
+                            placeholder = keyHint,
+                            isPassword = true,
+                            container = MaterialTheme.colorScheme.background,
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                            ),
+                            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = {
+                                if (keyText.isNotBlank()) saveKey()
+                            }),
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    }
+                }
+                windowActions(
+                    listOfNotNull(
+                        WindowButton(label = keySave, enabled = keyText.isNotBlank()) { saveKey() },
+                        WindowButton(label = keyRemove, destructive = true) {
+                            AppSettings.setEximApiKey("")
+                            fetchNow()
+                        }.takeIf { eximKey.isNotBlank() },
+                    ),
+                )
+            }
+        } else {
+            windowCard(rows = listOf(Unit), header = rateHeader, footer = rateFooter) {
+                androidx.compose.foundation.layout.Column(
+                    Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                ) {
+                    Text(
+                        text = rateValue,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onBackground,
+                    )
+                    PillTextField(
+                        value = rateText,
+                        onValueChange = { typed -> rateText = typed.filter { it.isDigit() }.take(4) },
+                        placeholder = AppSettings.DEFAULT_KRW_PER_USD.toString(),
+                        container = MaterialTheme.colorScheme.background,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+                            imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                        ),
+                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { saveRate() }),
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+            }
+            windowActions(listOf(WindowButton(label = rateSave) { saveRate() }))
+        }
+        windowCard(rows = fees, header = feeHeader, footer = feeFooter) { option ->
+            WindowChoice(
+                label = if (option <= 0.0) feeNone else feeOption.format(feeText(option)),
+                checked = option == (fees.minByOrNull { kotlin.math.abs(it - fee) } ?: 0.0),
+            ) { AppSettings.setCardFeePercent(option) }
+        }
+        windowText(appliedText)
         windowCard(rows = MONTHLY_CAPS, header = capHeader, footer = capFooter) { cap ->
             WindowChoice(
                 label = if (cap <= 0.0) noneLabel else format.limit(cap),

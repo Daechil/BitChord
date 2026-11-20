@@ -47,7 +47,8 @@ fun MonthlyCapSubtitle(cap: Double, usage: AppSettings.ClaudeUsage) {
 @Composable
 fun CostSettingsSubtitle() {
     val display by AppSettings.moneyDisplay.collectAsStateWithLifecycle()
-    val rate by AppSettings.krwPerUsd.collectAsStateWithLifecycle()
+    // The rate amounts are shown at: fetched or typed, the card's fee on top.
+    val rate by AppSettings.krwRate.collectAsStateWithLifecycle()
     val warnAt by AppSettings.claudeCapWarnPercent.collectAsStateWithLifecycle()
     val monthlyCap by AppSettings.claudeMonthlyCap.collectAsStateWithLifecycle()
     val dailyCap by AppSettings.claudeDailyCap.collectAsStateWithLifecycle()
@@ -61,7 +62,7 @@ fun CostSettingsSubtitle() {
     ) + if (display == AppSettings.MONEY_USD) {
         ""
     } else {
-        " · " + stringResource(R.string.krw_rate_value, java.text.NumberFormat.getIntegerInstance().format(rate))
+        " · " + stringResource(R.string.krw_rate_value, java.text.NumberFormat.getIntegerInstance().format(Math.round(rate)))
     }
     val warning = if (monthlyCap <= 0.0 || warnAt <= 0) stringResource(R.string.cap_warn_off) else "$warnAt%"
     val daily = if (dailyCap <= 0.0) stringResource(R.string.daily_cap_none) else format.limit(dailyCap)

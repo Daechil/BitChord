@@ -549,6 +549,37 @@ object AppSettings {
     /** Dollars a month Claude may spend before Google takes over; 0 for no limit. */
     val claudeMonthlyCap = MutableStateFlow(0.0)
 
+    /** How amounts are shown: [MONEY_USD], [MONEY_KRW] or [MONEY_BOTH]. */
+    val moneyDisplay = MutableStateFlow(MONEY_BOTH)
+
+    /** Won to the dollar, as the user set it, for showing amounts in won. */
+    val krwPerUsd = MutableStateFlow(DEFAULT_KRW_PER_USD)
+
+    /** The share of the monthly limit, in percent, at which a notification says so; 0 for none. */
+    val claudeCapWarnPercent = MutableStateFlow(80)
+
+    /**
+     * Dollars a day Claude's answers as they are asked for may cost before
+     * Google takes over until midnight; 0 for no limit. Batches are not
+     * counted: they are sent on purpose, after their cost was shown.
+     */
+    val claudeDailyCap = MutableStateFlow(0.0)
+
+    /** Today's spending on answers asked for as they are needed — what [claudeDailyCap] is set against. */
+    val claudeToday = MutableStateFlow(DayUsage())
+
+    data class DayUsage(val day: String = currentDay(), val usd: Double = 0.0)
+
+    /** Songs in each batch a translate-ahead job sends, and downloads gather before one is sent. */
+    val translateAheadChunk = MutableStateFlow(20)
+
+    const val MONEY_USD = "usd"
+    const val MONEY_KRW = "krw"
+    const val MONEY_BOTH = "both"
+    const val DEFAULT_KRW_PER_USD = 1400
+    const val MIN_KRW_PER_USD = 100
+    const val MAX_KRW_PER_USD = 5000
+
     /** Ask Sonnet once when Haiku declines a song. See [LyricsTranslation.sonnetStandInEnabled]. */
     val claudeSonnetStandIn = MutableStateFlow(true)
 
@@ -681,6 +712,8 @@ object AppSettings {
     }
 
     private fun currentMonth(): String = java.time.YearMonth.now().toString()
+
+    private fun currentDay(): String = java.time.LocalDate.now().toString()
 
     /**
      * Plays a looping video behind the cover art on the player when one is
@@ -1233,6 +1266,20 @@ object AppSettings {
         com.music.bitchord.data.lyrics.LyricsTranslation.keptLimitBytes = keptStoreLimitMb.value * 1024L * 1024L
         com.music.bitchord.data.lyrics.LyricsTranslation.usageSink = ::recordClaudeUsage
         claudeMonthlyCap.value = prefs.getFloat(KEY_CLAUDE_MONTHLY_CAP, 0f).toDouble()
+        moneyDisplay.value = prefs.getString(KEY_MONEY_DISPLAY, null)
+            ?.takeIf { it == MONEY_USD || it == MONEY_KRW || it == MONEY_BOTH } ?: MONEY_BOTH
+        krwPerUsd.value = prefs.getInt(KEY_KRW_PER_USD, DEFAULT_KRW_PER_USD)
+            .takeIf { it in MIN_KRW_PER_USD..MAX_KRW_PER_USD } ?: DEFAULT_KRW_PER_USD
+        claudeCapWarnPercent.value = prefs.getInt(KEY_CLAUDE_CAP_WARN, 80)
+        claudeDailyCap.value = prefs.getFloat(KEY_CLAUDE_DAILY_CAP, 0f).toDouble()
+        claudeToday.value = prefs.getString(KEY_CLAUDE_TODAY, null)?.let { raw ->
+            runCatching {
+                val (day, usd) = raw.split('|', limit = 2)
+                DayUsage(day, usd.toDouble())
+            }.getOrNull()
+        } ?: DayUsage()
+        translateAheadChunk.value = prefs.getInt(KEY_TRANSLATE_AHEAD_CHUNK, 20).takeIf { it in 5..50 } ?: 20
+        com.music.bitchord.data.lyrics.LyricsTranslation.claudeOverDailyBudget = ::claudeOverDailyBudget
         claudeSonnetStandIn.value = prefs.getBoolean(KEY_CLAUDE_SONNET_STAND_IN, true)
         claudeReading.value = prefs.getBoolean(KEY_CLAUDE_READING, true)
         floatingLyrics.value = prefs.getBoolean(KEY_FLOATING_LYRICS, false)
@@ -1802,6 +1849,45 @@ object AppSettings {
         prefs.edit().putFloat(KEY_CLAUDE_MONTHLY_CAP, value.toFloat()).apply()
     }
 
+    fun setMoneyDisplay(value: String) {
+        moneyDisplay.value = value
+        prefs.edit().putString(KEY_MONEY_DISPLAY, value).apply()
+    }
+
+    /** False, and nothing saved, for a rate outside [MIN_KRW_PER_USD]..[MAX_KRW_PER_USD]. */
+    fun setKrwPerUsd(value: Int): Boolean {
+        if (value !in MIN_KRW_PER_USD..MAX_KRW_PER_USD) return false
+        krwPerUsd.value = value
+        prefs.edit().putInt(KEY_KRW_PER_USD, value).apply()
+        return true
+    }
+
+    fun setClaudeCapWarnPercent(value: Int) {
+        claudeCapWarnPercent.value = value
+        prefs.edit().putInt(KEY_CLAUDE_CAP_WARN, value).apply()
+    }
+
+    fun setClaudeDailyCap(value: Double) {
+        claudeDailyCap.value = value
+        prefs.edit().putFloat(KEY_CLAUDE_DAILY_CAP, value.toFloat()).apply()
+    }
+
+    fun setTranslateAheadChunk(value: Int) {
+        translateAheadChunk.value = value
+        prefs.edit().putInt(KEY_TRANSLATE_AHEAD_CHUNK, value).apply()
+    }
+
+    /** Today's spending on answers asked for as needed, in dollars: zero once the day has turned. */
+    fun claudeSpentToday(): Double {
+        val today = claudeToday.value
+        return if (today.day == currentDay()) today.usd else 0.0
+    }
+
+    private fun claudeOverDailyBudget(): Boolean {
+        val cap = claudeDailyCap.value
+        return cap > 0.0 && claudeSpentToday() >= cap
+    }
+
     /** This month's estimated Claude spending, in dollars: zero once the month has turned. */
     fun claudeSpentThisMonth(): Double {
         val usage = claudeUsage.value
@@ -1896,7 +1982,18 @@ object AppSettings {
             outputByModel = usage.outputByModel + (model to (usage.outputByModel[model] ?: 0L) + outputTokens),
         )
         claudeUsage.value = usage
-        prefs.edit().putString(KEY_CLAUDE_USAGE, writeClaudeUsage(usage)).apply()
+        val edit = prefs.edit().putString(KEY_CLAUDE_USAGE, writeClaudeUsage(usage))
+        // A batch's tokens are left out of the day: the daily limit is for what is asked as it is needed.
+        if (!model.endsWith(com.music.bitchord.data.lyrics.LyricsTranslation.BATCH_MODEL_SUFFIX)) {
+            val (inPrice, outPrice) = claudePricePerMillion(model)
+            val cost = inputTokens * inPrice / 1_000_000.0 + outputTokens * outPrice / 1_000_000.0
+            val day = currentDay()
+            val before = claudeToday.value.takeIf { it.day == day }?.usd ?: 0.0
+            val today = DayUsage(day, before + cost)
+            claudeToday.value = today
+            edit.putString(KEY_CLAUDE_TODAY, today.day + "|" + today.usd)
+        }
+        edit.apply()
     }
 
     /** Clears this month's tallies, and — when [everything] — the months before it as well. */
@@ -1904,7 +2001,8 @@ object AppSettings {
     fun resetClaudeUsage(everything: Boolean = false) {
         val usage = ClaudeUsage(previousMonthUsd = if (everything) null else claudeUsage.value.previousMonthUsd)
         claudeUsage.value = usage
-        val edit = prefs.edit().putString(KEY_CLAUDE_USAGE, writeClaudeUsage(usage))
+        claudeToday.value = DayUsage()
+        val edit = prefs.edit().putString(KEY_CLAUDE_USAGE, writeClaudeUsage(usage)).remove(KEY_CLAUDE_TODAY)
         if (everything) {
             claudeUsageHistory.value = emptyList()
             edit.putString(KEY_CLAUDE_USAGE_HISTORY, "")
@@ -2762,6 +2860,12 @@ object AppSettings {
     private const val KEY_CLAUDE_SPEECH = "claude_speech"
     private const val KEY_CLAUDE_MODE = "claude_mode"
     private const val KEY_CLAUDE_MONTHLY_CAP = "ko_claude_monthly_cap"
+    private const val KEY_MONEY_DISPLAY = "ko_money_display"
+    private const val KEY_KRW_PER_USD = "ko_krw_per_usd"
+    private const val KEY_CLAUDE_CAP_WARN = "ko_claude_cap_warn"
+    private const val KEY_CLAUDE_DAILY_CAP = "ko_claude_daily_cap"
+    private const val KEY_CLAUDE_TODAY = "ko_claude_today"
+    private const val KEY_TRANSLATE_AHEAD_CHUNK = "ko_translate_ahead_chunk"
     private const val KEY_CLAUDE_SONNET_STAND_IN = "ko_claude_sonnet_stand_in"
     private const val KEY_CLAUDE_READING = "ko_claude_reading"
     private const val KEY_FLOATING_LYRICS = "ko_floating_lyrics"

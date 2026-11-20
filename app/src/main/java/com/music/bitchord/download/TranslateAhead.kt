@@ -76,6 +76,7 @@ object TranslateAhead {
      * are still being looked for, and a search cut short loses at most one
      * part's worth of looking.
      */
+    /** Songs per batch for a job from before the size could be chosen. */
     private const val CHUNK_SONGS = 20
 
     /** Anthropic keeps a batch's results this long after it was made. */
@@ -167,7 +168,11 @@ object TranslateAhead {
         val finishedAt: Long? = null,
         /** When its batches were last asked about, for "last checked" in the notification. */
         val lastPolled: Long = 0,
+        /** Songs per batch, as Settings had it when the job was made; 0 for a job from before it could be chosen. */
+        val chunkSongs: Int = 0,
     ) {
+        /** Songs per batch for this job: fixed when it was made, so a change in Settings leaves it alone. */
+        val songsPerChunk: Int get() = if (chunkSongs > 0) chunkSongs else CHUNK_SONGS
         val active: Boolean
             get() = state == State.PREPARING || state == State.WAITING || state == State.CANCELING
 
@@ -250,6 +255,7 @@ object TranslateAhead {
             speech = LyricsTranslation.translationSpeech,
             mode = LyricsTranslation.translationMode,
             tracks = tracks,
+            chunkSongs = AppSettings.translateAheadChunk.value,
         )
         update { listOf(job) + it }
         kick(app)
@@ -284,6 +290,7 @@ object TranslateAhead {
             target = DownloadTranslations.targetLanguage(app),
             speech = LyricsTranslation.translationSpeech,
             mode = LyricsTranslation.translationMode,
+            chunkSongs = AppSettings.translateAheadChunk.value,
             tracks = songs.map { song ->
                 Track(
                     videoId = song.videoId,
@@ -587,7 +594,7 @@ object TranslateAhead {
     }
 
     /**
-     * Looks for each song's lyrics and sends a batch every [CHUNK_SONGS] songs
+     * Looks for each song's lyrics and sends a batch every [Job.songsPerChunk] songs
      * that need one. Picks up where an earlier pass stopped: songs already
      * looked at keep their outcome, songs already sent stay sent, and only
      * songs whose requests were built but never sent are looked at again.
@@ -630,7 +637,7 @@ object TranslateAhead {
                     },
                 )
             }
-            if (pending.videoIds.size >= CHUNK_SONGS) {
+            if (pending.videoIds.size >= job.songsPerChunk) {
                 stopped = sendChunk(app, job, pending)
                 pending.clear()
                 if (stopped != null) break

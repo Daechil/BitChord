@@ -469,6 +469,13 @@ object LyricsTranslation {
     @Volatile
     var claudeOverBudget: () -> Boolean = { false }
 
+    /**
+     * True once today's spending on answers asked as they are needed has
+     * reached the daily limit; batches are not held back by it.
+     */
+    @Volatile
+    var claudeOverDailyBudget: () -> Boolean = { false }
+
     /** Ask Sonnet once when Haiku declines a song, rather than going straight to Google. */
     @Volatile
     var sonnetStandInEnabled: Boolean = true
@@ -885,6 +892,9 @@ object LyricsTranslation {
         }
         if (claudeOverBudget()) {
             return done(ClaudeFailure.BUDGET, detail = "not sent: this month's limit is reached", sent = false)
+        }
+        if (claudeOverDailyBudget()) {
+            return done(ClaudeFailure.DAILY_BUDGET, detail = "not sent: today's limit is reached", sent = false)
         }
         val now = System.currentTimeMillis()
         if (now < claudeCooldownUntil) {

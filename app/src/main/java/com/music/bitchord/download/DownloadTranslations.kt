@@ -91,9 +91,8 @@ object DownloadTranslations {
         val durationText: String? = null,
     )
 
-    /** A batch goes up this long after the last download, or once [GATHER_SONGS] are waiting. */
+    /** A batch goes up this long after the last download, or once a batch's worth (Settings' batch size) are waiting. */
     private const val GATHER_QUIET_MS = 3L * 60L * 1000L
-    private const val GATHER_SONGS = 20
     private const val WAITING_FILE = "translate_ahead/download_waiting.json"
     private val waitingSerializer = kotlinx.serialization.builtins.ListSerializer(Waiting.serializer())
     private val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
@@ -128,7 +127,7 @@ object DownloadTranslations {
                 Waiting(song.videoId, song.title, song.artist, song.albumName, song.durationText)
             writeWaiting(app, list)
             flushJob?.cancel()
-            val full = list.size >= GATHER_SONGS
+            val full = list.size >= AppSettings.translateAheadChunk.value.coerceAtLeast(1)
             flushJob = gatherScope.launch {
                 if (!full) kotlinx.coroutines.delay(GATHER_QUIET_MS)
                 flush(app)

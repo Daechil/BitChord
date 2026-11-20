@@ -60,28 +60,30 @@ private class StatusWords(
     val google: String,
     val speech: Map<String, String>,
     val mode: Map<String, String>,
+    val badges: Map<TranslationStatus.State, WindowBadge>,
+    val format: KoFormat,
 ) {
-    private val time = SimpleDateFormat("MM-dd", Locale.US)
-
     fun language(tag: String): String =
         Locale.forLanguageTag(tag.replace('_', '-')).getDisplayName(Locale.getDefault()).ifBlank { tag }
 
-    /** "Claude Haiku · Korean · Auto · Natural · saved · translated ahead · 11-17" */
-    fun describe(answer: StoredAnswer): String = buildList {
-        add(
-            when {
-                !answer.byClaude -> google
-                answer.model == LyricsTranslation.CLAUDE_SONNET -> sonnet
-                answer.model == LyricsTranslation.CLAUDE_HAIKU -> haiku
-                else -> "Claude"
-            },
-        )
+    /** Who wrote [answer] and where it is kept: "Claude Haiku · 보관함". */
+    fun engine(answer: StoredAnswer): String = listOf(
+        when {
+            !answer.byClaude -> google
+            answer.model == LyricsTranslation.CLAUDE_SONNET -> sonnet
+            answer.model == LyricsTranslation.CLAUDE_HAIKU -> haiku
+            else -> "Claude"
+        },
+        if (answer.kept) kept else cache,
+    ).joinToString(" · ")
+
+    /** In what and how it came: "한국어 · 자동 · 자연스럽게 · 미리 번역 · 11월 17일". */
+    fun style(answer: StoredAnswer): String = buildList {
         add(language(answer.target))
         answer.speech?.takeIf { it.isNotEmpty() }?.let { add(speech[it] ?: it) }
         answer.mode?.takeIf { it.isNotEmpty() }?.let { add(mode[it] ?: it) }
-        add(if (answer.kept) kept else cache)
         answer.via?.let { add(vias[it] ?: it) }
-        if (answer.at > 0) add(time.format(Date(answer.at)))
+        if (answer.at > 0) add(format.time(answer.at, withTime = false))
     }.joinToString(" · ")
 }
 
@@ -115,15 +117,18 @@ private fun statusWords(): StatusWords {
         google = stringResource(R.string.translation_engine_google),
         speech = styleSpeech.associateWith { stringResource(claudeSpeechLabelRes(it)) },
         mode = styleMode.associateWith { stringResource(claudeModeLabelRes(it)) },
+        badges = mapOf(
+            TranslationStatus.State.CLAUDE to WindowBadge(stringResource(R.string.translation_badge_claude), Color(0xFF34C759)),
+            TranslationStatus.State.CLAUDE_OTHER_STYLE to WindowBadge(stringResource(R.string.translation_badge_other), Color(0xFFFF9500)),
+            TranslationStatus.State.GOOGLE to WindowBadge(stringResource(R.string.translation_badge_google), Color(0xFF8E8E93)),
+            TranslationStatus.State.SAME_LANGUAGE to WindowBadge(stringResource(R.string.translation_badge_same), Color(0xFF0A84FF)),
+            TranslationStatus.State.NONE to WindowBadge(
+                stringResource(R.string.translation_badge_none),
+                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            ),
+        ),
+        format = koFormat(),
     )
-}
-
-private fun mark(state: TranslationStatus.State): String = when (state) {
-    TranslationStatus.State.CLAUDE -> "✓"
-    TranslationStatus.State.CLAUDE_OTHER_STYLE -> "~"
-    TranslationStatus.State.GOOGLE -> "G"
-    TranslationStatus.State.SAME_LANGUAGE -> "="
-    TranslationStatus.State.NONE -> "–"
 }
 
 /**
@@ -208,10 +213,11 @@ private fun songHeading(song: Song, status: TranslationStatus.SongStatus?, words
         page.otherNote.takeIf { status?.state == TranslationStatus.State.CLAUDE_OTHER_STYLE },
     ).joinToString("\n")
 
+/** One answer to a pair of lines: what it is and who wrote it, then in what style and how it came. */
 private fun songLines(status: TranslationStatus.SongStatus?, words: StatusWords): List<Pair<String, String>> =
     status?.answers.orEmpty()
         .sortedWith(compareBy<StoredAnswer> { it.kind }.thenByDescending { it.at })
-        .map { answer -> (words.kinds[answer.kind] ?: answer.kind) to words.describe(answer) }
+        .map { answer -> ((words.kinds[answer.kind] ?: answer.kind) + " · " + words.engine(answer)) to words.style(answer) }
 
 /** Every stored answer of one song, each with who wrote it, in which style, and where it is kept. */
 @Composable
@@ -291,22 +297,17 @@ private fun ReleaseStatusWindow(release: AheadAsk, onDismiss: () -> Unit) {
         words.mode[LyricsTranslation.translationMode] ?: LyricsTranslation.translationMode,
     ).joinToString(" · ")
     val loading = stringResource(R.string.translation_status_loading)
+    // The style the songs are judged in, then a row per state with its count: easier to read than one long line.
     val summary = if (all == null) {
         loading
     } else {
         listOf(
             style,
-            stringResource(
-                R.string.translation_status_summary,
-                counts[TranslationStatus.State.CLAUDE] ?: 0,
-                counts[TranslationStatus.State.CLAUDE_OTHER_STYLE] ?: 0,
-                counts[TranslationStatus.State.GOOGLE] ?: 0,
-                counts[TranslationStatus.State.SAME_LANGUAGE] ?: 0,
-                counts[TranslationStatus.State.NONE] ?: 0,
-            ),
             stringResource(R.string.translation_status_stores, keptCount, cacheCount),
         ).joinToString("\n")
     }
+    val songsCount = stringResource(R.string.translation_status_count)
+    val stateRows = TranslationStatus.State.entries.filter { (counts[it] ?: 0) > 0 }
     val note = stringResource(R.string.translation_status_note)
     val summaryHeader = stringResource(R.string.ko_window_summary)
     val songsHeader = stringResource(R.string.ko_window_songs, songs.size)
@@ -333,23 +334,31 @@ private fun ReleaseStatusWindow(release: AheadAsk, onDismiss: () -> Unit) {
             songStatusItems(inner, openedStatus, words, page, loading)
             return@KoWindow
         }
-        windowText(summary, header = summaryHeader, footer = note.takeIf { all != null })
+        windowText(summary, header = summaryHeader)
+        if (stateRows.isNotEmpty()) {
+            windowCard(rows = stateRows, footer = note) { state ->
+                WindowLine(
+                    title = words.states[state].orEmpty(),
+                    value = songsCount.format(counts[state] ?: 0),
+                    badge = words.badges[state],
+                )
+            }
+        }
         windowActions(buttons)
         if (all != null) {
             windowCard(rows = songs, header = songsHeader, key = { it.videoId }) { song ->
                 val status = all[song.videoId]
                 val state = status?.state ?: TranslationStatus.State.NONE
-                val detail = buildString {
-                    append(words.states[state].orEmpty())
-                    status?.translation?.takeIf { status.covered || state == TranslationStatus.State.GOOGLE }?.let {
-                        append(" · ").append(if (it.kept) words.kept else words.cache)
-                    }
-                    if (status?.reading != null) append(" · ").append(words.kinds[LyricsTranslation.KIND_READING]).append(" ✓")
-                }
+                val detail = listOfNotNull(
+                    song.artist.takeIf { it.isNotBlank() },
+                    status?.translation?.takeIf { status.covered || state == TranslationStatus.State.GOOGLE }
+                        ?.let { if (it.kept) words.kept else words.cache },
+                    status?.reading?.let { words.kinds[LyricsTranslation.KIND_READING] + " ✓" },
+                ).joinToString(" · ")
                 WindowLine(
-                    title = if (song.artist.isBlank()) song.title else song.title + " — " + song.artist,
+                    title = song.title,
                     detail = detail,
-                    mark = mark(state),
+                    badge = words.badges[state],
                     onClick = { opened = song },
                 )
             }
@@ -403,31 +412,39 @@ private fun StorageWindow(hazeState: HazeState, onDismiss: () -> Unit) {
     val parts = breakdown
     val cacheLimit = LyricsTranslation.CACHE_LIMIT_BYTES
     val loading = stringResource(R.string.translation_status_loading)
-    val summary = if (all == null || parts == null) {
-        loading
+    // Each place with how full it is, each kind with its songs and size: a row apiece.
+    val mb = 1024L * 1024L
+    val usedOf = stringResource(R.string.translation_storage_used)
+    val songsSize = stringResource(R.string.translation_storage_songs_size)
+    val meters = if (parts == null) {
+        emptyList()
+    } else {
+        listOf(
+            Triple(words.kept, usedOf.format(megabytes(parts.keptBytes), keptLimitMb), parts.keptBytes.toFloat() / (keptLimitMb * mb)),
+            Triple(words.cache, usedOf.format(megabytes(parts.cacheBytes), cacheLimit / mb), parts.cacheBytes.toFloat() / cacheLimit),
+        )
+    }
+    val kinds = if (parts == null) {
+        emptyList()
     } else {
         listOfNotNull(
-            stringResource(
-                R.string.translation_storage_places,
-                megabytes(parts.keptBytes),
-                keptLimitMb,
-                megabytes(parts.cacheBytes),
-                cacheLimit / (1024 * 1024),
-            ),
-            stringResource(
-                R.string.translation_storage_kinds,
-                parts.claude.songs, megabytes(parts.claude.bytes),
-                parts.google.songs, megabytes(parts.google.bytes),
-                parts.reading.songs, megabytes(parts.reading.bytes),
-                parts.meaning.songs, megabytes(parts.meaning.bytes),
-            ),
-            stringResource(R.string.translation_storage_other, parts.other.songs, megabytes(parts.other.bytes))
-                .takeIf { parts.other.songs > 0 },
+            stringResource(R.string.translation_storage_kind_claude) to parts.claude,
+            stringResource(R.string.translation_storage_kind_google) to parts.google,
+            stringResource(R.string.translation_storage_kind_reading) to parts.reading,
+            stringResource(R.string.translation_storage_kind_meaning) to parts.meaning,
+            (stringResource(R.string.translation_storage_kind_other) to parts.other).takeIf { parts.other.songs > 0 },
+        ).map { (label, part) -> label to songsSize.format(part.songs, megabytes(part.bytes)) }
+    }
+    val warnings = if (parts == null) {
+        null
+    } else {
+        listOfNotNull(
             stringResource(R.string.translation_storage_cache_full).takeIf { parts.cacheBytes * 10 >= cacheLimit * 8 },
             stringResource(R.string.translation_storage_kept_full)
-                .takeIf { parts.keptBytes * 10 >= keptLimitMb * 1024L * 1024L * 8 },
-        ).joinToString("\n")
+                .takeIf { parts.keptBytes * 10 >= keptLimitMb * mb * 8 },
+        ).joinToString("\n").ifBlank { null }
     }
+    val kindsHeader = stringResource(R.string.translation_storage_kinds_header)
     val unnamed = stringResource(R.string.translation_storage_unnamed)
     val spaceHeader = stringResource(R.string.ko_window_space)
     val limitHeader = stringResource(R.string.translation_storage_limit)
@@ -496,7 +513,14 @@ private fun StorageWindow(hazeState: HazeState, onDismiss: () -> Unit) {
             songStatusItems(inner, openedStatus, words, page, loading)
             return@KoWindow
         }
-        windowText(summary, header = spaceHeader)
+        if (all == null || parts == null) {
+            windowText(loading, header = spaceHeader)
+        } else {
+            windowCard(rows = meters, header = spaceHeader, footer = warnings) { (label, value, fraction) ->
+                WindowMeter(label = label, value = value, fraction = fraction)
+            }
+            windowCard(rows = kinds, header = kindsHeader) { (label, value) -> WindowLine(title = label, value = value) }
+        }
         windowCard(rows = limits, header = limitHeader, footer = limitFooter) { limit ->
             WindowChoice(label = "$limit MB", checked = limit == limitChosen) { AppSettings.setKeptStoreLimitMb(limit) }
         }

@@ -809,7 +809,7 @@ fun SettingsScreen(
                                 R.string.claude_usage_subtitle,
                                 compactTokens(claudeUsage.inputTokens),
                                 compactTokens(claudeUsage.outputTokens),
-                                String.format(Locale.US, "%.2f", claudeUsage.estimatedUsd()),
+                                com.music.bitchord.ui.components.koFormat().money(claudeUsage.estimatedUsd()),
                             )
                         },
                         trailing = { Chevron() },
@@ -821,17 +821,19 @@ fun SettingsScreen(
                     SettingsRow(
                         icon = SfIcons.AutoAwesome,
                         title = claudeMonthlyCapTitle,
-                        subtitle = stringResource(
-                            R.string.claude_monthly_cap_subtitle,
-                            if (claudeMonthlyCap <= 0.0) {
-                                stringResource(R.string.claude_monthly_cap_none)
-                            } else {
-                                com.music.bitchord.ui.components.monthlyCapLabel(claudeMonthlyCap)
-                            },
-                            String.format(Locale.US, "%.2f", AppSettings.claudeSpentThisMonth()),
-                        ),
+                        subtitleContent = { com.music.bitchord.ui.components.MonthlyCapSubtitle(claudeMonthlyCap, claudeUsage) },
                         trailing = { Chevron() },
                         onClick = { com.music.bitchord.ui.components.KoAlerts.monthlyCap.value = true },
+                    )
+                }
+                val costSettingsTitle = stringResource(R.string.claude_cost_settings)
+                row(costSettingsTitle, "claude", "won", "krw", "exchange", "limit", "daily", "warning", "원화", "환율", "한도", "하루", "경고", "금액") {
+                    SettingsRow(
+                        icon = SfIcons.AutoAwesome,
+                        title = costSettingsTitle,
+                        subtitleContent = { com.music.bitchord.ui.components.CostSettingsSubtitle() },
+                        trailing = { Chevron() },
+                        onClick = { com.music.bitchord.ui.components.KoAlerts.costSettings.value = true },
                     )
                 }
                 val claudeLogTitle = stringResource(R.string.claude_log)
@@ -930,6 +932,16 @@ fun SettingsScreen(
                             )
                         },
                         onClick = { AppSettings.setTranslateAheadIntro(!aheadIntro) },
+                    )
+                }
+                val chunkTitle = stringResource(R.string.translate_ahead_chunk)
+                row(chunkTitle, "claude", "batch", "translate", "ahead", "size", "chunk", "미리", "번역", "묶음", "크기") {
+                    SettingsRow(
+                        icon = SfIcons.AutoAwesome,
+                        title = chunkTitle,
+                        subtitleContent = { com.music.bitchord.ui.components.ChunkSizeSubtitle() },
+                        trailing = { Chevron() },
+                        onClick = { com.music.bitchord.ui.components.KoAlerts.chunkSize.value = true },
                     )
                 }
             }
@@ -3624,9 +3636,23 @@ internal fun claudeModeLabelRes(mode: String): Int = when (mode) {
 /** "12.4" — megabytes, one decimal. */
 internal fun megabytes(bytes: Long): String = String.format(Locale.US, "%.1f", bytes / 1_048_576.0)
 
-/** 1234 -> "1.2K", 2_500_000 -> "2.5M". */
-internal fun compactTokens(count: Long): String = when {
-    count >= 1_000_000L -> String.format(Locale.US, "%.1fM", count / 1_000_000.0)
-    count >= 1_000L -> String.format(Locale.US, "%.1fK", count / 1_000.0)
-    else -> count.toString()
+/**
+ * 1234 -> "1.2K", 2_500_000 -> "2.5M"; in Korean, by its own units —
+ * 1234 -> "1,234", 12_345 -> "1.2만", 2_500_000 -> "250만", 1.5억.
+ */
+internal fun compactTokens(count: Long): String {
+    if (Locale.getDefault().language == "ko") {
+        fun trim(value: Double) = String.format(Locale.US, "%.1f", value).removeSuffix(".0")
+        return when {
+            count >= 100_000_000L -> trim(count / 100_000_000.0) + "억"
+            count >= 1_000_000L -> (count / 10_000L).toString() + "만"
+            count >= 10_000L -> trim(count / 10_000.0) + "만"
+            else -> java.text.NumberFormat.getIntegerInstance(Locale.KOREA).format(count)
+        }
+    }
+    return when {
+        count >= 1_000_000L -> String.format(Locale.US, "%.1fM", count / 1_000_000.0)
+        count >= 1_000L -> String.format(Locale.US, "%.1fK", count / 1_000.0)
+        else -> count.toString()
+    }
 }

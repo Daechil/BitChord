@@ -18,6 +18,8 @@ enum class ClaudeFailure {
     COOLDOWN,
     /** Not sent: this month's spending limit is reached. */
     BUDGET,
+    /** Not sent: today's limit for answers asked as they are needed is reached. */
+    DAILY_BUDGET,
     /** 401/403, or a key refused earlier and not sent again. */
     KEY_REJECTED,
     /** 400 "credit balance is too low". */

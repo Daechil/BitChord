@@ -20,6 +20,7 @@ fun claudeFailureLabel(failure: ClaudeFailure?): String = stringResource(
         ClaudeFailure.NETWORK -> Res.string.claude_fail_network
         ClaudeFailure.REFUSAL -> Res.string.claude_fail_refusal
         ClaudeFailure.BUDGET -> Res.string.claude_fail_budget
+        ClaudeFailure.DAILY_BUDGET -> Res.string.claude_fail_daily_budget
         ClaudeFailure.CUT_OFF -> Res.string.claude_fail_cut_off
         ClaudeFailure.LINE_MISMATCH -> Res.string.claude_fail_line_mismatch
         ClaudeFailure.BAD_ANSWER -> Res.string.claude_fail_bad_answer

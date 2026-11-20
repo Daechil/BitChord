@@ -120,7 +120,9 @@ fun requestTranslateAhead(
     if (remaining != null && estimate > remaining) {
         Toast.makeText(
             context,
-            context.getString(R.string.translate_ahead_over_cap, usd(estimate), usd(remaining)),
+            KoFormat(context).let { format ->
+                context.getString(R.string.translate_ahead_over_cap, format.money(estimate), format.money(remaining))
+            },
             Toast.LENGTH_LONG,
         ).show()
         return
@@ -156,9 +158,14 @@ private fun TranslateAheadAskAlert(hazeState: HazeState, ask: AheadAsk, onDismis
     val estimate = if (model == LyricsTranslation.CLAUDE_SONNET) sonnetUsd else haikuUsd
     val remaining = remainingCapUsd()
     val overCap = remaining != null && estimate > remaining
+    val format = koFormat()
+    val chunk by AppSettings.translateAheadChunk.collectAsStateWithLifecycle()
+    val usd = format::money
     val message = listOfNotNull(
         stringResource(R.string.translate_ahead_description),
         stringResource(R.string.translate_ahead_scope, count, style),
+        stringResource(R.string.translate_ahead_scope_chunks, chunk, (count + chunk - 1) / chunk.coerceAtLeast(1))
+            .takeIf { count > chunk },
         stringResource(R.string.translate_ahead_over_cap, usd(estimate), usd(remaining ?: 0.0)).takeIf { overCap },
     ).joinToString("\n\n")
     AlertScaffold(hazeState = hazeState, onDismiss = onDismiss) {
@@ -324,7 +331,6 @@ private fun modelLabel(model: String): String = stringResource(
     if (model == LyricsTranslation.CLAUDE_SONNET) R.string.claude_model_sonnet else R.string.claude_model_haiku,
 )
 
-private fun usd(value: Double): String = String.format(Locale.US, if (value < 0.1) "%.3f" else "%.2f", value)
 
 /**
  * Every job, newest first — what was asked for, when, and how far it has got
@@ -334,7 +340,8 @@ private fun usd(value: Double): String = String.format(Locale.US, if (value < 0.
 @Composable
 private fun TranslateAheadLogWindow(hazeState: HazeState, onDismiss: () -> Unit) {
     val context = LocalContext.current
-    val time = remember { SimpleDateFormat("MM-dd HH:mm", Locale.US) }
+    val format = koFormat()
+    val translatedOf = stringResource(R.string.translate_ahead_job_translated)
     val jobs by TranslateAhead.jobs.collectAsStateWithLifecycle()
     val watches by TranslateAhead.watches.collectAsStateWithLifecycle()
     var opened by remember { mutableStateOf<String?>(null) }
@@ -414,7 +421,7 @@ private fun TranslateAheadLogWindow(hazeState: HazeState, onDismiss: () -> Unit)
                     detail = watchLine.format(
                         modelOf(watch.model),
                         watch.sent,
-                        if (watch.lastChecked > 0) time.format(Date(watch.lastChecked)) else neverChecked,
+                        if (watch.lastChecked > 0) format.time(watch.lastChecked) else neverChecked,
                     ),
                     onClick = { stopping = watch },
                 )
@@ -423,12 +430,13 @@ private fun TranslateAheadLogWindow(hazeState: HazeState, onDismiss: () -> Unit)
         if (jobs.isNotEmpty()) {
             windowCard(rows = jobs, header = jobsHeader, key = { "job:" + it.id }) { item ->
                 val translated = item.count(TranslateAhead.TrackStatus.TRANSLATED)
+                // When and with what, then how it went: two short lines rather than one long one.
                 val line = buildString {
-                    append(time.format(Date(item.createdAt))).append(" · ").append(modelOf(item.model))
-                    append(" · ").append(states[item.id].orEmpty())
+                    append(format.time(item.createdAt)).append(" · ").append(modelOf(item.model))
+                    append('\n').append(states[item.id].orEmpty())
                     if (!item.active) {
-                        append(" · ").append(translated).append('/').append(item.tracks.size)
-                        if (item.inputTokens > 0 || item.outputTokens > 0) append(" · $").append(usd(item.costUsd()))
+                        append(" · ").append(translatedOf.format(translated, item.tracks.size))
+                        if (item.inputTokens > 0 || item.outputTokens > 0) append(" · ").append(format.money(item.costUsd()))
                     }
                 }
                 WindowLine(title = item.title, detail = line, onClick = { opened = item.id })
@@ -485,11 +493,12 @@ private fun jobPageText(job: TranslateAhead.Job): JobPageText {
         job.count(status.DECLINED),
         job.count(status.FAILED),
     )
+    val format = koFormat()
     val costLine = stringResource(
         R.string.translate_ahead_summary_cost,
-        compactTokens(job.inputTokens),
-        compactTokens(job.outputTokens),
-        usd(job.costUsd()),
+        format.tokens(job.inputTokens),
+        format.tokens(job.outputTokens),
+        format.money(job.costUsd()),
     )
     val expiredLine = stringResource(R.string.translate_ahead_expired_note)
     val summary = listOfNotNull(

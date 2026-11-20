@@ -42,6 +42,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalView
@@ -252,6 +253,10 @@ internal fun WindowLine(
     detail: String? = null,
     mark: String? = null,
     detailStyle: TextStyle? = null,
+    /** A figure at the end of the row: "3곡", "1.2 / 100MB". */
+    value: String? = null,
+    /** A short coloured label at the end of the row, for where something stands. */
+    badge: WindowBadge? = null,
     onClick: (() -> Unit)? = null,
 ) {
     Row(
@@ -284,6 +289,28 @@ internal fun WindowLine(
                 )
             }
         }
+        if (value != null) {
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.End,
+            )
+        }
+        if (badge != null) {
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = badge.label,
+                style = MaterialTheme.typography.labelSmall,
+                color = badge.color,
+                maxLines = 1,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(badge.color.copy(alpha = 0.16f))
+                    .padding(horizontal = 7.dp, vertical = 3.dp),
+            )
+        }
         if (onClick != null) {
             Spacer(Modifier.width(8.dp))
             Chevron()
@@ -291,23 +318,90 @@ internal fun WindowLine(
     }
 }
 
-/** One of a few choices, ticked when it is the one in force. */
+/** A short label and its colour, such as "Claude" in green: always words, never the colour alone. */
+internal class WindowBadge(val label: String, val color: androidx.compose.ui.graphics.Color)
+
+/**
+ * How full something is: a name and "1.2 / 100MB" on one line, a bar under
+ * them, orange from 80% and red when full.
+ */
 @Composable
-internal fun WindowChoice(label: String, checked: Boolean, onClick: () -> Unit) {
+internal fun WindowMeter(label: String, value: String, fraction: Float) {
+    val shown = fraction.coerceIn(0f, 1f)
+    val color = when {
+        shown >= 1f -> MaterialTheme.colorScheme.error
+        shown >= 0.8f -> androidx.compose.ui.graphics.Color(0xFFFF9500)
+        else -> MaterialTheme.colorScheme.primary
+    }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = ROW_INSET, vertical = 12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = label,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Box(
+            Modifier
+                .padding(top = 8.dp)
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp))
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)),
+        ) {
+            Box(
+                Modifier
+                    .fillMaxWidth(shown)
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(color),
+            )
+        }
+    }
+}
+
+/** One of a few choices, ticked when it is the one in force; greyed out and inert when not [enabled]. */
+@Composable
+internal fun WindowChoice(
+    label: String,
+    checked: Boolean,
+    detail: String? = null,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
+            .alpha(if (enabled) 1f else 0.45f)
             .heightIn(min = 48.dp)
             .padding(horizontal = ROW_INSET, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = label,
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onBackground,
-        )
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+            if (!detail.isNullOrEmpty()) {
+                Text(
+                    text = detail,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         if (checked) {
             Icon(
                 imageVector = Icons.Rounded.Check,

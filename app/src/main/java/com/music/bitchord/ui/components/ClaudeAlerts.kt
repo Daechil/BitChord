@@ -60,6 +60,12 @@ object KoAlerts {
      */
     val recommend = MutableStateFlow<com.music.bitchord.data.model.Song?>(null)
 
+    /** A song held back from a playlist because another release of it is already there. */
+    val similarSong = MutableStateFlow<SimilarAsk?>(null)
+
+    /** A playlist being looked through for songs it holds twice. */
+    val duplicates = MutableStateFlow<DuplicateAsk?>(null)
+
     /** A song whose stored translations are on show. */
     val songStatus = MutableStateFlow<com.music.bitchord.data.model.Song?>(null)
 
@@ -129,6 +135,8 @@ fun ClaudeAlerts(
     TranslateAheadAlerts(hazeState)
     TranslationStatusAlerts(hazeState)
     RecommendAlerts()
+    DuplicatesAlerts()
+    SimilarSongAlert(hazeState)
     FloatingLyricsAlerts(hazeState)
     val showWatchInterval by KoAlerts.watchInterval.collectAsStateWithLifecycle()
     if (showWatchInterval) {

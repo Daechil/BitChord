@@ -85,6 +85,44 @@ object SongMatch {
             .toSet()
     }
 
+    /** Two lengths further apart than this are two recordings, for [sameEntry]. */
+    private const val ENTRY_GAP_SECONDS = 3.0
+
+    /**
+     * Whether two catalogue entries are one song filed twice — a single and
+     * its album cut, a repackage, a re-release — as a playlist would hold
+     * them under two video ids. Stricter than [sameSong]: the titles have to
+     * be the same outside their brackets (not merely contain one another), the
+     * version words the same, and the lengths within [ENTRY_GAP_SECONDS] where
+     * both are known. An artist written two ways passes only on a length
+     * that agrees to the second.
+     */
+    fun sameEntry(
+        title: String,
+        artist: String,
+        durationMs: Long,
+        otherTitle: String,
+        otherArtist: String,
+        otherDurationMs: Long,
+    ): Boolean {
+        val core = coreTitle(title)
+        if (core.isEmpty() || core != coreTitle(otherTitle)) return false
+        if (versionOf(title) != versionOf(otherTitle)) return false
+        val gap = if (durationMs > 0 && otherDurationMs > 0) abs(durationMs - otherDurationMs) / 1000.0 else null
+        if (gap != null && gap > ENTRY_GAP_SECONDS) return false
+        val left = artistsOf(artist)
+        val right = artistsOf(otherArtist)
+        if (left.isEmpty() || right.isEmpty()) return gap != null
+        if (left.any { l -> right.any { r -> l == r || l.contains(r) || r.contains(l) } }) return true
+        // Both in plain Latin letters and different: two artists, a cover.
+        if (plainLatin(artist) && plainLatin(otherArtist)) return false
+        return gap != null && gap <= 1.5
+    }
+
+    /** A title outside its brackets and before any " - ", letters and digits only. */
+    private fun coreTitle(title: String): String =
+        normalized(title.replace(BRACKETED, " ").substringBefore(" - ")).ifEmpty { normalized(title) }
+
     /** The same credited artists on both sides, no more and no fewer. */
     fun sameArtists(a: String, b: String): Boolean = artistsOf(a) == artistsOf(b)
 

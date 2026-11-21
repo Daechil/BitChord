@@ -5176,6 +5176,14 @@ private fun BitChordApp(
                             },
                     )
                 }.takeIf { downloadable },
+                onFindDuplicates = target.browseId?.takeIf { playlist != null }?.let { id ->
+                    act { songs ->
+                        com.music.bitchord.ui.components.KoAlerts.duplicates.value =
+                            com.music.bitchord.ui.components.DuplicateAsk(target.title, songs) { list ->
+                                viewModel.removeManyFromPlaylist(id, list)
+                            }
+                    }
+                },
                 onTranslationStatus = act { songs ->
                     com.music.bitchord.ui.components.KoAlerts.releaseStatus.value =
                         com.music.bitchord.ui.components.AheadAsk(

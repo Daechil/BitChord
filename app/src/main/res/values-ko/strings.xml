@@ -817,6 +817,26 @@
     <string name="ahead_live_updates">미리 번역 실시간 알림</string>
     <string name="ahead_live_updates_subtitle">진행 상황을 상태바 칩과 잠금화면 위쪽에 보여줘요(Android 16). 실제로 보일지는 시스템이 정해요.</string>
     <string name="ahead_live_updates_blocked">시스템 설정에서 BitChord의 실시간 정보가 꺼져 있어요. 눌러서 켤 수 있어요.</string>
+    <string name="similar_song_title">다른 버전이 이미 있어요</string>
+    <string name="similar_song_description">%1$s에 같은 곡의 다른 발매본이 이미 있어요.
+
+이미 있는 곡: %2$s
+%3$s
+
+추가하려는 곡: %4$s
+%5$s</string>
+    <string name="similar_song_add_anyway">그래도 추가</string>
+    <string name="duplicates_title">중복 곡 찾기</string>
+    <string name="duplicates_none">‘%1$s’에 두 번 들어간 곡이 없어요.</string>
+    <string name="duplicates_summary">같은 곡이 다른 발매본으로 두 번 넘게 들어간 곡이 %1$d개 있어요(%2$d곡 중). 곡마다 먼저 들어간 것을 남기고 나머지에 표시해 뒀어요. 지울 것을 골라 주세요.</string>
+    <string name="duplicates_position">플레이리스트 %1$d번째</string>
+    <string name="duplicates_keep">남기기</string>
+    <string name="duplicates_remove_mark">지우기</string>
+    <string name="duplicates_remove_button">표시한 %1$d곡 지우기</string>
+    <string name="duplicates_footer">같은 곡 기준: 제목이 같고, 버전(라이브·리믹스 등)이 같고, 아티스트가 같고, 길이 차이가 3초 이내. 확인하기 전에는 아무것도 지우지 않아요.</string>
+    <string name="duplicates_confirm_title">%1$d곡을 지울까요?</string>
+    <string name="duplicates_confirm_description">YouTube Music의 ‘%1$s’에서 지워져요. 곡마다 남기기로 한 것은 그대로 있어요.</string>
+    <string name="duplicates_removed">%1$d곡을 지웠어요</string>
     <string name="ko_window_summary">요약</string>
     <string name="ko_window_songs">곡 · %1$d곡</string>
     <string name="ko_window_space">사용 공간</string>

@@ -1027,23 +1027,58 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     ) {
         if (!requireSignIn() || playlists.isEmpty()) return
         viewModelScope.launch {
-            val outcomes = playlists.map { addOne(it, song) }
+            // Playlists that hold another release of this song: held back, and
+            // asked about once for all of them.
+            val held = mutableListOf<Pair<UserPlaylist, Song>>()
+            val outcomes = playlists.map { playlist -> addOne(playlist, song) { existing -> held += playlist to existing } }
             onResult(
                 outcomes.count { it == AddOutcome.ADDED },
-                outcomes.count { it == AddOutcome.ALREADY_THERE },
+                outcomes.count { it == AddOutcome.ALREADY_THERE || it == AddOutcome.SIMILAR },
                 outcomes.count { it == AddOutcome.FAILED },
             )
+            if (held.isNotEmpty()) {
+                com.music.bitchord.ui.components.KoAlerts.similarSong.value = com.music.bitchord.ui.components.SimilarAsk(
+                    song = song,
+                    existing = held.first().second,
+                    playlists = held.map { it.first.title },
+                ) {
+                    viewModelScope.launch {
+                        val added = held.count { (playlist, _) -> addOne(playlist, song, force = true) == AddOutcome.ADDED }
+                        android.widget.Toast.makeText(
+                            getApplication(),
+                            text(if (added > 0) R.string.song_added_to_playlist else R.string.failed),
+                            android.widget.Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                }
+            }
         }
     }
 
-    private enum class AddOutcome { ADDED, ALREADY_THERE, FAILED }
+    private enum class AddOutcome { ADDED, ALREADY_THERE, SIMILAR, FAILED }
 
-    private suspend fun addOne(playlist: UserPlaylist, song: Song): AddOutcome {
+    /**
+     * [force] adds it even where another release of the same song is already
+     * in the playlist; otherwise that is reported to [onSimilar] and nothing is
+     * added. The same video id is never added twice either way.
+     */
+    private suspend fun addOne(
+        playlist: UserPlaylist,
+        song: Song,
+        force: Boolean = false,
+        onSimilar: (Song) -> Unit = {},
+    ): AddOutcome {
         val openSongs = (_detailStack.value.firstOrNull { it.browseId == playlist.browseId }
             ?.songs as? UiState.Success)?.data
         val known = openSongs
             ?: YtMusicRepository.allSongs(playlist.browseId).getOrNull()
         if (known?.any { it.videoId == song.videoId } == true) return AddOutcome.ALREADY_THERE
+        if (!force) {
+            com.music.bitchord.ui.components.similarIn(song, known)?.let { existing ->
+                onSimilar(existing)
+                return AddOutcome.SIMILAR
+            }
+        }
         return YtMusicRepository.addToPlaylist(playlist.playlistId, listOf(song.videoId)).fold(
             onSuccess = { added ->
                 libraryStale = true
@@ -1171,6 +1206,28 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
+     * Takes [songs] — entries with a per-entry id — out of the playlist at
+     * [browseId] in one request, and off its open page. True when it worked.
+     */
+    suspend fun removeManyFromPlaylist(browseId: String, songs: List<Song>): Boolean {
+        val entries = songs.mapNotNull { song -> song.setVideoId?.let { it to song.videoId } }
+        if (entries.isEmpty() || !requireSignIn()) return false
+        val gone = entries.map { it.first }.toSet()
+        return YtMusicRepository.removeFromPlaylist(browseId.removePrefix("VL"), entries).fold(
+            onSuccess = {
+                libraryStale = true
+                _detailStack.value = _detailStack.value.map { page ->
+                    val list = (page.songs as? UiState.Success)?.data
+                    if (page.browseId != browseId || list == null) page
+                    else page.copy(songs = UiState.Success(list.filterNot { it.setVideoId in gone }))
+                }
+                true
+            },
+            onFailure = { false },
+        )
+    }
+
+    /**
      * Drops [song] from the playlist page it is being read on, and takes the
      * row out from under the reader rather than waiting for a re-fetch.
      */
@@ -1220,9 +1277,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * than after a re-fetch. A response that named no id still adds the row;
      * it just can't offer to take it back out yet.
      */
-    fun addSuggestedSong(browseId: String, song: Song) {
+    fun addSuggestedSong(browseId: String, song: Song, force: Boolean = false) {
         if (!requireSignIn()) return
         val playlistId = browseId.removePrefix("VL")
+        // YouTube's suggestions happily include another release of a song the
+        // playlist already has: asked about rather than added.
+        if (!force) {
+            val page = _detailStack.value.firstOrNull { it.browseId == browseId }
+            val existing = com.music.bitchord.ui.components.similarIn(song, (page?.songs as? UiState.Success)?.data)
+            if (existing != null) {
+                com.music.bitchord.ui.components.KoAlerts.similarSong.value = com.music.bitchord.ui.components.SimilarAsk(
+                    song = song,
+                    existing = existing,
+                    playlists = listOfNotNull(page?.title),
+                ) { addSuggestedSong(browseId, song, force = true) }
+                return
+            }
+        }
         viewModelScope.launch {
             YtMusicRepository.addToPlaylist(playlistId, listOf(song.videoId)).fold(
                 onSuccess = { added ->

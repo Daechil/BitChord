@@ -856,6 +856,26 @@
     <string name="ahead_live_updates">Live Update while translating ahead</string>
     <string name="ahead_live_updates_subtitle">Shows progress as a status bar chip and at the top of the lock screen (Android 16). Whether it appears is up to the system.</string>
     <string name="ahead_live_updates_blocked">Live Updates are off for BitChord in the system settings. Tap to turn them on.</string>
+    <string name="similar_song_title">Another release is already there</string>
+    <string name="similar_song_description">%1$s already has this song from another release.
+
+Already there: %2$s
+%3$s
+
+Adding: %4$s
+%5$s</string>
+    <string name="similar_song_add_anyway">Add anyway</string>
+    <string name="duplicates_title">Find duplicate songs</string>
+    <string name="duplicates_none">No song is in ‘%1$s’ twice.</string>
+    <string name="duplicates_summary">%1$d songs are in here more than once, as different releases (%2$d songs looked through). The first copy of each is kept; tick what to remove.</string>
+    <string name="duplicates_position">#%1$d in the playlist</string>
+    <string name="duplicates_keep">Keep</string>
+    <string name="duplicates_remove_mark">Remove</string>
+    <string name="duplicates_remove_button">Remove %1$d ticked</string>
+    <string name="duplicates_footer">Same song = same title, same version (not live or remix), same artist and a length within 3 seconds. Nothing is removed until you confirm.</string>
+    <string name="duplicates_confirm_title">Remove %1$d songs?</string>
+    <string name="duplicates_confirm_description">They are removed from ‘%1$s’ on YouTube Music. The copy kept of each song stays.</string>
+    <string name="duplicates_removed">Removed %1$d songs</string>
     <string name="ko_window_summary">Summary</string>
     <string name="ko_window_songs">Songs · %1$d</string>
     <string name="ko_window_space">Space used</string>

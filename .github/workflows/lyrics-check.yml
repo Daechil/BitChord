@@ -5,6 +5,11 @@ name: Lyrics match check
 # lyrics are printed: only titles, artists, lengths and a similarity score.
 on:
   workflow_dispatch:
+    inputs:
+      probe:
+        description: 'Songs to look at closely instead, separated by semicolons, e.g. Worlds Smallest Violin AJR'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -25,10 +30,18 @@ jobs:
           cache: gradle
 
       - name: Check
+        if: inputs.probe == ''
         env:
           LIVE_LYRICS: '1'
           LIVE_LYRICS_REPORT: ${{ github.workspace }}/live-lyrics.md
         run: ./gradlew :shared:jvmTest --tests 'com.music.bitchord.data.lyrics.LiveLyricsCheck' --rerun --no-daemon
+
+      - name: Probe
+        if: inputs.probe != ''
+        env:
+          LIVE_PROBE: ${{ inputs.probe }}
+          LIVE_LYRICS_REPORT: ${{ github.workspace }}/live-lyrics.md
+        run: ./gradlew :shared:jvmTest --tests 'com.music.bitchord.data.lyrics.LyricsProbe' --rerun --no-daemon
 
       - name: Report
         if: always()

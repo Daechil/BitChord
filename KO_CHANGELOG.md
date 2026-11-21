@@ -10,6 +10,14 @@
 - 릴리스가 없는 번호(11, 12 등)는 빌드가 실패했거나 취소된 번호예요.
 -->
 
+## v1.9.1-ko.59 · 2026-11-21
+
+### 제목에 아포스트로피(')가 있는 곡의 가사
+- "World's Smallest Violin", "Don't Stop Me Now"처럼 **제목에 ' 가 들어간 곡을 lrc.red에서 못 찾던 문제**를 고쳤어요. lrc.red 검색은 "World's", "Don't" 같은 줄임말로 찾으면 결과가 하나도 안 나와요.
+- 이제 처음 검색에서 아무것도 안 나오면 **' 를 빼고("Worlds", "Dont") 한 번 더** 찾아요. 찾은 곡은 예전처럼 제목·아티스트·길이가 맞는지 확인한 뒤에 써요.
+- 실제 검색으로 확인했어요: World's Smallest Violin(AJR), Don't Stop Me Now(Queen)이 lrc.red에서 찾아지고, Sweet Child O' Mine처럼 원래 되던 곡은 그대로예요.
+- BiniLyrics도 같은 방식으로 한 번 더 찾지만, 이 두 곡은 BiniLyrics에서는 여전히 안 나와요. 같은 가사를 lrc.red가 보여 줘요.
+
 ## v1.9.1-ko.58 · 2026-11-21
 
 ### 안드로이드 자동 백업 고침

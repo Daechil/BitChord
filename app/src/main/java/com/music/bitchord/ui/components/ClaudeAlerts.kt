@@ -54,15 +54,6 @@ object KoAlerts {
     /** Which of the floating bar's choices is open: "size", "opacity" or "show"; null for none. */
     val floatingChoice = MutableStateFlow<String?>(null)
 
-    /**
-     * Claude's song suggestions window, opened from this song; the window's
-     * own "from" choice can switch it to the queue or what is played most.
-     */
-    val recommend = MutableStateFlow<com.music.bitchord.data.model.Song?>(null)
-
-    /** The suggestions window opened from a playlist's or album's menu, with its songs as the start. */
-    val recommendPlaylist = MutableStateFlow<RecommendPlaylist?>(null)
-
     /** A song held back from a playlist because another release of it is already there. */
     val similarSong = MutableStateFlow<SimilarAsk?>(null)
 
@@ -137,7 +128,6 @@ fun ClaudeAlerts(
 ) {
     TranslateAheadAlerts(hazeState)
     TranslationStatusAlerts(hazeState)
-    RecommendAlerts()
     DuplicatesAlerts()
     SimilarSongAlert(hazeState)
     FloatingLyricsAlerts(hazeState)

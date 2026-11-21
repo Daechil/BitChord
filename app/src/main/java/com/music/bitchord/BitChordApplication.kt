@@ -173,7 +173,9 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory, Configu
         // "keep every Claude answer") and the download record as they start:
         // both have to be in before any of them runs.
         com.music.bitchord.download.PlayedLyrics.init(this)
-        com.music.bitchord.download.RecommendHistory.init(this)
+        // Claude's song suggestions were taken out again (ko.53): their
+        // history file, if one was ever written, goes with them.
+        runCatching { java.io.File(filesDir, "claude_recommend_history.json").delete() }
         com.music.bitchord.download.Waveforms.init(this)
         com.music.bitchord.download.DownloadTranslations.init(this)
         com.music.bitchord.download.TranslateAhead.init(this)

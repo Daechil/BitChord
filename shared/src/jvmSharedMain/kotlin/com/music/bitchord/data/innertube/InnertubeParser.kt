@@ -588,7 +588,16 @@ object InnertubeParser {
      * playlist-shaped in scope (an album, say), so callers fall back to the
      * generic walk.
      */
-    fun parsePlaylistShelf(root: JsonElement): PlaylistShelfPage? {
+    fun parsePlaylistShelf(
+        root: JsonElement,
+        /**
+         * The response continues a playlist's own pages. That is where the
+         * suggestions usually arrive — after the last real track, as a song
+         * shelf in a section list — and, without the playlist shelf in the
+         * same response to go by, only the caller knows it is a playlist's.
+         */
+        playlistContinuation: Boolean = false,
+    ): PlaylistShelfPage? {
         val scope: JsonElement = root.o("continuationContents")
             ?: root.o("contents").o("twoColumnBrowseResultsRenderer").o("secondaryContents")
             ?: return null
@@ -605,7 +614,18 @@ object InnertubeParser {
         val suggestionShelves = collectRenderers(scope, "musicShelfRenderer").filter { shelf ->
             shelf.o("title").runs() == "Suggestions" ||
                 collectRenderers(shelf, "reloadContinuationData").isNotEmpty() ||
-                playlistScope != null
+                playlistScope != null ||
+                (playlistContinuation && scope.o("sectionListContinuation") != null)
+        }
+        if (playlistContinuation || suggestionShelves.isNotEmpty()) {
+            // Counts only — enough to tell from a copied log why a playlist
+            // shows no suggestions, without a single song name in it.
+            com.music.bitchord.data.DebugLog.d(
+                "BitChord",
+                "playlist shelf: own=${playlistScope != null} songShelves=${collectRenderers(scope, "musicShelfRenderer").size} " +
+                    "suggestionShelves=${suggestionShelves.size} sections=${scope.o("sectionListContinuation") != null} " +
+                    "reload=${collectRenderers(scope, "reloadContinuationData").size}",
+            )
         }
         if (playlistScope == null && suggestionShelves.isEmpty()) return null
 

@@ -1998,7 +1998,6 @@ private fun BitChordApp(
     }
     val addSongsToQueue: (List<Song>) -> Unit = { songs -> queueSongs(songs, false) }
     val playSongsNext: (List<Song>) -> Unit = { songs -> queueSongs(songs, true) }
-    com.music.bitchord.ui.components.KoQueueHost(viewModel, play, playSongsNext, addSongsToQueue) { player.queue.drop(controller?.currentMediaItemIndex ?: 0) }
 
     // ---- Links from outside the app ----
 
@@ -4474,10 +4473,6 @@ private fun BitChordApp(
                     songActions = null
                     com.music.bitchord.ui.components.KoAlerts.songStatus.value = song
                 },
-                onRecommend = {
-                    songActions = null
-                    com.music.bitchord.ui.components.KoAlerts.recommend.value = song
-                },
                 likeStatus = likeStatusOf(song),
                 onPlayNext = { playNext(song); songActions = null },
                 onAddToQueue = { addToQueue(song); songActions = null },
@@ -5177,10 +5172,6 @@ private fun BitChordApp(
                             },
                     )
                 }.takeIf { downloadable },
-                onRecommend = act { songs ->
-                    com.music.bitchord.ui.components.KoAlerts.recommendPlaylist.value =
-                        com.music.bitchord.ui.components.RecommendPlaylist(target.title, songs)
-                }.takeIf { downloadable && target.type != BrowseType.ARTIST },
                 onFindDuplicates = target.browseId?.takeIf { playlist != null }?.let { id ->
                     act { songs ->
                         com.music.bitchord.ui.components.KoAlerts.duplicates.value =

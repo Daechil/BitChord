@@ -807,8 +807,8 @@ object YtMusicRepository {
     }
 
     /** The page [SongPage.continuation] points at. */
-    suspend fun moreSongs(token: String): Result<SongPage> = call("browse:more") {
-        pageOf(Innertube.browseContinuation(token), showByToken[token])
+    suspend fun moreSongs(token: String, playlist: Boolean = false): Result<SongPage> = call("browse:more") {
+        pageOf(Innertube.browseContinuation(token), showByToken[token], playlist)
     }
 
     /**
@@ -837,14 +837,14 @@ object YtMusicRepository {
     }
 
     /** [show] is the podcast a continuation [response] pages through, if any — see [showByToken]. */
-    private fun pageOf(response: JsonObject, show: String? = null): SongPage {
+    private fun pageOf(response: JsonObject, show: String? = null, playlist: Boolean = false): SongPage {
         val library = InnertubeParser.parseLibraryState(response)
         val header = InnertubeParser.parseBrowseHeader(response)
         // A playlist page is scoped to its own shelf so its "Suggested
         // tracks" never read as songs the user added — see
         // parsePlaylistShelf. Anything else (album, library, history,
         // podcast) has no such shelf, and falls back to the layout-agnostic walk.
-        InnertubeParser.parsePlaylistShelf(response)?.let { shelf ->
+        InnertubeParser.parsePlaylistShelf(response, playlistContinuation = playlist)?.let { shelf ->
             return SongPage(shelf.songs, shelf.continuation, shelf.suggested, shelf.suggestionsToken, library, header = header)
         }
         val podcast = InnertubeParser.podcastShow(response) ?: show

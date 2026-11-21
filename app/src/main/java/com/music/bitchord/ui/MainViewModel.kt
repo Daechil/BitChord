@@ -1214,7 +1214,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val page = _detailStack.value.firstOrNull { it.browseId == browseId } ?: return
         val token = page.suggestionsToken ?: return
         viewModelScope.launch {
-            val fresh = YtMusicRepository.moreSongs(token).getOrNull() ?: return@launch
+            val fresh = YtMusicRepository.moreSongs(token, playlist = true).getOrNull() ?: return@launch
             val inPlaylist = ((page.songs as? UiState.Success)?.data.orEmpty()).mapTo(HashSet()) { it.videoId }
             val suggested = fresh.suggested.filter { it.videoId !in inPlaylist }.distinctBy { it.videoId }
             if (suggested.isEmpty()) return@launch
@@ -3218,7 +3218,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             delay(150)
             var next: String? = token
             while (next != null) {
-                val fetched = YtMusicRepository.moreSongs(next).getOrNull() ?: return@launch
+                val fetched = YtMusicRepository.moreSongs(next, playlist = browseId.startsWith("VL")).getOrNull() ?: return@launch
                 // Repository calls may finish after cancellation. Do not let
                 // an in-flight UI page append after the playback service has
                 // taken the continuation over.

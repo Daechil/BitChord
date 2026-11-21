@@ -667,6 +667,39 @@ class SearchPagingTest {
     }
 
     @Test
+    fun `suggestions on a playlist's follow-up page are found when the caller says it is a playlist`() {
+        val json = """
+        {
+          "continuationContents": {
+            "sectionListContinuation": {
+              "contents": [{
+                "musicShelfRenderer": {
+                  "title": { "runs": [{ "text": "추천" }] },
+                  "contents": [{
+                    "musicResponsiveListItemRenderer": {
+                      "playlistItemData": { "videoId": "sug-2" },
+                      "flexColumns": [
+                        { "musicResponsiveListItemFlexColumnRenderer": { "text": { "runs": [{ "text": "Suggested" }] } } },
+                        { "musicResponsiveListItemFlexColumnRenderer": { "text": { "runs": [{ "text": "Artist" }, { "text": " • " }, { "text": "3:00" }] } } }
+                      ]
+                    }
+                  }]
+                }
+              }]
+            }
+          }
+        }
+        """.trimIndent()
+        val root = Json.parseToJsonElement(json).jsonObject
+
+        val asPlaylist = requireNotNull(InnertubeParser.parsePlaylistShelf(root, playlistContinuation = true))
+        assertEquals(listOf("sug-2"), asPlaylist.suggested.map { it.videoId })
+        assertEquals(emptyList<String>(), asPlaylist.songs.map { it.videoId })
+        // A history or library page continues in the same shape: not suggestions.
+        assertEquals(null, InnertubeParser.parsePlaylistShelf(root))
+    }
+
+    @Test
     fun `album backing playlist comes from the header instead of recommendation shelves`() {
         val json = """
         {

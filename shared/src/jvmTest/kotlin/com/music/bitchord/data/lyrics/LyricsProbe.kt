@@ -68,6 +68,24 @@ class LyricsProbe {
             }
         }
 
+        // The same search with the title written other ways: how many hits each gets.
+        out.append("### lrc.red search, other spellings\n\n")
+        listOf(
+            "$title $artist",
+            "${title.replace('\'', '\u2019')} $artist",
+            "${title.replace("'", "")} $artist",
+            "${title.replace("'", " ")} $artist",
+            title,
+            title.replace("'", ""),
+        ).distinct().forEach { q ->
+            val u = "https://lrc.red/search.json".toHttpUrl().newBuilder().addQueryParameter("q", q).build()
+            val b = runCatching { lyricsGet(u.toString()) }.getOrNull()
+            val n = b?.let { runCatching { lyricsJson.decodeFromString<LrcRed.Response>(it) }.getOrNull()?.hits?.size }
+            val first = b?.let { runCatching { lyricsJson.decodeFromString<LrcRed.Response>(it) }.getOrNull()?.hits?.firstOrNull() }
+            out.append("- `${cell(q)}`: ${n ?: "no answer"} hits${first?.let { " · first: ${cell(it.title)} — ${cell(it.artist)}" } ?: ""}\n")
+        }
+        out.append('\n')
+
         // Bini's search and identify, which hands lrc.red an ISRC in the app.
         out.append("### BiniLyrics\n\n")
         val bini = runCatching { BiniLyrics.search(title, artist, ms) }.getOrDefault(emptyList())

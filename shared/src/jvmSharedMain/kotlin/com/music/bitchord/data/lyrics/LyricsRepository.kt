@@ -1,5 +1,6 @@
 package com.music.bitchord.data.lyrics
 
+import com.music.bitchord.data.TrackLog
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -67,6 +68,8 @@ import java.util.concurrent.ConcurrentHashMap
 object LyricsRepository {
 
     /** Lyrics, and which source they turned out to come from. */
+    private const val TAG = "BitChord"
+
     data class Result(val source: LyricsSource, val lines: List<LyricLine>)
 
     /**
@@ -187,6 +190,14 @@ object LyricsRepository {
         }
         val recording = known ?: hit?.isrc?.takeIf { it.isNotBlank() }
         val documents = SharedDocuments(this)
+        // Copy Log's account of the lookup: what was asked, and each source's
+        // outcome and time — never the words.
+        TrackLog.d(
+            TAG,
+            "lyrics lookup: ${sequence.size} sources, ${durationMs / 1000}s, recording " +
+                (recording?.let { if (known != null) "known" else "found by BiniLyrics" } ?: "unknown"),
+            about = videoId,
+        )
 
         // Genius is a plain text web scraper. To preserve bandwidth and avoid rate-limiting,
         // it starts lazily and is only contacted if all higher-priority synced sources miss.
@@ -194,6 +205,12 @@ object LyricsRepository {
             val startMode = if (source == LyricsSource.GENIUS) kotlinx.coroutines.CoroutineStart.LAZY else kotlinx.coroutines.CoroutineStart.DEFAULT
             source to async(Dispatchers.IO, start = startMode) {
                 onSourceStarted?.invoke(source)
+                val started = System.currentTimeMillis()
+                fun note(outcome: String) = TrackLog.d(
+                    TAG,
+                    "lyrics ${source.label}: $outcome (${System.currentTimeMillis() - started}ms)",
+                    about = videoId,
+                )
                 try {
                     val found = fetch(
                         source,
@@ -206,12 +223,23 @@ object LyricsRepository {
                         hit,
                         documents::get,
                     )?.let { result(source, it) }
+                    note(
+                        found?.lines?.let { lines ->
+                            "${lines.size} lines, " + when {
+                                lines.any { it.isWordSynced } -> "word-synced"
+                                lines.any { it.timeMs > 0 } -> "line-synced"
+                                else -> "plain"
+                            }
+                        } ?: "nothing",
+                    )
                     onSourceResult?.invoke(source, found)
                     found
                 } catch (cancelled: CancellationException) {
+                    note("not waited for")
                     onSourceCancelled?.invoke(source)
                     throw cancelled
-                } catch (_: Exception) {
+                } catch (error: Exception) {
+                    note("error ${error.javaClass.simpleName}")
                     onSourceResult?.invoke(source, null)
                     null
                 }

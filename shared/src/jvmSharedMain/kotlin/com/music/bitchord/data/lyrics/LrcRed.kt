@@ -39,6 +39,15 @@ object LrcRed {
      */
     private const val DURATION_TOLERANCE_SECONDS = 3.0
 
+    /**
+     * The tolerance for a hit whose title and artists are exactly the ones
+     * asked about — the same song uploaded twice, a couple of seconds apart:
+     * "You're Welcome" is 2:44 on one YouTube upload and 2:48 in lrc.red. A
+     * different recording of it says so in its title, and is still held to
+     * [DURATION_TOLERANCE_SECONDS] by the version words.
+     */
+    private const val EXACT_NAME_TOLERANCE_SECONDS = 6.0
+
     /** `CC-XXX-YY-NNNNN` without the dashes — and nothing else goes into a path. */
     private val ISRC = Regex("""[A-Z]{2}[A-Z0-9]{3}\d{7}""")
 
@@ -80,8 +89,24 @@ object LrcRed {
             val body = lyricsGet(url.toString()) ?: return@firstNotNullOfOrNull null
             val hits = runCatching { lyricsJson.decodeFromString<Response>(body) }.getOrNull()?.hits
                 ?: return@firstNotNullOfOrNull null
-            best(hits, title, artist, durationMs)
+            best(hits, title, artist, durationMs) ?: run {
+                if (hits.isNotEmpty()) com.music.bitchord.data.TrackLog.d("BitChord", "lyrics lrc.red: ${hits.size} hits, none taken (${whyNot(hits, title, artist, durationMs)})")
+                null
+            }
         }
+    }
+
+    /** Why the closest hit was turned away, for Copy Log: names and lengths only. */
+    private fun whyNot(hits: List<Hit>, title: String, artist: String, durationMs: Long): String {
+        val sameTitle = hits.filter { it.title?.let(::coreOf) == coreOf(title) }
+        if (sameTitle.isEmpty()) return "no hit has this title"
+        val sameArtist = sameTitle.filter { hit -> artistsOf(hit.artist.orEmpty()).any { it in artistsOf(artist) } }
+        if (sameArtist.isEmpty()) return "this title, other artists"
+        val sameVersion = sameArtist.filter { versionOf(it.title.orEmpty()) == versionOf(title) }
+        if (sameVersion.isEmpty()) return "this title, another version (live, remix…)"
+        val closest = sameVersion.filter { it.duration != null }.minByOrNull { abs(it.duration!! - durationMs / 1000.0) }
+            ?: return "no length to compare"
+        return "same title, ${closest.duration!!.toInt()}s against ${durationMs / 1000}s"
     }
 
     /** What the search is asked, in turn: the name as given, then without its apostrophes. */
@@ -102,7 +127,8 @@ object LrcRed {
      *    ([VERSION_WORDS]: live, remix, acoustic…) are the same on both
      *    sides — "Remastered" and "From 'Aashiqui 2'" don't count;
      *  - at least one credited artist is shared;
-     *  - the length is within [DURATION_TOLERANCE_SECONDS], when both are known.
+     *  - the length is within [DURATION_TOLERANCE_SECONDS] when both are known
+     *    ([EXACT_NAME_TOLERANCE_SECONDS] when the title and artists are exactly the same).
      *
      * Of the hits that pass, the closest in length wins, and the search's own
      * rank breaks a tie.
@@ -116,6 +142,14 @@ object LrcRed {
         fun distance(hit: Hit): Double =
             if (durationMs > 0 && hit.duration != null) abs(hit.duration - seconds) else 0.0
 
+        val wantedName = normalized(title)
+        fun tolerance(hit: Hit): Double =
+            if (normalized(hit.title.orEmpty()) == wantedName && artistsOf(hit.artist.orEmpty()) == wantedArtists) {
+                EXACT_NAME_TOLERANCE_SECONDS
+            } else {
+                DURATION_TOLERANCE_SECONDS
+            }
+
         return hits
             .filter { hit ->
                 val name = hit.title ?: return@filter false
@@ -123,7 +157,7 @@ object LrcRed {
                     coreOf(name) == wantedTitle &&
                     versionOf(name) == wantedVersion &&
                     (wantedArtists.isEmpty() || artistsOf(hit.artist.orEmpty()).any { it in wantedArtists }) &&
-                    distance(hit) <= DURATION_TOLERANCE_SECONDS
+                    distance(hit) <= tolerance(hit)
             }
             .minByOrNull(::distance)
     }

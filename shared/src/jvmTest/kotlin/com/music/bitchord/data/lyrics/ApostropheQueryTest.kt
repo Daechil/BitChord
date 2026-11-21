@@ -27,3 +27,26 @@ class ApostropheQueryTest {
         assertNotNull(LrcRed.best(listOf(hit), "World's Smallest Violin", "AJR", 181_000))
     }
 }
+
+class LrcRedLengthTest {
+    private fun hit(title: String, artist: String, seconds: Double) =
+        LrcRed.Hit(isrc = "USWD11677561", title = title, artist = artist, duration = seconds)
+
+    @Test
+    fun theSameNameMayBeAFewSecondsLonger() {
+        val found = LrcRed.best(listOf(hit("You're Welcome", "Dwayne Johnson, Disney", 168.3)), "You're Welcome", "Dwayne Johnson, Disney", 164_000)
+        assertNotNull(found)
+    }
+
+    @Test
+    fun aDifferentlyNamedHitKeepsTheTightLimit() {
+        val found = LrcRed.best(listOf(hit("You're Welcome (From Moana)", "Dwayne Johnson", 168.3)), "You're Welcome", "Dwayne Johnson, Disney", 164_000)
+        kotlin.test.assertNull(found)
+    }
+
+    @Test
+    fun farLongerIsStillAnotherRecording() {
+        val found = LrcRed.best(listOf(hit("You're Welcome", "Dwayne Johnson, Disney", 175.0)), "You're Welcome", "Dwayne Johnson, Disney", 164_000)
+        kotlin.test.assertNull(found)
+    }
+}

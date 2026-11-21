@@ -47,7 +47,10 @@ jobs:
             } > keystore.properties
             echo "Signing with the fork's own key."
           else
-            echo "::warning::No signing key configured; signing with a throwaway debug key (reinstall needed on update)."
+            # A release signed with a throwaway key cannot install over the app,
+            # and the in-app updater would offer it anyway: no release at all.
+            echo "::error::No signing key (KO_KEYSTORE_BASE64 / KO_KEYSTORE_PASSWORD); refusing to publish a debug-signed release."
+            exit 1
           fi
 
       - name: Version

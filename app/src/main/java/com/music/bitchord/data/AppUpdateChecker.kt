@@ -67,21 +67,57 @@ object AppUpdateChecker {
     @Volatile
     private var downloadCancelled = false
 
-    suspend fun check() = withContext(Dispatchers.IO) {
-        runCatching {
+    /** What a check found: a newer build, none, or why it could not tell. */
+    sealed interface CheckResult {
+        data object UpToDate : CheckResult
+        data class Found(val info: UpdateInfo) : CheckResult
+        data class Failed(val reason: FailReason, val httpCode: Int? = null) : CheckResult
+    }
+
+    enum class FailReason { OFFLINE, RATE_LIMITED, NO_RELEASE, HTTP, UNREADABLE }
+
+    /** Why a GitHub answer was not a release, from its status and rate-limit header. */
+    internal fun failureFor(code: Int, rateRemaining: String?): FailReason = when {
+        (code == 403 || code == 429) && (rateRemaining == "0" || code == 429) -> FailReason.RATE_LIMITED
+        code == 404 -> FailReason.NO_RELEASE
+        else -> FailReason.HTTP
+    }
+
+    suspend fun check(): CheckResult = withContext(Dispatchers.IO) {
+        try {
             val request = Request.Builder().url(LATEST_RELEASE_URL).build()
-            val body = Http.client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) null else response.body?.string()
-            } ?: return@runCatching
-            val release = json.parseToJsonElement(body) as? JsonObject ?: return@runCatching
-            val tag = release["tag_name"]?.jsonPrimitive?.contentOrNull ?: return@runCatching
-            val url = release["html_url"]?.jsonPrimitive?.contentOrNull ?: return@runCatching
-            val apkUrl = apkAssetUrl(release)
-            val notes = release["body"]?.jsonPrimitive?.contentOrNull
-            val latest = tag.removePrefix("v")
-            if (isNewer(latest, BuildConfig.VERSION_NAME)) {
-                _available.value = UpdateInfo(latest, url, apkUrl, notes)
+            Http.client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return@withContext CheckResult.Failed(
+                        failureFor(response.code, response.header("x-ratelimit-remaining")),
+                        response.code,
+                    )
+                }
+                val body = response.body?.string()
+                    ?: return@withContext CheckResult.Failed(FailReason.UNREADABLE)
+                val release = runCatching { json.parseToJsonElement(body) as? JsonObject }.getOrNull()
+                    ?: return@withContext CheckResult.Failed(FailReason.UNREADABLE)
+                val tag = release["tag_name"]?.jsonPrimitive?.contentOrNull
+                    ?: return@withContext CheckResult.Failed(FailReason.UNREADABLE)
+                val url = release["html_url"]?.jsonPrimitive?.contentOrNull
+                    ?: return@withContext CheckResult.Failed(FailReason.UNREADABLE)
+                val apkUrl = apkAssetUrl(release)
+                val notes = release["body"]?.jsonPrimitive?.contentOrNull
+                val latest = tag.removePrefix("v")
+                if (isNewer(latest, BuildConfig.VERSION_NAME)) {
+                    val info = UpdateInfo(latest, url, apkUrl, notes)
+                    _available.value = info
+                    CheckResult.Found(info)
+                } else {
+                    CheckResult.UpToDate
+                }
             }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (_: java.io.IOException) {
+            CheckResult.Failed(FailReason.OFFLINE)
+        } catch (_: Exception) {
+            CheckResult.Failed(FailReason.UNREADABLE)
         }
     }
 

@@ -43,7 +43,7 @@ object AndroidStreamHooks {
             listOf(
                 "build: ${BuildConfig.VERSION_NAME} (${BuildConfig.BUILD_TYPE})",
                 "device: ${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE}",
-            )
+            ) + com.music.bitchord.data.CrashRecord.headerLines()
         }
         StreamResolver.maxKbps = { AppSettings.effectiveAudioQuality.maxKbps }
         InnerTubeXResolver.debugLogging = BuildConfig.DEBUG

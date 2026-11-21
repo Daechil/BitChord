@@ -211,6 +211,35 @@ object TrackLog {
             "\n"
     }
 
+    /**
+     * The last [maxLines] lines whatever they are about, under [title] — for
+     * a moment that is about the player rather than one song, such as
+     * playback stopping after several songs would not start.
+     */
+    suspend fun recent(title: String, maxLines: Int = 400): String = withContext(Dispatchers.Default) {
+        val held = synchronized(lines) { lines.toList() }.takeLast(maxLines)
+        buildString {
+            appendLine("BitChord log — $title")
+            appendLine("window: last ${held.size} lines → ${CLOCK.format(Date())}")
+            headerLines().forEach(::appendLine)
+            held.forEach { appendLine("${CLOCK.format(Date(it.at))} ${it.level} ${it.text}") }
+        }
+    }
+
+    /** The newest lines, at most [maxChars] of them, for a crash record written as the app goes down. */
+    fun tail(maxChars: Int): String {
+        val held = synchronized(lines) { lines.toList() }
+        val out = ArrayDeque<String>()
+        var size = 0
+        for (line in held.asReversed()) {
+            val text = "${CLOCK.format(Date(line.at))} ${line.level} ${line.text}"
+            if (size + text.length + 1 > maxChars) break
+            out.addFirst(text)
+            size += text.length + 1
+        }
+        return out.joinToString("\n")
+    }
+
     // ── The part that isn't the log ─────────────────────────────────────────
 
     /**

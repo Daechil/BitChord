@@ -58,6 +58,8 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory, Configu
     @kotlin.OptIn(ExperimentalComposeUiApi::class)
     override fun onCreate() {
         super.onCreate()
+        // First: a crash anywhere after this is kept for the next launch to show.
+        com.music.bitchord.data.CrashRecord.install(this)
         // The player is drawn by the shared UI module; this is what it reads
         // underneath — settings, the Canvas decoder, outputs, the party.
         AndroidStreamHooks.installEarly()
@@ -147,6 +149,7 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory, Configu
         // Before the settings and the downloads list are read: after a restore
         // from a backup, they must not point at files this phone does not have.
         com.music.bitchord.data.RestoreGuard.check(this)
+        com.music.bitchord.data.CrashRecord.collect(this)
         AppSettings.init(this, authStore)
         // Restores the addon token, so the first search after a process restart
         // doesn't have to attest the device again.

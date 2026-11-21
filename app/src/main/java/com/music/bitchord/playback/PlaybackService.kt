@@ -922,6 +922,7 @@ class PlaybackService : MediaLibraryService() {
                 // say the queue is not simply unplayable end to end.
                 audibleMediaId = exoPlayer.currentMediaItem?.mediaId
                 consecutiveErrorSkips = 0
+                PlaybackTrouble.clear()
             }
             if (isPlaying) registerCurrentPlay()
             // Nothing to read ahead for while paused, and a pause is often
@@ -3778,6 +3779,7 @@ class PlaybackService : MediaLibraryService() {
             // advance would leave every track looking like it never started.
             audibleMediaId = mediaItem?.mediaId
             consecutiveErrorSkips = 0
+            PlaybackTrouble.clear()
         }
         // And the same instant on the wall clock, which is the one
         // logcat stamps its lines with — see [TrackLog].
@@ -4479,6 +4481,7 @@ class PlaybackService : MediaLibraryService() {
                 "$MAX_CONSECUTIVE_SKIPS tracks in a row failed to start; " +
                     "this is the queue or the connection, not the track — stopping here",
             )
+            PlaybackTrouble.stopped(MAX_CONSECUTIVE_SKIPS + 1, network = isNetworkFault(error))
             return null
         }
         consecutiveErrorSkips++

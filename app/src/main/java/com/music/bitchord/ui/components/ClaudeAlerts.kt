@@ -48,6 +48,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 object KoAlerts {
     val monthlyCap = MutableStateFlow(false)
 
+    /** The update Settings' "Check for updates" found, opened over Settings. */
+    val openUpdate = MutableStateFlow(false)
+
     /** The log of playlists and albums translated ahead. */
     val aheadLog = MutableStateFlow(false)
 
@@ -127,6 +130,7 @@ fun ClaudeAlerts(
     onDismissLog: () -> Unit = {},
 ) {
     TranslateAheadAlerts(hazeState)
+    KoHealthAlerts(hazeState)
     TranslationStatusAlerts(hazeState)
     DuplicatesAlerts()
     SimilarSongAlert(hazeState)

@@ -2097,6 +2097,10 @@ fun SettingsScreen(
         // No footer: it only restated the stop-on-close row's own subtitle,
         // which sits four rows above it and says the same thing in fewer words.
         if (shows(SettingsCategory.MISCELLANEOUS)) SearchableSettingsGroup(search, header = stringResource(R.string.miscellaneous)) {
+            val updateCheckTitle = stringResource(R.string.update_check)
+            row(updateCheckTitle, "update", "version", "업데이트", "버전") {
+                com.music.bitchord.ui.components.UpdateCheckRow(updateCheckTitle)
+            }
             val playNextOnSwipeTitle = stringResource(R.string.play_next_on_swipe)
             row(playNextOnSwipeTitle, "swipe", "queue") {
                 SettingsRow(

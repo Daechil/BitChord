@@ -308,9 +308,6 @@ fun DetailScreen(
     onShuffle: (List<Song>) -> Unit,
     onSectionItemClick: (ShelfItem) -> Unit,
     onArtistClick: (String, String) -> Unit,
-    onAddSuggested: (Song) -> Unit,
-    /** A fresh batch of suggestions; null when YouTube offered no way to ask. */
-    onRefreshSuggested: (() -> Unit)? = null,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
     listState: LazyListState = rememberLazyListState(),
@@ -465,9 +462,6 @@ fun DetailScreen(
     // list. When no filter is active, matches contains the full running order
     // and plays the complete release/playlist from the tapped position.
     val queue = remember(matches) { matches.map { it.value } }
-    val suggested = remember(page.suggestedSongs, query) {
-        page.suggestedSongs.matching(query).map { it.value }
-    }
 
     // A device folder's tab and Downloads selection. The selection answers
     // Back before the search does: it is registered after it, so it is asked
@@ -809,55 +803,6 @@ fun DetailScreen(
                                 color = palette.divider,
                             )
                         }
-                    }
-                }
-            }
-
-            // Tracks YouTube offers to round the playlist out, never folded
-            // into the list above — see [DetailPage.suggestedSongs].
-            if (suggested.isNotEmpty()) {
-                item(key = "suggested-heading") {
-                    androidx.compose.foundation.layout.Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                    ) {
-                        androidx.compose.foundation.layout.Box(Modifier.weight(1f)) {
-                            SectionHeading(stringResource(R.string.suggested), palette)
-                        }
-                        onRefreshSuggested?.let { refresh ->
-                            androidx.compose.material3.TextButton(
-                                onClick = refresh,
-                                modifier = Modifier.padding(end = 8.dp),
-                            ) {
-                                androidx.compose.material3.Text(
-                                    text = stringResource(R.string.suggested_refresh),
-                                    color = palette.accent,
-                                )
-                            }
-                        }
-                    }
-                }
-                val isSuggestedCurrent = playingRowMatcher(suggested, currentSong)
-                itemsIndexed(
-                    suggested,
-                    key = { _, song -> "suggested-${song.videoId}" },
-                ) { index, song ->
-                    SuggestedSongRow(
-                        song = song,
-                        palette = palette,
-                        onClick = { onSongClick(suggested, index) },
-                        onLongPress = { onSongLongPress(song) },
-                        onAdd = { onAddSuggested(song) },
-                        downloadedTint = downloadedTint,
-                        isCurrent = isSuggestedCurrent(song),
-                        isPlaying = isSuggestedCurrent(song) && isPlaying,
-                    )
-                    if (index < suggested.lastIndex) {
-                        HorizontalDivider(
-                            modifier = Modifier.padding(start = ROW_DIVIDER_INSET),
-                            thickness = 0.5.dp,
-                            color = palette.divider,
-                        )
                     }
                 }
             }
@@ -2106,86 +2051,6 @@ private fun CompactSongRow(
             DownloadedBadge(song.videoId, downloadedTint)
         }
         RowMoreButton(onClick = onLongPress, tint = palette.onBackgroundVariant)
-    }
-}
-
-/**
- * A row under "Suggested" — a track YouTube offers to round the playlist
- * out but that was never added. [onAdd] is the point of the row, so it gets
- * the trailing spot a track already on the playlist spends on "more"; the
- * long-press sheet is still one gesture away for anything else.
- */
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun SuggestedSongRow(
-    song: Song,
-    palette: ArtworkPalette,
-    onClick: () -> Unit,
-    onLongPress: () -> Unit,
-    onAdd: () -> Unit,
-    downloadedTint: Color? = null,
-    isCurrent: Boolean = false,
-    isPlaying: Boolean = false,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .longPressMenuClickable(
-                onClick = onClick,
-                onLongClick = onLongPress,
-                liftPadding = PaddingValues(horizontal = PAGE_GUTTER),
-            )
-            .padding(horizontal = PAGE_GUTTER, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.trackArtSize(52.dp, song.isVideo)) {
-            AsyncImage(
-                model = song.artworkAt(ROW_ART_PX),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .matchParentSize()
-                    .clip(RoundedCornerShape(8.dp))
-                    .thumbnailBorder(RoundedCornerShape(8.dp))
-                    .background(palette.elevated),
-            )
-            if (isCurrent && isPlaying) SearchPlayingBars(Modifier.align(Alignment.Center))
-        }
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            ExplicitSongTitle(
-                song = song,
-                style = MaterialTheme.typography.titleMedium,
-                color = if (isCurrent) palette.accent else palette.onBackground,
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = song.artist,
-                style = MaterialTheme.typography.bodyMedium,
-                color = palette.onBackgroundVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        if (downloadedTint != null) {
-            DownloadedBadge(song.videoId, downloadedTint)
-        }
-        Spacer(Modifier.width(8.dp))
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(CircleShape)
-                .background(palette.accent.copy(alpha = 0.16f))
-                .clickable(onClick = onAdd),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                Icons.Rounded.Add,
-                contentDescription = stringResource(R.string.add_to_playlist),
-                tint = palette.accent,
-                modifier = Modifier.size(20.dp),
-            )
-        }
     }
 }
 

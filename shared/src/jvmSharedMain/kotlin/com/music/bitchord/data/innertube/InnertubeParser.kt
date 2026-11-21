@@ -617,19 +617,6 @@ object InnertubeParser {
                 playlistScope != null ||
                 (playlistContinuation && scope.o("sectionListContinuation") != null)
         }
-        if (playlistContinuation || playlistScope != null || suggestionShelves.isNotEmpty()) {
-            // Counts and structure names only — enough to tell from Copy Log
-            // why a playlist shows no suggestions, without a song name or an
-            // id in it. Into the track log, which a release build keeps.
-            com.music.bitchord.data.TrackLog.d(
-                "BitChord",
-                "playlist shelf: continuation=$playlistContinuation own=${playlistScope != null} " +
-                    "scope=${(scope as? JsonObject)?.keys?.take(4)} songShelves=${collectRenderers(scope, "musicShelfRenderer").size} " +
-                    "suggestionShelves=${suggestionShelves.size} reload=${collectRenderers(scope, "reloadContinuationData").size} " +
-                    "rows=${collectRenderers(scope, "musicResponsiveListItemRenderer").size}",
-                about = null,
-            )
-        }
         if (playlistScope == null && suggestionShelves.isEmpty()) return null
 
         val pageCredit = pageCredit(root)

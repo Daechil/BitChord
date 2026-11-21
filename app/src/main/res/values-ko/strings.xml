@@ -791,7 +791,6 @@
     <string name="duplicates_confirm_title">%1$d곡을 지울까요?</string>
     <string name="duplicates_confirm_description">YouTube Music의 ‘%1$s’에서 지워져요. 곡마다 남기기로 한 것은 그대로 있어요.</string>
     <string name="duplicates_removed">%1$d곡을 지웠어요</string>
-    <string name="suggested_refresh">새로고침</string>
     <string name="ko_window_summary">요약</string>
     <string name="ko_window_songs">곡 · %1$d곡</string>
     <string name="ko_window_space">사용 공간</string>

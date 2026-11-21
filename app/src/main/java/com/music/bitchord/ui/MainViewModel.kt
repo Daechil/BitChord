@@ -1084,7 +1084,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 libraryStale = true
                 // The playlist's page may be open behind the picker — it is
                 // reachable from a row's own menu on it — so the track goes
-                // into it for the same reason [addSuggestedSong] does.
+                // into it straight away rather than on the next fetch.
                 appendToOpenPlaylist(playlist.browseId, song, added[song.videoId])
                 AddOutcome.ADDED
             },
@@ -1206,26 +1206,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * A fresh batch of the playlist's suggestions in place of the ones shown —
-     * YouTube Music's "Refresh" under its Suggestions shelf. Leaves the old
-     * ones up if the new batch doesn't come.
-     */
-    fun refreshSuggestions(browseId: String) {
-        val page = _detailStack.value.firstOrNull { it.browseId == browseId } ?: return
-        val token = page.suggestionsToken ?: return
-        viewModelScope.launch {
-            val fresh = YtMusicRepository.moreSongs(token, playlist = true).getOrNull() ?: return@launch
-            val inPlaylist = ((page.songs as? UiState.Success)?.data.orEmpty()).mapTo(HashSet()) { it.videoId }
-            val suggested = fresh.suggested.filter { it.videoId !in inPlaylist }.distinctBy { it.videoId }
-            if (suggested.isEmpty()) return@launch
-            _detailStack.value = _detailStack.value.map {
-                if (it.browseId != browseId) it
-                else it.copy(suggestedSongs = suggested, suggestionsToken = fresh.suggestionsToken ?: it.suggestionsToken)
-            }
-        }
-    }
-
-    /**
      * Takes [songs] — entries with a per-entry id — out of the playlist at
      * [browseId] in one request, and off its open page. True when it worked.
      */
@@ -1274,61 +1254,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             )
                         }
                     }
-                },
-                onFailure = {},
-            )
-        }
-    }
-
-    /**
-     * Adds one of [DetailPage.suggestedSongs] to the playlist it was suggested
-     * for: out of that section, and into the track list above it.
-     *
-     * Both halves, because either alone is a worse answer than doing nothing.
-     * Only removing it — which is what this used to do — reads as the track
-     * having been discarded rather than added: it leaves the Suggested list and
-     * turns up nowhere, and the playlist it was added to looks unchanged until
-     * the page is closed and reopened. Only adding it would leave YouTube still
-     * suggesting a track that is now in the playlist.
-     *
-     * The row goes in complete, per-entry id included, because
-     * [YtMusicRepository.addToPlaylist] reports the one it was just filed
-     * under — so "Remove from this playlist" works on it immediately rather
-     * than after a re-fetch. A response that named no id still adds the row;
-     * it just can't offer to take it back out yet.
-     */
-    fun addSuggestedSong(browseId: String, song: Song, force: Boolean = false) {
-        if (!requireSignIn()) return
-        val playlistId = browseId.removePrefix("VL")
-        // YouTube's suggestions happily include another release of a song the
-        // playlist already has: asked about rather than added.
-        if (!force) {
-            val page = _detailStack.value.firstOrNull { it.browseId == browseId }
-            val existing = com.music.bitchord.ui.components.similarIn(song, (page?.songs as? UiState.Success)?.data)
-            if (existing != null) {
-                com.music.bitchord.ui.components.KoAlerts.similarSong.value = com.music.bitchord.ui.components.SimilarAsk(
-                    song = song,
-                    existing = existing,
-                    playlists = listOfNotNull(page?.title),
-                ) { addSuggestedSong(browseId, song, force = true) }
-                return
-            }
-        }
-        viewModelScope.launch {
-            YtMusicRepository.addToPlaylist(playlistId, listOf(song.videoId)).fold(
-                onSuccess = { added ->
-                    libraryStale = true
-                    _detailStack.value = _detailStack.value.map { page ->
-                        if (page.browseId != browseId) {
-                            page
-                        } else {
-                            page.copy(
-                                suggestedSongs = page.suggestedSongs
-                                    .filterNot { it.videoId == song.videoId },
-                            )
-                        }
-                    }
-                    appendToOpenPlaylist(browseId, song, added[song.videoId])
                 },
                 onFailure = {},
             )
@@ -2985,14 +2910,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             // Only once the first page is on screen: [fillIn] appends to it,
             // and has nothing to append to before this.
-            if (browseId.startsWith("VL")) {
-                com.music.bitchord.data.TrackLog.d(
-                    "BitChord",
-                    "playlist page: signedIn=${authStore.isSignedIn} suggested=${suggested.size} " +
-                        "refresh=${suggestionsToken != null} more=${more != null}",
-                    about = null,
-                )
-            }
             more?.let { fillIn(browseId, it, thumbnailUrl ?: artwork) }
         }
     }
@@ -3226,22 +3143,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             delay(150)
             var next: String? = token
             while (next != null) {
-                val playlistPage = browseId.startsWith("VL")
-                val result = YtMusicRepository.moreSongs(next, playlist = playlistPage)
-                if (playlistPage) {
-                    val page = result.getOrNull()
-                    com.music.bitchord.data.TrackLog.d(
-                        "BitChord",
-                        if (page == null) {
-                            "playlist fill-in: failed (${result.exceptionOrNull()?.javaClass?.simpleName})"
-                        } else {
-                            "playlist fill-in: songs=${page.songs.size} suggested=${page.suggested.size} " +
-                                "refresh=${page.suggestionsToken != null} next=${page.continuation != null}"
-                        },
-                        about = null,
-                    )
-                }
-                val fetched = result.getOrNull() ?: return@launch
+                // Told it is a playlist's page, so suggestions arriving after the
+                // last track are kept out of the playlist's own songs.
+                val fetched = YtMusicRepository.moreSongs(next, playlist = browseId.startsWith("VL")).getOrNull() ?: return@launch
                 // Repository calls may finish after cancellation. Do not let
                 // an in-flight UI page append after the playback service has
                 // taken the continuation over.

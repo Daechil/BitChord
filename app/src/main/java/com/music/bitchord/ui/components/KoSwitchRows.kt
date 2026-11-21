@@ -86,3 +86,26 @@ fun AheadLiveUpdatesRow(title: String) {
         },
     )
 }
+
+/**
+ * "Check again", shown while Claude refuses the key: forgets the refusal, so
+ * the next translation tries the key again — after a top-up, say. Sends
+ * nothing itself.
+ */
+@androidx.compose.runtime.Composable
+fun ClaudeKeyRecheckRow(title: String) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    com.music.bitchord.ui.screens.SettingsRow(
+        icon = com.music.bitchord.ui.icons.SfIcons.AutoAwesome,
+        title = title,
+        subtitle = androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.claude_key_recheck_subtitle),
+        onClick = {
+            com.music.bitchord.data.lyrics.LyricsTranslation.clearClaudeKeyRejection()
+            android.widget.Toast.makeText(
+                context,
+                context.getString(com.music.bitchord.R.string.claude_key_recheck_done),
+                android.widget.Toast.LENGTH_SHORT,
+            ).show()
+        },
+    )
+}

@@ -148,6 +148,7 @@ import kotlin.math.sin
 import kotlin.random.Random
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -513,6 +514,8 @@ internal sealed interface LyricsTranslationUiState {
         val fromCache: Boolean = false,
         /** Stored in the kept store rather than the cache. */
         val kept: Boolean = false,
+        /** Google's stand-in while Claude's answer is in a batch still out. */
+        val aheadPending: Boolean = false,
     ) : LyricsTranslationUiState
     data object SameLanguage : LyricsTranslationUiState
 }
@@ -3200,8 +3203,9 @@ internal fun rememberLyricsTranslation(
                 )
             ) {
                 is LyricsTranslationResult.Translated -> {
-                    translationState = LyricsTranslationUiState.Ready(result.lines, result.byClaude, result.claudeFellBack, result.claudeFailure, result.sonnetStandIn, result.fromCache, result.kept)
+                    translationState = result.toUiState()
                     lyricsDisplayMode = LyricsDisplayMode.Translated
+                    LyricsViewMemory.translation.value = true
                     translationTransition++
                     haptics.play(Haptic.ToggleOn)
                 }
@@ -3224,6 +3228,7 @@ internal fun rememberLyricsTranslation(
                 } else {
                     LyricsDisplayMode.Translated
                 }
+                LyricsViewMemory.translation.value = lyricsDisplayMode == LyricsDisplayMode.Translated
                 translationTransition++
                 haptics.play(Haptic.Select)
             }
@@ -3267,6 +3272,7 @@ internal fun rememberLyricsTranslation(
                 is LyricsRomanizationResult.Romanized -> {
                     romanizationState = LyricsTranslationUiState.Ready(result.lines, byClaude = result.byClaude)
                     lyricsDisplayMode = LyricsDisplayMode.Romanized
+                    LyricsViewMemory.translation.value = false
                     translationTransition++
                     haptics.play(Haptic.ToggleOn)
                 }
@@ -3289,6 +3295,7 @@ internal fun rememberLyricsTranslation(
                 } else {
                     LyricsDisplayMode.Romanized
                 }
+                if (lyricsDisplayMode == LyricsDisplayMode.Romanized) LyricsViewMemory.translation.value = false
                 translationTransition++
                 haptics.play(Haptic.Select)
             }
@@ -3306,6 +3313,72 @@ internal fun rememberLyricsTranslation(
             requestRomanization(true)
         }
     }
+    // A reader who left the translation on finds it on for this song too —
+    // read from storage only, never asked for: a song with nothing stored
+    // keeps its originals, quietly, and nothing is paid for.
+    fun showStoredTranslation() {
+        val source = lyrics.orEmpty()
+        if (source.isEmpty() || !LyricsViewMemory.translation.value) return
+        if (translationState != LyricsTranslationUiState.Idle) return
+        translationJob?.cancel()
+        translationJob = translationScope.launch {
+            val result = PlayerPlatform.host.translateLyrics(
+                trackId = trackId,
+                lines = source,
+                targetLanguageTag = translationLanguage,
+                cacheOnly = true,
+            )
+            if (result !is LyricsTranslationResult.Translated) return@launch
+            if (!LyricsViewMemory.autoShowAccepts(result.byClaude, result.claudeFellBack, result.aheadPending)) return@launch
+            if (translationState != LyricsTranslationUiState.Idle) return@launch
+            translationState = result.toUiState()
+            if (lyricsDisplayMode == LyricsDisplayMode.Original) lyricsDisplayMode = LyricsDisplayMode.Translated
+        }
+    }
+    // Google's stand-in for a translation still out in a batch: Claude's
+    // answer, once it is in, takes its place without a tap.
+    fun swapInArrived() {
+        val ready = translationState as? LyricsTranslationUiState.Ready ?: return
+        if (!ready.aheadPending) return
+        val source = lyrics.orEmpty()
+        if (source.isEmpty()) return
+        translationJob?.cancel()
+        translationJob = translationScope.launch {
+            val result = PlayerPlatform.host.translateLyrics(
+                trackId = trackId,
+                lines = source,
+                targetLanguageTag = translationLanguage,
+                cacheOnly = true,
+            ) as? LyricsTranslationResult.Translated ?: return@launch
+            val now = translationState as? LyricsTranslationUiState.Ready ?: return@launch
+            if (!now.aheadPending) return@launch
+            when {
+                result.byClaude -> {
+                    translationState = result.toUiState()
+                    if (showingTranslation) translationTransition++
+                }
+                // The batch is over without it (failed, declined, expired):
+                // Google's stays, and stops saying it is waiting.
+                !result.aheadPending -> translationState = now.copy(aheadPending = false)
+            }
+        }
+    }
+    LaunchedEffect(trackId, translationLanguage, lyrics) {
+        showStoredTranslation()
+    }
+    LaunchedEffect(trackId, translationLanguage, lyrics) {
+        @OptIn(kotlinx.coroutines.FlowPreview::class)
+        PlayerPlatform.host.translationStoreChanges
+            .debounce(300L)
+            .collect {
+                if (translationState == LyricsTranslationUiState.Idle) {
+                    showStoredTranslation()
+                } else {
+                    swapInArrived()
+                }
+            }
+    }
+
     // The one line that sits above the scrubber while the lyrics are open: which
     // of the providers the timings came from, or what the translation is doing.
     // Worked out once for both layouts — the portrait player puts it over its
@@ -3325,6 +3398,8 @@ internal fun rememberLyricsTranslation(
             stringResource(Res.string.translating_lyrics_to, translationLanguageName)
         romanizationState is LyricsTranslationUiState.Loading ->
             stringResource(Res.string.romanizing_lyrics)
+        showingTranslation && (translationState as? LyricsTranslationUiState.Ready)?.aheadPending == true ->
+            stringResource(Res.string.lyrics_translation_ahead_waiting)
         // Named only when Claude wrote it: Google Translate is the default the
         // line has always meant, and naming it too would be noise.
         showingTranslation && (translationState as? LyricsTranslationUiState.Ready)?.sonnetStandIn == true ->
@@ -3373,3 +3448,15 @@ internal fun rememberLyricsTranslation(
         retranslate = retranslate,
     )
 }
+
+private fun LyricsTranslationResult.Translated.toUiState(): LyricsTranslationUiState.Ready =
+    LyricsTranslationUiState.Ready(
+        lines = lines,
+        byClaude = byClaude,
+        claudeFellBack = claudeFellBack,
+        claudeFailure = claudeFailure,
+        sonnetStandIn = sonnetStandIn,
+        fromCache = fromCache,
+        kept = kept,
+        aheadPending = aheadPending,
+    )

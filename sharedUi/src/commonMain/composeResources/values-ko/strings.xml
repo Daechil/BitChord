@@ -99,6 +99,7 @@
     <string name="lyrics_translation_fresh">방금 번역</string>
     <string name="lyrics_translation_kept">보관함에서</string>
     <string name="lyrics_translation_cached">캐시에서</string>
+    <string name="lyrics_translation_ahead_waiting">Claude 미리 번역 대기 중 · 도착하면 바뀌어요</string>
     <string name="lyrics_reading_claude">발음 · Claude</string>
     <string name="claude_fail_budget">월 한도 도달</string>
     <string name="claude_fail_daily_budget">오늘 한도 도달</string>

@@ -106,7 +106,15 @@ interface PlayerHost {
         targetLanguageTag: String,
         /** Skip the cached answer and ask again — a long press on the translate disc. */
         fresh: Boolean = false,
+        /** Only a translation already stored; never a request — the player showing one on its own. */
+        cacheOnly: Boolean = false,
     ): LyricsTranslationResult
+
+    /**
+     * Fires when a stored translation may have changed — one written, or a
+     * batch translating ahead moving on — so a song on screen can look again.
+     */
+    val translationStoreChanges: kotlinx.coroutines.flow.Flow<Unit> get() = kotlinx.coroutines.flow.emptyFlow()
 
     suspend fun romanizeLyrics(
         trackId: String,
@@ -389,6 +397,8 @@ sealed interface LyricsTranslationResult {
         val fromCache: Boolean = false,
         /** Stored in the kept store, which nothing clears, rather than the cache. */
         val kept: Boolean = false,
+        /** Google's stand-in while Claude's answer is in a batch still out; it is swapped in when it arrives. */
+        val aheadPending: Boolean = false,
     ) : LyricsTranslationResult
     data class SameLanguage(val language: String) : LyricsTranslationResult
     data object Unavailable : LyricsTranslationResult

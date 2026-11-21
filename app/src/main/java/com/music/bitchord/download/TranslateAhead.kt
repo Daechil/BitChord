@@ -368,6 +368,35 @@ object TranslateAhead {
 
     private var lastManualCheck = 0L
 
+    /** Waits, at most [timeoutMs], for the jobs on disk to be read, so a question about them right after launch is not answered from an empty list. */
+    suspend fun awaitLoaded(timeoutMs: Long = 2_000L) {
+        kotlinx.coroutines.withTimeoutOrNull(timeoutMs) { loaded.await() }
+    }
+
+    /**
+     * Whether [videoId]'s translation into [target], in the style set now, is
+     * in a batch still out: paid for, not answered yet. The player then shows
+     * a free stand-in rather than pay for the same answer again.
+     */
+    fun awaitingTranslation(videoId: String, target: String): Boolean =
+        awaitingTranslation(_jobs.value, videoId, target, LyricsTranslation.translationSpeech, LyricsTranslation.translationMode)
+
+    internal fun awaitingTranslation(
+        jobs: List<Job>,
+        videoId: String,
+        target: String,
+        speech: String,
+        mode: String,
+    ): Boolean {
+        val wanted = target.trim()
+        return jobs.any { job ->
+            (job.state == State.WAITING || job.state == State.PREPARING) &&
+                (job.target.isBlank() || job.target.trim().equals(wanted, ignoreCase = true)) &&
+                (job.speech.isBlank() || job.speech == speech) && (job.mode.isBlank() || job.mode == mode) &&
+                job.tracks.any { it.videoId == videoId && it.status == TrackStatus.SENT }
+        }
+    }
+
     /**
      * The notification's "Check now": asks about every batch still out at
      * once. False when it was asked less than a minute ago, and nothing is sent.

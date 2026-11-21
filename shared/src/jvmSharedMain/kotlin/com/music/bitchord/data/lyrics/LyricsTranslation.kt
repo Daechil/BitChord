@@ -218,6 +218,12 @@ object LyricsTranslation {
         cacheOnly: Boolean = false,
         /** Where the request came from, for [storedAnswers]: [VIA_PLAYER] or [VIA_DOWNLOAD]. */
         via: String = VIA_PLAYER,
+        /**
+         * Google Translate only, Claude left out — for a song whose Claude
+         * answer is already paid for in a batch still out, so the player
+         * shows something now without paying for the same answer twice.
+         */
+        googleOnly: Boolean = false,
     ): Result {
         // Sent as given rather than reduced to a base language: zh-CN and
         // zh-TW are the same language in two scripts, and canonicalising either
@@ -234,7 +240,7 @@ object LyricsTranslation {
         // there, the lyric sheet must not, so anything short of a complete
         // answer falls through to Google Translate below — with the reason
         // kept, for the status line and the diagnostics log.
-        val claudeTried = claudeEnabled && cleanClaudeKey().isNotEmpty()
+        val claudeTried = !googleOnly && claudeEnabled && cleanClaudeKey().isNotEmpty()
         var claudeFailure: ClaudeFailure? = null
         if (claudeTried) {
             val attempt = try {
@@ -444,8 +450,27 @@ object LyricsTranslation {
     var claudeApiKey: String = ""
         set(value) {
             field = value
+            // A key saved again — after topping up, say — is tried again: the
+            // refusal held for the old value would otherwise outlive the
+            // "ready" Settings now shows.
+            rejectedClaudeKey = null
             claudeKeyRejected.value = false
         }
+
+    /**
+     * Forgets that Claude refused the key, so the next translation tries it
+     * again — after credit was topped up, say. Sends nothing itself: a key
+     * still refused is refused again, free, on that next request.
+     */
+    internal fun rejectKey(key: String) {
+        rejectedClaudeKey = key
+        claudeKeyRejected.value = true
+    }
+
+    fun clearClaudeKeyRejection() {
+        rejectedClaudeKey = null
+        claudeKeyRejected.value = false
+    }
 
     /** True once Claude refused the current key (or its account has no credit), so Settings can say why. */
     val claudeKeyRejected = MutableStateFlow(false)
@@ -985,13 +1010,11 @@ object LyricsTranslation {
             // A bad key, or an account with nothing left to spend, fails the
             // same every time: stop asking with it and let Settings say why.
             code == 401 || code == 403 -> {
-                rejectedClaudeKey = key
-                claudeKeyRejected.value = true
+                rejectKey(key)
                 ClaudeFailure.KEY_REJECTED
             }
             code == 400 && text.contains("credit balance", ignoreCase = true) -> {
-                rejectedClaudeKey = key
-                claudeKeyRejected.value = true
+                rejectKey(key)
                 ClaudeFailure.NO_CREDIT
             }
             // Rate limited or overloaded: rest a minute rather than delay
@@ -1942,13 +1965,11 @@ object LyricsTranslation {
 
     private fun batchHttpFailure(code: Int, text: String, key: String): ClaudeFailure = when {
         code == 401 || code == 403 -> {
-            rejectedClaudeKey = key
-            claudeKeyRejected.value = true
+            rejectKey(key)
             ClaudeFailure.KEY_REJECTED
         }
         code == 400 && text.contains("credit balance", ignoreCase = true) -> {
-            rejectedClaudeKey = key
-            claudeKeyRejected.value = true
+            rejectKey(key)
             ClaudeFailure.NO_CREDIT
         }
         code == 429 -> ClaudeFailure.RATE_LIMIT

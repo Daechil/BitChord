@@ -830,6 +830,9 @@ Adding: %4$s
     <string name="duplicates_confirm_title">Remove %1$d songs?</string>
     <string name="duplicates_confirm_description">They are removed from ‘%1$s’ on YouTube Music. The copy kept of each song stays.</string>
     <string name="duplicates_removed">Removed %1$d songs</string>
+    <string name="claude_key_recheck">Check the key again</string>
+    <string name="claude_key_recheck_subtitle">Topped up credit or fixed the key? Tap. Nothing is sent now; the next translation tries the key again.</string>
+    <string name="claude_key_recheck_done">Claude will be tried again on the next translation</string>
     <string name="ko_window_summary">Summary</string>
     <string name="ko_window_songs">Songs · %1$d</string>
     <string name="ko_window_space">Space used</string>

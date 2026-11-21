@@ -99,6 +99,7 @@
     <string name="lyrics_translation_fresh">just translated</string>
     <string name="lyrics_translation_kept">from saved</string>
     <string name="lyrics_translation_cached">from cache</string>
+    <string name="lyrics_translation_ahead_waiting">Waiting for Claude\'s translation ahead · switches when it arrives</string>
     <string name="lyrics_reading_claude">Pronunciation · Claude</string>
     <string name="claude_fail_budget">monthly limit reached</string>
     <string name="claude_fail_daily_budget">daily limit reached</string>

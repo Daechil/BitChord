@@ -732,6 +732,12 @@ fun SettingsScreen(
                     onClick = onClaudeKey,
                 )
             }
+            if (claudeKeyRejected && claudeApiKey.isNotBlank()) {
+                val recheckTitle = stringResource(R.string.claude_key_recheck)
+                row(recheckTitle, "claude", "key", "credit", "다시", "확인", "크레딧", "충전") {
+                    com.music.bitchord.ui.components.ClaudeKeyRecheckRow(recheckTitle)
+                }
+            }
             if (claudeApiKey.isNotBlank()) {
                 val claudeModelTitle = stringResource(R.string.claude_model)
                 row(claudeModelTitle, "claude", "model", "haiku", "sonnet", "ai") {

@@ -23,6 +23,7 @@ import com.music.bitchord.data.lyrics.LyricsTranslation
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.settings.LastPlayerScreen
+import com.music.bitchord.download.TranslateAhead
 import com.music.bitchord.playback.MusicOnlyPlayback
 import com.music.bitchord.playback.AudioOutputStatus
 import com.music.bitchord.playback.AudioRouting
@@ -43,6 +44,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import java.util.Locale
@@ -190,20 +192,57 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
         lines: List<LyricLine>,
         targetLanguageTag: String,
         fresh: Boolean,
-    ): LyricsTranslationResult =
-        when (val result = LyricsTranslation.translate(trackId, lines, targetLanguageTag, fresh = fresh)) {
-            is LyricsTranslation.Result.Translated -> LyricsTranslationResult.Translated(
-                lines = result.lines,
-                byClaude = result.engine == LyricsTranslation.Engine.CLAUDE,
-                claudeFellBack = result.claudeFellBack,
-                claudeFailure = result.claudeFailure,
-                sonnetStandIn = result.sonnetStandIn,
-                fromCache = result.fromCache,
-                kept = result.kept,
-            )
+        cacheOnly: Boolean,
+    ): LyricsTranslationResult {
+        // Claude would be asked now: on in Settings, a key it has not refused, under the monthly limit.
+        val claudeLive = AppSettings.claudeTranslation.value &&
+            LyricsTranslation.claudeKeyUsable && !LyricsTranslation.claudeOverBudget()
+        // Claude's answer is already paid for in a batch still out. A long
+        // press asks anyway; a tap shows Google's meanwhile and swaps.
+        val awaiting = !fresh && claudeLive && run {
+            TranslateAhead.awaitLoaded()
+            TranslateAhead.awaitingTranslation(trackId, targetLanguageTag)
+        }
+        fun mapped(result: LyricsTranslation.Result, standIn: Boolean): LyricsTranslationResult = when (result) {
+            is LyricsTranslation.Result.Translated -> {
+                val byClaude = result.engine == LyricsTranslation.Engine.CLAUDE
+                LyricsTranslationResult.Translated(
+                    lines = result.lines,
+                    byClaude = byClaude,
+                    // A Google answer read from storage only "fell back" when Claude would have been asked.
+                    claudeFellBack = result.claudeFellBack && !standIn && (!cacheOnly || claudeLive),
+                    claudeFailure = result.claudeFailure.takeIf { !standIn },
+                    sonnetStandIn = result.sonnetStandIn,
+                    fromCache = result.fromCache,
+                    kept = result.kept,
+                    aheadPending = standIn && !byClaude,
+                )
+            }
             is LyricsTranslation.Result.SameLanguage -> LyricsTranslationResult.SameLanguage(result.language)
             LyricsTranslation.Result.Unavailable -> LyricsTranslationResult.Unavailable
         }
+        if (cacheOnly) {
+            return mapped(LyricsTranslation.translate(trackId, lines, targetLanguageTag, cacheOnly = true), standIn = awaiting)
+        }
+        if (awaiting) {
+            val stored = LyricsTranslation.translate(trackId, lines, targetLanguageTag, cacheOnly = true)
+            if (stored !is LyricsTranslation.Result.Unavailable) return mapped(stored, standIn = true)
+            // Nothing stored yet: a free Google answer now, and a nudge for the batch.
+            TranslateAhead.checkNow()
+            return mapped(LyricsTranslation.translate(trackId, lines, targetLanguageTag, googleOnly = true), standIn = true)
+        }
+        return mapped(LyricsTranslation.translate(trackId, lines, targetLanguageTag, fresh = fresh), standIn = false)
+    }
+
+    override val translationStoreChanges: kotlinx.coroutines.flow.Flow<Unit> by lazy {
+        kotlinx.coroutines.flow.merge(
+            LyricsTranslation.translationsChanged.map { },
+            TranslateAhead.jobs
+                .map { jobs -> jobs.sumOf { job -> job.tracks.count { it.status == TranslateAhead.TrackStatus.SENT } } to jobs.count { it.active } }
+                .distinctUntilChanged()
+                .map { },
+        )
+    }
 
     override suspend fun romanizeLyrics(
         trackId: String,

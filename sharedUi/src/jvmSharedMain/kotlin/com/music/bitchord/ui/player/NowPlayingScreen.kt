@@ -2324,7 +2324,8 @@ fun NowPlayingScreen(
                                 // armed would only eat taps meant for the lines.
                                 LyricsPanel(
                                     lines = lyrics.orEmpty(),
-                                    subLines = lyricsTranslation.subLines,
+                                    subLines = lyricsTranslation.translationLines,
+                                    readingLines = lyricsTranslation.readingLines,
                                     trackKey = song.videoId,
                                     playhead = lyricsPlayhead,
                                     looking = !lyricsUnavailable,
@@ -3881,7 +3882,8 @@ fun NowPlayingScreen(
                                 ) { particleProgress ->
                                     LyricsPanel(
                                         lines = lyrics.orEmpty(),
-                                        subLines = lyricsTranslation.subLines,
+                                        subLines = lyricsTranslation.translationLines,
+                                        readingLines = lyricsTranslation.readingLines,
                                         trackKey = song.videoId,
                                         playhead = lyricsPlayhead,
                                         looking = !lyricsUnavailable,

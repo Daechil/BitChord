@@ -374,6 +374,8 @@ object LyricsTranslation {
         trackId: String,
         lines: List<LyricLine>,
         targetLanguageTag: String,
+        /** Only what is already cached; never a request. */
+        cacheOnly: Boolean = false,
     ): RomanizationResult {
         if (lines.isEmpty()) return RomanizationResult.Unavailable
         val slots = flatten(lines)
@@ -395,6 +397,7 @@ object LyricsTranslation {
                 fromCache = true,
             )
         }
+        if (cacheOnly) return RomanizationResult.Unavailable
 
         val target = targetLanguageTag.trim().ifBlank { "en" }
         val batches = batches(slots)
@@ -1652,6 +1655,8 @@ object LyricsTranslation {
         force: Boolean = false,
         /** Only a reading already stored or translated ahead, which costs nothing: never a request. */
         storedOnly: Boolean = false,
+        /** Looked up on the player's own, not for a tap: lyrics that differ from the batch's are not reported. */
+        quiet: Boolean = false,
     ): RomanizationResult? {
         if (!storedOnly && (!claudeEnabled || (!claudeReadingEnabled && !force) || cleanClaudeKey().isEmpty())) return null
         val target = targetLanguageTag.trim()
@@ -1667,7 +1672,7 @@ object LyricsTranslation {
             noteStored(cacheKey, trackId, KIND_READING, cached, target, model = null, kept = isKept(cacheKey), via = null)
             return RomanizationResult.Romanized(rebuild(lines, slots, cached.texts), cached.sourceLanguage, fromCache = true)
         }
-        fromAhead(trackId, "reading\u0000$trackId", target, slots, report = true)?.let { ahead ->
+        fromAhead(trackId, "reading\u0000$trackId", target, slots, report = !quiet)?.let { ahead ->
             memory.put(cacheKey, ahead)
             writeCache(cacheKey, ahead, keep = true)
             noteStored(cacheKey, trackId, KIND_READING, ahead, target, model = null, kept = keepDir != null, via = VIA_AHEAD)

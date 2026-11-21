@@ -98,6 +98,7 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
         override val syncedLyrics get() = AppSettings.syncedLyrics
         override val translationLanguage get() = AppSettings.translationLanguage
         override val versionAlignmentInProgress get() = AppSettings.versionAlignmentInProgress
+        override val lyricsSubLineSize get() = AppSettings.lyricsSubLineSize
 
         override fun setLastPlayerScreen(value: LastPlayerScreen) = AppSettings.setLastPlayerScreen(value)
         override fun setLyricsOffsetMs(value: Int) = AppSettings.setLyricsOffsetMs(value)
@@ -249,8 +250,18 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
         lines: List<LyricLine>,
         targetLanguageTag: String,
         preferClaude: Boolean,
+        cacheOnly: Boolean,
     ): LyricsRomanizationResult {
         val mode = AppSettings.pronunciationMode.value
+        if (cacheOnly) {
+            // What is stored only. Claude's reading where one was written; the
+            // free reading from Google's cached romanisation, except where
+            // Settings reads with Claude — showing Google's there would turn
+            // the next tap into "off" rather than the reading asked for.
+            (LyricsTranslation.claudeReading(trackId, lines, targetLanguageTag, storedOnly = true, quiet = true) as? LyricsTranslation.RomanizationResult.Romanized)
+                ?.let { return LyricsRomanizationResult.Romanized(it.lines, byClaude = true) }
+            if (mode == AppSettings.PRONOUNCE_CLAUDE) return LyricsRomanizationResult.Unavailable
+        }
         // Claude's reading in the reader's own script where Settings asks for it,
         // or this one song was long-pressed for it; Google's romanisation otherwise.
         if (preferClaude || mode == AppSettings.PRONOUNCE_CLAUDE) {
@@ -262,7 +273,7 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
             (LyricsTranslation.claudeReading(trackId, lines, targetLanguageTag, storedOnly = true) as? LyricsTranslation.RomanizationResult.Romanized)
                 ?.let { return LyricsRomanizationResult.Romanized(it.lines, byClaude = true) }
         }
-        return when (val result = LyricsTranslation.romanize(trackId, lines, targetLanguageTag)) {
+        return when (val result = LyricsTranslation.romanize(trackId, lines, targetLanguageTag, cacheOnly = cacheOnly)) {
             is LyricsTranslation.RomanizationResult.Romanized -> {
                 val korean = targetLanguageTag.trim().lowercase().substringBefore('-').substringBefore('_') == "ko"
                 LyricsRomanizationResult.Romanized(

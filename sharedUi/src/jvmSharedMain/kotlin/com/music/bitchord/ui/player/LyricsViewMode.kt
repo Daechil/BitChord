@@ -12,6 +12,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 internal object LyricsViewMemory {
     val translation = MutableStateFlow(false)
 
+    /** The pronunciation switch. Brought along to the next song only with the translation, from what is stored. */
+    val reading = MutableStateFlow(false)
+
     /**
      * Whether a translation read from storage, with nothing asked for, may go
      * on screen by itself. Not Google's where Claude would answer a tap: shown
@@ -20,4 +23,11 @@ internal object LyricsViewMemory {
      */
     fun autoShowAccepts(byClaude: Boolean, claudeFellBack: Boolean, aheadPending: Boolean): Boolean =
         byClaude || aheadPending || !claudeFellBack
+}
+
+/** The translation and pronunciation lines' size, as Settings has it: 0 small, 1 normal, 2 large. */
+internal fun subLineScale(size: Int): Float = when (size) {
+    0 -> 0.85f
+    2 -> 1.2f
+    else -> 1f
 }

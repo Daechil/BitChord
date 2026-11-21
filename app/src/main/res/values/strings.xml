@@ -833,6 +833,11 @@ Adding: %4$s
     <string name="claude_key_recheck">Check the key again</string>
     <string name="claude_key_recheck_subtitle">Topped up credit or fixed the key? Tap. Nothing is sent now; the next translation tries the key again.</string>
     <string name="claude_key_recheck_done">Claude will be tried again on the next translation</string>
+    <string name="lyrics_sub_size">Translation &amp; pronunciation size</string>
+    <string name="lyrics_sub_size_subtitle">The small lines under each lyric, in the player and on the lock screen</string>
+    <string name="lyrics_sub_size_small">Small</string>
+    <string name="lyrics_sub_size_normal">Normal</string>
+    <string name="lyrics_sub_size_large">Large</string>
     <string name="ko_window_summary">Summary</string>
     <string name="ko_window_songs">Songs · %1$d</string>
     <string name="ko_window_space">Space used</string>

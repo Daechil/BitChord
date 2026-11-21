@@ -122,6 +122,8 @@ interface PlayerHost {
         targetLanguageTag: String,
         /** Claude's reading for this song, whatever Settings reads with — a long press on the romanize disc. */
         preferClaude: Boolean = false,
+        /** Only a reading already stored; never a request. */
+        cacheOnly: Boolean = false,
     ): LyricsRomanizationResult
 
     /**
@@ -189,6 +191,7 @@ private val NoCast = MutableStateFlow(CastUi())
 private val NoSongMeaning = MutableStateFlow(false)
 
 private val DefaultVideoAspect = MutableStateFlow(16f / 9f)
+private val DefaultLyricsSubLineSize = MutableStateFlow(1)
 
 private val NoVideoQuality = MutableStateFlow(MusicVideoQualityUi())
 
@@ -312,6 +315,8 @@ interface PlayerSettingsSource {
     val syncedLyrics: StateFlow<Boolean>
     val translationLanguage: StateFlow<String>
     val versionAlignmentInProgress: StateFlow<Boolean>
+    /** The translation and pronunciation lines' size: 0 small, 1 normal, 2 large. */
+    val lyricsSubLineSize: StateFlow<Int> get() = DefaultLyricsSubLineSize
 
     fun setLastPlayerScreen(value: LastPlayerScreen)
     fun setLyricsOffsetMs(value: Int)

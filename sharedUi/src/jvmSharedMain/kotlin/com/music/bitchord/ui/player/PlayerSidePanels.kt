@@ -119,7 +119,8 @@ fun LyricsSidePanel(
                     // bring back.
                     LyricsPanel(
                         lines = lyrics.orEmpty(),
-                        subLines = lyricsTranslation.subLines,
+                        subLines = lyricsTranslation.translationLines,
+                        readingLines = lyricsTranslation.readingLines,
                         trackKey = song.videoId,
                         playhead = lyricsPlayhead,
                         looking = !lyricsUnavailable,

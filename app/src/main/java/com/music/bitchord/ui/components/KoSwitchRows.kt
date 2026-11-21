@@ -3,6 +3,8 @@ package com.music.bitchord.ui.components
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 
 
 /** Settings' "waveform seek bar" switch: its own composable, so Settings' long body gains a call rather than the row. */
@@ -107,5 +109,30 @@ fun ClaudeKeyRecheckRow(title: String) {
                 android.widget.Toast.LENGTH_SHORT,
             ).show()
         },
+    )
+}
+
+/** The size of the translation and pronunciation lines under each lyric: small, normal, large. */
+@androidx.compose.runtime.Composable
+fun LyricsSubSizeRow(title: String) {
+    val size by com.music.bitchord.data.settings.AppSettings.lyricsSubLineSize.collectAsStateWithLifecycle()
+    com.music.bitchord.ui.screens.SettingsRow(
+        icon = com.music.bitchord.ui.icons.SfIcons.Language,
+        title = title,
+        subtitle = androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.lyrics_sub_size_subtitle),
+    )
+    com.music.bitchord.ui.screens.SegmentedControl(
+        options = listOf(
+            androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.lyrics_sub_size_small),
+            androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.lyrics_sub_size_normal),
+            androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.lyrics_sub_size_large),
+        ),
+        selectedIndex = size.coerceIn(0, 2),
+        onSelect = com.music.bitchord.data.settings.AppSettings::setLyricsSubLineSize,
+        modifier = androidx.compose.ui.Modifier.padding(
+            start = com.music.bitchord.ui.screens.TEXT_INSET,
+            end = com.music.bitchord.ui.screens.ROW_INSET,
+            bottom = 14.dp,
+        ),
     )
 }

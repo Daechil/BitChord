@@ -1831,6 +1831,10 @@ fun SettingsScreen(
                         onClick = { AppSettings.setLyricsBlur(!lyricsBlur) },
                     )
                 }
+                val lyricsSubSizeTitle = stringResource(R.string.lyrics_sub_size)
+                row(lyricsSubSizeTitle, "lyrics", "translation", "pronunciation", "size", "번역", "발음", "글자", "크기") {
+                    com.music.bitchord.ui.components.LyricsSubSizeRow(lyricsSubSizeTitle)
+                }
                 val lyricsSourcesTitle = stringResource(R.string.lyrics_sources)
                 row(lyricsSourcesTitle, "lyrics", "lrclib", "musixmatch") {
                     SettingsRow(

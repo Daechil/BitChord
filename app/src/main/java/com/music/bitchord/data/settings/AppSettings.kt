@@ -918,6 +918,9 @@ object AppSettings {
     /** The seek bar drawn as the song's waveform, where one is known. Off unless chosen. */
     val waveformSeekBar = MutableStateFlow(false)
 
+    /** The translation and pronunciation lines under each lyric: 0 small, 1 normal, 2 large. */
+    val lyricsSubLineSize = MutableStateFlow(1)
+
     /** Translating ahead asks Android 16 to show its progress as a Live Update. */
     val aheadLiveUpdates = MutableStateFlow(true)
 
@@ -1464,6 +1467,7 @@ object AppSettings {
         keepDownloadTranslations.value = prefs.getBoolean(KEY_KEEP_DOWNLOAD_TRANSLATIONS, true)
         lockScreenLyrics.value = prefs.getBoolean(KEY_LOCK_SCREEN_LYRICS, false)
         waveformSeekBar.value = prefs.getBoolean(KEY_WAVEFORM_SEEK_BAR, false)
+        lyricsSubLineSize.value = prefs.getInt(KEY_LYRICS_SUB_SIZE, 1).coerceIn(0, 2)
         aheadLiveUpdates.value = prefs.getBoolean(KEY_AHEAD_LIVE_UPDATES, true)
         waveformPlayed.value = prefs.getBoolean(KEY_WAVEFORM_PLAYED, true)
         lyricsSources.value = readLyricsSources()
@@ -2336,6 +2340,12 @@ object AppSettings {
         prefs.edit().putBoolean(KEY_AHEAD_LIVE_UPDATES, value).apply()
     }
 
+    fun setLyricsSubLineSize(value: Int) {
+        val size = value.coerceIn(0, 2)
+        lyricsSubLineSize.value = size
+        prefs.edit().putInt(KEY_LYRICS_SUB_SIZE, size).apply()
+    }
+
     fun setWaveformSeekBar(value: Boolean) {
         waveformSeekBar.value = value
         prefs.edit().putBoolean(KEY_WAVEFORM_SEEK_BAR, value).apply()
@@ -3175,6 +3185,7 @@ object AppSettings {
     private const val KEY_KEEP_DOWNLOAD_TRANSLATIONS = "ko_keep_download_translations"
     private const val KEY_LOCK_SCREEN_LYRICS = "ko_lock_screen_lyrics"
     private const val KEY_WAVEFORM_SEEK_BAR = "ko_waveform_seek_bar"
+    private const val KEY_LYRICS_SUB_SIZE = "ko_lyrics_sub_size"
     private const val KEY_AHEAD_LIVE_UPDATES = "ko_ahead_live_updates"
     private const val KEY_WAVEFORM_PLAYED = "ko_waveform_played"
     private const val KEY_LYRICS_SOURCES = "lyrics_sources"

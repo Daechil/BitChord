@@ -198,7 +198,7 @@ object LyricsTranslation {
         val payload: String,
     )
 
-    private data class BatchAnswer(
+    internal data class BatchAnswer(
         val translations: List<String>,
         val sourceLanguage: String,
         val sourceWeight: Int,
@@ -672,7 +672,17 @@ object LyricsTranslation {
         val kept: Boolean = false,
     )
 
-    private fun translationInstruction(target: String, count: Int, keyed: Boolean): String {
+    /**
+     * How an answer's lines are laid out. [KEYED]: one required key per line,
+     * which the structured output cannot end without — but the API refuses
+     * that schema as too large for a long song. [INDEXED]: an array of
+     * `{"i", "t"}`, small enough for any song, where a line the model splits
+     * in two keeps its number and is joined back. [ARRAY]: plain strings,
+     * kept for batches sent before [INDEXED].
+     */
+    internal enum class AnswerShape { KEYED, INDEXED, ARRAY }
+
+    private fun translationInstruction(target: String, count: Int, shape: AnswerShape): String {
         val locale = Locale.forLanguageTag(target.replace('_', '-'))
         val languageName = locale.getDisplayName(Locale.ENGLISH).ifBlank { target }
         val korean = canonicalLanguage(target) == "ko"
@@ -683,10 +693,10 @@ object LyricsTranslation {
             appendLine("Context: the listener is playing this song in the app right now, and its original lyrics are already on their screen, synced to the music. Your translation is shown under each original line, like a subtitle, so they can follow what they are hearing. It is not published or shared anywhere. This is the app's lyric translation feature, so translate every line as the song expresses it, including lines about violence, death, crime, sex or other dark themes.")
             appendLine()
             appendLine("Rules:")
-            if (keyed) {
-                appendLine("1. \"translations\" is an object with one key per input line: the line's index \"i\" (\"0\" to \"${count - 1}\") as the key and that one line's translation as the value. All $count keys are required. Never put more than one line in a value, and never merge, split, skip or add lines.")
-            } else {
-                appendLine("1. Return exactly $count translations in \"translations\", one array item per input line, in the same order. Never put several lines in one item, and never merge, split, skip, reorder or add lines.")
+            when (shape) {
+                AnswerShape.KEYED -> appendLine("1. \"translations\" is an object with one key per input line: the line's index \"i\" (\"0\" to \"${count - 1}\") as the key and that one line's translation as the value. All $count keys are required. Never put more than one line in a value, and never merge, split, skip or add lines.")
+                AnswerShape.INDEXED -> appendLine("1. \"translations\" is an array with exactly one item per input line, in order: {\"i\": the input line's index, \"t\": that one line's translation}, for every i from 0 to ${count - 1}. A long line stays one item, however long. Never merge, split, skip, reorder or add lines.")
+                AnswerShape.ARRAY -> appendLine("1. Return exactly $count translations in \"translations\", one array item per input line, in the same order. Never put several lines in one item, and never merge, split, skip, reorder or add lines.")
             }
             appendLine("2. Read the whole song first. Keep one consistent narrator voice, speech level and tone across all lines.")
             val (casualHint, politeHint) = registerHints(target)
@@ -714,7 +724,7 @@ object LyricsTranslation {
         }
     }
 
-    private fun readingInstruction(target: String, count: Int, keyed: Boolean): String {
+    private fun readingInstruction(target: String, count: Int, shape: AnswerShape): String {
         val locale = Locale.forLanguageTag(target.replace('_', '-'))
         val languageName = locale.getDisplayName(Locale.ENGLISH).ifBlank { target }
         val script = when (canonicalLanguage(target)) {
@@ -733,10 +743,10 @@ object LyricsTranslation {
             appendLine("Context: the listener is playing this song right now and its original lyrics are already on their screen; this reading is shown under each line. It is not published or shared anywhere.")
             appendLine()
             appendLine("Rules:")
-            if (keyed) {
-                appendLine("1. \"translations\" is an object with one key per input line: the line's index \"i\" (\"0\" to \"${count - 1}\") as the key and that one line's reading as the value. All $count keys are required. Never put more than one line in a value, and never merge, split, skip or add lines.")
-            } else {
-                appendLine("1. Return exactly $count readings in \"translations\", one array item per input line, in the same order. Never put several lines in one item, and never merge, split, skip, reorder or add lines.")
+            when (shape) {
+                AnswerShape.KEYED -> appendLine("1. \"translations\" is an object with one key per input line: the line's index \"i\" (\"0\" to \"${count - 1}\") as the key and that one line's reading as the value. All $count keys are required. Never put more than one line in a value, and never merge, split, skip or add lines.")
+                AnswerShape.INDEXED -> appendLine("1. \"translations\" is an array with exactly one item per input line, in order: {\"i\": the input line's index, \"t\": that one line's reading}, for every i from 0 to ${count - 1}. A long line stays one item, however long. Never merge, split, skip, reorder or add lines.")
+                AnswerShape.ARRAY -> appendLine("1. Return exactly $count readings in \"translations\", one array item per input line, in the same order. Never put several lines in one item, and never merge, split, skip, reorder or add lines.")
             }
             appendLine("2. Write the sounds of the original words; never translate them. Read words the way the singer sings them, including the song's own readings of kanji.")
             appendLine("3. A line already written in that script, and names or words a $languageName reader would write as they are, may be kept as they are.")
@@ -784,29 +794,29 @@ object LyricsTranslation {
         reading: Boolean = false,
     ): ClaudeResult<BatchAnswer> {
         val input = translationInput(slots, target)
-        suspend fun ask(keyed: Boolean) = askClaude(
+        suspend fun ask(shape: AnswerShape) = askClaude(
             purpose = if (reading) ClaudeDiagnostics.PURPOSE_READING else ClaudeDiagnostics.PURPOSE_TRANSLATE,
             model = model,
-            system = if (reading) readingInstruction(target, slots.size, keyed) else translationInstruction(target, slots.size, keyed),
+            system = if (reading) readingInstruction(target, slots.size, shape) else translationInstruction(target, slots.size, shape),
             input = input,
-            schema = if (keyed) keyedTranslationSchema(slots.size) else TRANSLATION_SCHEMA,
+            schema = schemaFor(shape, slots.size),
             effort = "medium",
             linesAsked = slots.size,
-        ) { text -> parseTranslation(text, slots.map { it.text }, keyed) }
+        ) { text -> parseTranslation(text, slots.map { it.text }, shape) }
         // One required key per line holds the answer to the line count: the
         // structured output cannot end until every line has its own value,
         // which an array — any length satisfies "an array of strings" — never
         // did. A schema that large may still be refused for a very long song;
-        // the array, with the split-up repair in [parseTranslation], is then
-        // the next best thing.
+        // the numbered array, where a line split in two keeps its number and
+        // is joined back, is then the next best thing.
         // Once the per-line schema has been refused for a song this long, a
         // longer one is asked with the array straight away: the refusal costs
         // nothing, but it is a round trip before every translation.
-        if (slots.size > MAX_KEYED_LINES || slots.size >= keyedRefusedFrom) return ask(keyed = false)
-        val keyed = ask(keyed = true)
+        if (slots.size > MAX_KEYED_LINES || slots.size >= keyedRefusedFrom) return ask(AnswerShape.INDEXED)
+        val keyed = ask(AnswerShape.KEYED)
         if (keyed.failure != ClaudeFailure.BAD_REQUEST) return keyed
         keyedRefusedFrom = minOf(keyedRefusedFrom, slots.size)
-        return ask(keyed = false)
+        return ask(AnswerShape.INDEXED)
     }
 
     /** The user's turn of a translation or reading request: the lines, numbered, each with its role. */
@@ -865,6 +875,44 @@ object LyricsTranslation {
             add("translations")
         }
         put("additionalProperties", false)
+    }
+
+    private fun schemaFor(shape: AnswerShape, count: Int): JsonObject = when (shape) {
+        AnswerShape.KEYED -> keyedTranslationSchema(count)
+        AnswerShape.INDEXED -> INDEXED_TRANSLATION_SCHEMA
+        AnswerShape.ARRAY -> TRANSLATION_SCHEMA
+    }
+
+    /** `{"source_language", "declined_reason", "translations": [{"i": 0, "t": "..."}, …]}`; see [AnswerShape.INDEXED]. */
+    private val INDEXED_TRANSLATION_SCHEMA: JsonObject by lazy {
+        buildJsonObject {
+            put("type", "object")
+            putJsonObject("properties") {
+                putJsonObject("source_language") { put("type", "string") }
+                putJsonObject("declined_reason") { put("type", "string") }
+                putJsonObject("translations") {
+                    put("type", "array")
+                    putJsonObject("items") {
+                        put("type", "object")
+                        putJsonObject("properties") {
+                            putJsonObject("i") { put("type", "integer") }
+                            putJsonObject("t") { put("type", "string") }
+                        }
+                        putJsonArray("required") {
+                            add("i")
+                            add("t")
+                        }
+                        put("additionalProperties", false)
+                    }
+                }
+            }
+            putJsonArray("required") {
+                add("source_language")
+                add("declined_reason")
+                add("translations")
+            }
+            put("additionalProperties", false)
+        }
     }
 
     private val TRANSLATION_SCHEMA: JsonObject by lazy {
@@ -1126,7 +1174,7 @@ object LyricsTranslation {
             .takeIf { it.isNotEmpty() }
     }.getOrNull()
 
-    private fun parseTranslation(text: String, sources: List<String>, keyed: Boolean): Parsed<BatchAnswer> {
+    internal fun parseTranslation(text: String, sources: List<String>, answerShape: AnswerShape): Parsed<BatchAnswer> {
         val expected = sources.size
         val answer = runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull()
             ?: return Parsed(null, ClaudeFailure.BAD_ANSWER, detail = "not a JSON object (${text.length} chars)")
@@ -1142,7 +1190,7 @@ object LyricsTranslation {
 
         val field = answer["translations"]
         val translations: List<String> = when {
-            keyed && field is JsonObject -> {
+            answerShape == AnswerShape.KEYED && field is JsonObject -> {
                 val values = (0 until expected).map { primitive(field[it.toString()]) }
                 val missing = values.indices.filter { values[it] == null }
                 if (missing.isNotEmpty()) {
@@ -1163,6 +1211,33 @@ object LyricsTranslation {
                     )
                 }
                 lines
+            }
+            field is kotlinx.serialization.json.JsonArray && field.any { it is JsonObject } -> {
+                // Numbered items: each line's translation under its own index.
+                // A line the model split keeps its number twice and is joined
+                // back; a number out of range or missing means it lost count.
+                val byIndex = HashMap<Int, MutableList<String>>()
+                var outOfRange = 0
+                field.forEach { element ->
+                    val item = element as? JsonObject ?: return@forEach
+                    val index = (item["i"] as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull?.trim()?.toIntOrNull()
+                    val value = primitive(item["t"]).orEmpty()
+                    if (index == null || index !in 0 until expected) {
+                        outOfRange++
+                    } else {
+                        byIndex.getOrPut(index) { mutableListOf() }.add(value)
+                    }
+                }
+                val missing = (0 until expected).filter { it !in byIndex }
+                val joined = byIndex.count { it.value.size > 1 }
+                val shape = "items=${field.size}, joined=$joined, out of range=$outOfRange, missing=${missing.size}"
+                if (missing.isNotEmpty() || outOfRange > 0) {
+                    return Parsed(null, ClaudeFailure.LINE_MISMATCH, linesGot = expected - missing.size, detail = shape)
+                }
+                val lines = (0 until expected).map { index ->
+                    byIndex.getValue(index).filter { it.isNotBlank() }.joinToString(" ").replace('\n', ' ').trim()
+                }
+                return finishTranslation(lines, sources, source, text, detail = if (joined > 0) "repaired: $shape" else null)
             }
             field is kotlinx.serialization.json.JsonArray -> {
                 val items = field.map { primitive(it).orEmpty() }
@@ -1764,6 +1839,8 @@ object LyricsTranslation {
         val target: String,
         val model: String,
         val keyed: Boolean,
+        /** Asked as the numbered array ([AnswerShape.INDEXED]); false for a batch sent before it. */
+        val indexed: Boolean = false,
         /** The lines as sent. Kept on the device until the answer is filed, never logged. */
         val sources: List<String>,
         /** The style a translation was asked in, for [storedAnswers]; empty for a pronunciation. */
@@ -1812,15 +1889,15 @@ object LyricsTranslation {
         // A batch has no second try. The player asks with one key per line
         // first and, when the API refuses that schema as an invalid request
         // (as it does for a song of ordinary length), asks again with the
-        // array; a batch sent with the per-line schema came back refused for
-        // every song. So a batch asks the way the player's request succeeds:
-        // the array, with [parseTranslation]'s repair for a line split in two.
-        val keyed = false
+        // numbered array; a batch sent with the per-line schema came back
+        // refused for every song. So a batch asks the way the player's request
+        // succeeds: the numbered array, where a line split in two is joined back.
+        val shape = AnswerShape.INDEXED
         val params = claudeBody(
             model = model,
-            system = if (reading) readingInstruction(target, slots.size, keyed) else translationInstruction(target, slots.size, keyed),
+            system = if (reading) readingInstruction(target, slots.size, shape) else translationInstruction(target, slots.size, shape),
             input = translationInput(slots, target),
-            schema = if (keyed) keyedTranslationSchema(slots.size) else TRANSLATION_SCHEMA,
+            schema = schemaFor(shape, slots.size),
             effort = "medium",
         )
         val item = AheadItem(
@@ -1831,7 +1908,8 @@ object LyricsTranslation {
             aheadKey = aheadKey(prefix, target),
             target = target,
             model = model,
-            keyed = keyed,
+            keyed = false,
+            indexed = true,
             sources = slots.map { it.text },
             speech = if (reading) "" else translationSpeech,
             mode = if (reading) "" else translationMode,
@@ -2185,7 +2263,15 @@ object LyricsTranslation {
         }
         val answer = claudeText(message) ?: return out(ClaudeFailure.BAD_ANSWER, "no text block in the answer")
         val parsed = try {
-            parseTranslation(answer, item.sources, item.keyed)
+            parseTranslation(
+                answer,
+                item.sources,
+                when {
+                    item.keyed -> AnswerShape.KEYED
+                    item.indexed -> AnswerShape.INDEXED
+                    else -> AnswerShape.ARRAY
+                },
+            )
         } catch (error: Exception) {
             Parsed<BatchAnswer>(null, ClaudeFailure.BAD_ANSWER, detail = error.toString())
         }

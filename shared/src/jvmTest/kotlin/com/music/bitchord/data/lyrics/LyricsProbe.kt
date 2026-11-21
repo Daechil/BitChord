@@ -34,10 +34,19 @@ class LyricsProbe {
 
     private suspend fun probeOne(query: String, out: StringBuilder) {
         out.append("## ").append(query).append("\n\n")
-        val song = runCatching {
-            YtMusicRepository.search(query, SearchFilter.SONGS).getOrNull().orEmpty()
-                .firstNotNullOfOrNull { (it as? SearchResult.Track)?.song ?: (it as? SearchResult.TopTrack)?.song }
-        }.getOrNull()
+        // "query#N": the Nth song YouTube Music lists, for a song uploaded more than once.
+        val pick = query.substringAfterLast('#', "").toIntOrNull()?.coerceAtLeast(1) ?: 1
+        val asked = if (query.contains('#')) query.substringBeforeLast('#').trim() else query
+        val songs = runCatching {
+            YtMusicRepository.search(asked, SearchFilter.SONGS).getOrNull().orEmpty()
+                .mapNotNull { (it as? SearchResult.Track)?.song ?: (it as? SearchResult.TopTrack)?.song }
+        }.getOrDefault(emptyList())
+        if (pick == 1 && songs.size > 1) {
+            out.append("YouTube Music lists: ")
+            out.append(songs.take(6).joinToString(" · ") { "`${cell(it.title)}` — `${cell(it.artist)}` (${it.durationMillis() / 1000}s)" })
+            out.append("\n\n")
+        }
+        val song = songs.getOrNull(pick - 1)
         if (song == null) {
             out.append("YouTube Music search failed\n\n")
             return

@@ -10,6 +10,10 @@ on:
         description: 'Songs to look at closely instead, separated by semicolons, e.g. Worlds Smallest Violin AJR'
         required: false
         default: ''
+      radio:
+        description: 'Radio seeds to check for songs held to be one, separated by semicolons'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -30,7 +34,7 @@ jobs:
           cache: gradle
 
       - name: Check
-        if: inputs.probe == ''
+        if: inputs.probe == '' && inputs.radio == ''
         env:
           LIVE_LYRICS: '1'
           LIVE_LYRICS_REPORT: ${{ github.workspace }}/live-lyrics.md
@@ -42,6 +46,13 @@ jobs:
           LIVE_PROBE: ${{ inputs.probe }}
           LIVE_LYRICS_REPORT: ${{ github.workspace }}/live-lyrics.md
         run: ./gradlew :shared:jvmTest --tests 'com.music.bitchord.data.lyrics.LyricsProbe' --rerun --no-daemon
+
+      - name: Radio
+        if: inputs.radio != ''
+        env:
+          LIVE_RADIO: ${{ inputs.radio }}
+          LIVE_LYRICS_REPORT: ${{ github.workspace }}/live-lyrics.md
+        run: ./gradlew :shared:jvmTest --tests 'com.music.bitchord.playback.RadioDedupeProbe' --rerun --no-daemon
 
       - name: Report
         if: always()

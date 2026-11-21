@@ -83,4 +83,60 @@ class QueueBuilderSameSongTest {
         )
         assertEquals(listOf("a", "c"), extra.map { it.videoId })
     }
+
+    @Test
+    fun `two producers' miku songs are not one song for sharing the voice`() = assertFalse(
+        QueueBuilder.isSameRecording(
+            song("a", "砂の惑星", "Kenshi Yonezu 및 Hatsune Miku", "3:56"),
+            song("b", "Machine Love (feat. Hatsune Miku)", "Jamie Paige, Hatsune Miku", "3:56"),
+        ),
+    )
+
+    @Test
+    fun `a cover over the original's backing track is not the original`() = assertFalse(
+        QueueBuilder.isSameRecording(
+            song("a", "テトリス", "Hiiragi Magnetite", "2:47"),
+            song("b", "テトリス", "Some Utaite", "2:47"),
+        ),
+    )
+
+    @Test
+    fun `part one and part two are two tracks`() = assertFalse(
+        QueueBuilder.isSameRecording(
+            song("a", "Overture - Act 1", "Composer", "3:00"),
+            song("b", "Overture - Act 2", "Composer", "3:00"),
+        ),
+    )
+
+    @Test
+    fun `one title holding the other's name is one song by one maker`() = assertTrue(
+        QueueBuilder.isSameRecording(
+            song("a", "テトリス", "Hiiragi Magnetite", "2:47"),
+            song("b", "テトリス - Tetoris", "Hiiragi Magnetite", "2:47"),
+        ),
+    )
+
+    @Test
+    fun `a label shared by both is not a maker`() = assertFalse(
+        QueueBuilder.isSameRecording(
+            song("a", "どこまでも", "Disney", "2:42"),
+            song("b", "Let It Go", "Disney", "2:42"),
+        ),
+    )
+
+    @Test
+    fun `the maker's upload in its own language is the one kept`() {
+        val seed = song("s", "Machine Love", "Jamie Paige", "3:00")
+        val extra = QueueBuilder.extend(
+            existing = listOf(seed),
+            candidates = listOf(
+                song("en", "I'm Glad You're Evil Too (feat. Hatsune Miku)", "PinocchioP", "3:52"),
+                song("voice", "テトリス - Tetoris (feat. Kasane Teto)", "Kasane Teto", "2:47"),
+                song("ja", "きみも悪い人でよかった", "PinocchioP", "3:52"),
+                song("maker", "テトリス - Tetoris", "Hiiragi Magnetite", "2:47"),
+            ),
+            limit = 10,
+        )
+        assertEquals(listOf("ja", "maker"), extra.map { it.videoId })
+    }
 }

@@ -40,7 +40,9 @@ object QueueBuilder {
      * already queued, nothing repeated, at most [limit] tracks.
      */
     fun extend(existing: List<Song>, candidates: List<Song>, limit: Int, preferVideos: Boolean = false): List<Song> {
-        val taken = existing.toMutableList()
+        // Worked out once per song rather than once per comparison: [existing]
+        // is the whole queue, hundreds of songs, and this runs on the main thread.
+        val taken = existing.mapTo(mutableListOf(), ::Key)
         val perArtist = mutableMapOf<String, Int>()
         val seedArtists = existing.lastOrNull()?.artist?.let(::artistSet).orEmpty()
         val out = mutableListOf<Song>()
@@ -59,25 +61,33 @@ object QueueBuilder {
             preferVideos -> candidates
             else -> songsOnly.ifEmpty { candidates }
         }
+        val keys = ordered.map(::Key)
+        // Of two uploads of one song among the candidates, the one in its own
+        // language and under its maker's name stays, wherever the mix put it.
+        val passedOver = keys.indices.filterTo(HashSet()) { i ->
+            keys.indices.any { j -> j != i && preferred(keys[j], keys[i]) && same(keys[i], keys[j]) }
+        }
 
-        for (candidate in ordered) {
+        for ((index, candidate) in ordered.withIndex()) {
             if (out.size >= limit) break
-            if (taken.any { isSameRecording(it, candidate) }) continue
+            if (index in passedOver) continue
+            val key = keys[index]
+            if (taken.any { same(it, key) }) continue
 
             val artists = artistSet(candidate.artist)
-            val key = artists.minOrNull()
-            if (key != null) {
+            val capKey = artists.minOrNull()
+            if (capKey != null) {
                 val cap = if (artists.any { it in seedArtists }) {
                     SEED_ARTIST_LIMIT
                 } else {
                     PER_ARTIST_LIMIT
                 }
-                val played = perArtist[key] ?: 0
+                val played = perArtist[capKey] ?: 0
                 if (played >= cap) continue
-                perArtist[key] = played + 1
+                perArtist[capKey] = played + 1
             }
 
-            taken += candidate
+            taken += key
             out += candidate
         }
         return out
@@ -87,61 +97,75 @@ object QueueBuilder {
      * Whether two entries are the same recording. Ids differ between the audio
      * and video cuts of a track, which is exactly the case id equality misses.
      */
-    fun isSameRecording(a: Song, b: Song): Boolean {
-        if (a.videoId == b.videoId) return true
-        val titleA = normalisedTitle(a.title)
-        val titleB = normalisedTitle(b.title)
-        if (titleA.isNotEmpty() && titleA == titleB) {
+    fun isSameRecording(a: Song, b: Song): Boolean = same(Key(a), Key(b))
+
+    /** What a comparison reads of a song, worked out once. */
+    private class Key(song: Song) {
+        val id = song.videoId
+        val title = normalisedTitle(song.title)
+        val pieces = titlePieces(song.title)
+        val version = SongMatch.versionOf(song.title)
+        val latin = latinOnly(title)
+        val artists = artistSet(song.artist)
+        /** The credit that names who made it: the first one that is not a voice or a label. */
+        val lead = artists.firstOrNull { it !in NOT_THE_MAKER }
+        /** The lead's channel, where the lead is the maker rather than a voice. */
+        val leadId = song.artistId?.takeIf { lead != null && artists.firstOrNull() == lead }
+        /**
+         * Billed to the voice it is sung by — Kasane Teto's channel carrying
+         * Hiiragi Magnetite's "Tetoris" — so the credit says nothing of who made it.
+         */
+        val voiceBilled = artists.isNotEmpty() && artists.all { it in NOT_THE_MAKER }
+        val ms = song.durationMillis()
+    }
+
+    private fun same(a: Key, b: Key): Boolean {
+        if (a.id == b.id) return true
+        if (a.title.isNotEmpty() && a.title == b.title) {
             // One shared name is enough. The two cuts of a track get billed in
             // whatever order the upload used — "Pritam, Arijit Singh & Shilpa Rao"
             // against "Shilpa Rao, Arijit Singh, & Pritam" is one song, twice.
-            if (sameArtist(a, b)) return true
-            // The same title under another name and the same length: the
-            // producer's upload and the voice's — "テトリス - Tetoris" by Hiiragi
-            // Magnetite and by Kasane Teto. A cover with the same title is
-            // rarely the same length to the second.
-            return closeLength(a, b, SAME_TITLE_GAP_SECONDS)
+            if (a.artists.isEmpty() || b.artists.isEmpty() || a.artists.any { it in b.artists }) return true
+            // The same title under another credit is one song only where a
+            // credit cannot be trusted — one upload billed to the voice that
+            // sings it — and the two are the same length to the second. A
+            // cover over the original's backing track is just as long, so the
+            // length alone is not enough.
+            return (a.voiceBilled || b.voiceBilled) && closeLength(a, b, SAME_LENGTH_SECONDS)
         }
         // Past this point nothing in the two names agrees outright, so a
         // remix, a live cut or an acoustic take must say the same of both.
-        if (SongMatch.versionOf(a.title) != SongMatch.versionOf(b.title)) return false
-        // The song's name written another way by the same artist — its
-        // Japanese and English titles ("きみも悪い人でよかった" and "I'm Glad
-        // You're Evil Too"), or a localised artist name on one of them
-        // ("YOASOBI" and "요아소비") — at the same length.
-        if (titleA.isNotEmpty() && titleB.isNotEmpty() && otherScript(titleA, titleB) &&
-            sameArtist(a, b) && closeLength(a, b, OTHER_SCRIPT_GAP_SECONDS)
+        if (a.version != b.version) return false
+        val sameMaker = sameLead(a, b)
+        // "テトリス - Tetoris" against "テトリス": one title holds the other's
+        // every name. "Part 1" and "Part 2" share a name but neither holds the other.
+        if (a.pieces.isNotEmpty() && b.pieces.isNotEmpty() && a.pieces != b.pieces &&
+            (b.pieces.containsAll(a.pieces) || a.pieces.containsAll(b.pieces))
         ) {
-            return true
+            return sameMaker || ((a.voiceBilled || b.voiceBilled) && closeLength(a, b, SAME_LENGTH_SECONDS))
         }
-        // "テトリス - Tetoris" against "テトリス": one name of the two in the title.
-        val piecesA = titlePieces(a.title)
-        val piecesB = titlePieces(b.title)
-        if ((piecesA.size > 1 || piecesB.size > 1) && piecesA.any { it in piecesB }) {
-            return sameArtist(a, b) || closeLength(a, b, SAME_TITLE_GAP_SECONDS)
-        }
-        return false
+        // The song's name written another way by the same maker — its Japanese
+        // and English titles ("きみも悪い人でよかった" and "I'm Glad You're
+        // Evil Too"), or the maker under a localised name ("YOASOBI" and
+        // "요아소비", one channel) — at the same length, to the second.
+        return a.title.isNotEmpty() && b.title.isNotEmpty() && a.latin != b.latin &&
+            sameMaker && closeLength(a, b, SAME_LENGTH_SECONDS)
+    }
+
+    /** One maker, by name or by channel; a voice or a label shared by thousands of songs is not one. */
+    private fun sameLead(a: Key, b: Key): Boolean =
+        (a.lead != null && a.lead == b.lead) || (a.leadId != null && a.leadId == b.leadId)
+
+    /** Which of two uploads of one song a station keeps: the maker's over the voice's, its own language over a translation. */
+    private fun preferred(keep: Key, over: Key): Boolean = when {
+        keep.voiceBilled != over.voiceBilled -> !keep.voiceBilled
+        keep.latin != over.latin -> !keep.latin
+        else -> false
     }
 
     /** Lengths within [seconds] of each other; false where either is unknown. */
-    private fun closeLength(a: Song, b: Song, seconds: Double): Boolean {
-        val left = a.durationMillis()
-        val right = b.durationMillis()
-        return left > 0 && right > 0 && kotlin.math.abs(left - right) <= seconds * 1000
-    }
-
-    /** One credited artist in common, by name or by channel. Either side without a credit counts. */
-    private fun sameArtist(a: Song, b: Song): Boolean {
-        val left = artistSet(a.artist)
-        val right = artistSet(b.artist)
-        if (left.isEmpty() || right.isEmpty() || left.any { it in right }) return true
-        val idsA = (a.artists.mapNotNull { it.browseId } + listOfNotNull(a.artistId)).toSet()
-        val idsB = (b.artists.mapNotNull { it.browseId } + listOfNotNull(b.artistId)).toSet()
-        return idsA.any { it in idsB }
-    }
-
-    /** One title in Latin letters and the other not: a translation or a reading, not a coincidence of spelling. */
-    private fun otherScript(a: String, b: String): Boolean = latinOnly(a) != latinOnly(b)
+    private fun closeLength(a: Key, b: Key, seconds: Double): Boolean =
+        a.ms > 0 && b.ms > 0 && kotlin.math.abs(a.ms - b.ms) <= seconds * 1000
 
     private fun latinOnly(value: String): Boolean {
         val letters = value.filter { it.isLetter() }
@@ -156,11 +180,24 @@ object QueueBuilder {
             .filter { it.length >= 2 }
             .toSet()
 
-    /** Same title, another credit: how close in length makes it one recording. */
-    private const val SAME_TITLE_GAP_SECONDS = 2.0
+    /** YouTube gives lengths in whole seconds: one second apart is the same length rounded two ways. */
+    private const val SAME_LENGTH_SECONDS = 1.0
 
-    /** Same artist, the title in another script: closer still, as nothing in the names agrees. */
-    private const val OTHER_SCRIPT_GAP_SECONDS = 1.5
+    /**
+     * Credits that name the voice a song is sung by, or the label it came out
+     * on, rather than who made it: shared by thousands of songs, they say
+     * nothing about whether two are one.
+     */
+    private val NOT_THE_MAKER = setOf(
+        "hatsune miku", "初音ミク", "하츠네 미쿠", "miku",
+        "kasane teto", "重音テト", "카사네 테토", "teto",
+        "kagamine rin", "鏡音リン", "kagamine len", "鏡音レン", "kagamine rin len",
+        "megurine luka", "巡音ルカ", "kaito", "meiko", "gumi", "ia", "flower", "v flower",
+        "kafu", "可不", "kaai yuki", "yuzuki yukari", "結月ゆかり",
+        "otomachi una", "音街ウナ", "zundamon", "ずんだもん", "kotonoha akane", "kotonoha aoi",
+        "vocaloid", "utau", "synthesizer v",
+        "various artists", "verschiedene interpreten", "disney", "walt disney records",
+    )
 
     /**
      * `Kesariya (From "Brahmastra") | Official Video` and `Kesariya` are one
@@ -177,7 +214,8 @@ object QueueBuilder {
     /** The cast behind a credit, split out so billing order stops mattering. */
     fun artistSet(raw: String): Set<String> = raw.lowercase(Locale.ROOT)
         .replace(TOPIC, " ")
-        .split(",", "&", "·", "•", ";", " feat", " ft.", " ft ", " x ", " with ")
+        // " 및 " and "、" are how YouTube Music bills two artists in Korean and Japanese.
+        .split(",", "&", "·", "•", ";", "、", " 및 ", " feat", " ft.", " ft ", " x ", " with ")
         .map { it.replace(PUNCTUATION, " ").replace(SPACES, " ").trim() }
         .filter { it.isNotEmpty() }
         .toSet()

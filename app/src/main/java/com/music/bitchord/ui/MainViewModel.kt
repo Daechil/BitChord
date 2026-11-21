@@ -2985,6 +2985,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             // Only once the first page is on screen: [fillIn] appends to it,
             // and has nothing to append to before this.
+            if (browseId.startsWith("VL")) {
+                com.music.bitchord.data.TrackLog.d(
+                    "BitChord",
+                    "playlist page: signedIn=${authStore.isSignedIn} suggested=${suggested.size} " +
+                        "refresh=${suggestionsToken != null} more=${more != null}",
+                    about = null,
+                )
+            }
             more?.let { fillIn(browseId, it, thumbnailUrl ?: artwork) }
         }
     }
@@ -3218,7 +3226,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             delay(150)
             var next: String? = token
             while (next != null) {
-                val fetched = YtMusicRepository.moreSongs(next, playlist = browseId.startsWith("VL")).getOrNull() ?: return@launch
+                val playlistPage = browseId.startsWith("VL")
+                val result = YtMusicRepository.moreSongs(next, playlist = playlistPage)
+                if (playlistPage) {
+                    val page = result.getOrNull()
+                    com.music.bitchord.data.TrackLog.d(
+                        "BitChord",
+                        if (page == null) {
+                            "playlist fill-in: failed (${result.exceptionOrNull()?.javaClass?.simpleName})"
+                        } else {
+                            "playlist fill-in: songs=${page.songs.size} suggested=${page.suggested.size} " +
+                                "refresh=${page.suggestionsToken != null} next=${page.continuation != null}"
+                        },
+                        about = null,
+                    )
+                }
+                val fetched = result.getOrNull() ?: return@launch
                 // Repository calls may finish after cancellation. Do not let
                 // an in-flight UI page append after the playback service has
                 // taken the continuation over.

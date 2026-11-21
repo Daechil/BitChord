@@ -136,3 +136,29 @@ fun LyricsSubSizeRow(title: String) {
         ),
     )
 }
+
+/**
+ * How much of Android's 25 MB Auto Backup this app's data takes, worked out
+ * when the row is shown. Past the limit Android backs up nothing for the app.
+ */
+@androidx.compose.runtime.Composable
+fun AutoBackupSizeRow(title: String) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val bytes by androidx.compose.runtime.produceState<Long?>(null) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            com.music.bitchord.data.BackupBudget.estimate(context)
+        }
+    }
+    val size = bytes
+    val megabytes = size?.let { String.format(java.util.Locale.ROOT, "%.1f MB", it / (1024.0 * 1024.0)) }
+    com.music.bitchord.ui.screens.SettingsRow(
+        icon = com.music.bitchord.ui.icons.SfIcons.FileUpload,
+        title = title,
+        subtitle = when {
+            megabytes == null -> androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.auto_backup_size_counting)
+            size >= com.music.bitchord.data.BackupBudget.LIMIT_BYTES * 9 / 10 ->
+                androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.auto_backup_size_near, megabytes)
+            else -> androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.auto_backup_size_subtitle, megabytes)
+        },
+    )
+}

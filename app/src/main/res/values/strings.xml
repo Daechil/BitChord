@@ -838,6 +838,10 @@ Adding: %4$s
     <string name="lyrics_sub_size_small">Small</string>
     <string name="lyrics_sub_size_normal">Normal</string>
     <string name="lyrics_sub_size_large">Large</string>
+    <string name="auto_backup_size">Android backup</string>
+    <string name="auto_backup_size_counting">Counting…</string>
+    <string name="auto_backup_size_subtitle">About %1$s of 25 MB · music files, models and caches are left out</string>
+    <string name="auto_backup_size_near">About %1$s of 25 MB · close to the limit; back up translations as a zip too</string>
     <string name="ko_window_summary">Summary</string>
     <string name="ko_window_songs">Songs · %1$d</string>
     <string name="ko_window_space">Space used</string>

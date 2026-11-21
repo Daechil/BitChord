@@ -799,6 +799,10 @@
     <string name="lyrics_sub_size_small">작게</string>
     <string name="lyrics_sub_size_normal">보통</string>
     <string name="lyrics_sub_size_large">크게</string>
+    <string name="auto_backup_size">안드로이드 자동 백업</string>
+    <string name="auto_backup_size_counting">계산하는 중…</string>
+    <string name="auto_backup_size_subtitle">약 %1$s / 25MB · 음악 파일·모델·캐시는 빼고 백업해요</string>
+    <string name="auto_backup_size_near">약 %1$s / 25MB · 한도에 가까워요. 번역은 zip으로도 백업해 두세요</string>
     <string name="ko_window_summary">요약</string>
     <string name="ko_window_songs">곡 · %1$d곡</string>
     <string name="ko_window_space">사용 공간</string>

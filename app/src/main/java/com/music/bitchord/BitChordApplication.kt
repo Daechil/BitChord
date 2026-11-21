@@ -144,6 +144,9 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory, Configu
                 ?.let { Innertube.selectChannel(it.pageId, it.dataSyncId, it.authUser) }
             CoroutineScope(Dispatchers.IO).launch { Innertube.ensureSessionScope() }
         }
+        // Before the settings and the downloads list are read: after a restore
+        // from a backup, they must not point at files this phone does not have.
+        com.music.bitchord.data.RestoreGuard.check(this)
         AppSettings.init(this, authStore)
         // Restores the addon token, so the first search after a process restart
         // doesn't have to attest the device again.

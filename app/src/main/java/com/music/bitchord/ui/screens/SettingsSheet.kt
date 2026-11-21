@@ -2088,6 +2088,10 @@ fun SettingsScreen(
                     onClick = { confirmImport = true },
                 )
             }
+            val autoBackupTitle = stringResource(R.string.auto_backup_size)
+            row(autoBackupTitle, "backup", "google", "drive", "백업", "자동") {
+                com.music.bitchord.ui.components.AutoBackupSizeRow(autoBackupTitle)
+            }
         }
 
         // No footer: it only restated the stop-on-close row's own subtitle,

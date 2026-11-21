@@ -17,6 +17,28 @@
         <exclude domain="sharedpref" path="bitchord_last_played.xml" />
         <exclude domain="sharedpref" path="bitchord_bounded_context.xml" />
         <exclude domain="sharedpref" path="bitchord_party_queue_stash.xml" />
+        <!-- Heavy, or made again on the phone: Auto Backup stops at 25 MB and then skips the whole app,
+             so music files, models, caches and analyses are left out and the paid-for translations fit. -->
+        <exclude domain="file" path="beat_this_final0_q8.onnx" />
+        <exclude domain="file" path="vocals_umxhq_int8.onnx" />
+        <exclude domain="file" path="beat_this_int8.onnx" />
+        <exclude domain="file" path="downloads" />
+        <exclude domain="file" path="offline-hls" />
+        <exclude domain="file" path="download-artwork" />
+        <exclude domain="file" path="waveforms" />
+        <exclude domain="file" path="waveforms_played" />
+        <exclude domain="file" path="smart_analysis" />
+        <exclude domain="file" path="innertubex_players" />
+        <exclude domain="file" path="translate_ahead/download_waiting.json" />
+        <exclude domain="database" path="exoplayer_internal.db" />
+        <exclude domain="database" path="exoplayer_internal.db-journal" />
+        <exclude domain="database" path="exoplayer_internal.db-wal" />
+        <exclude domain="database" path="exoplayer_internal.db-shm" />
+        <exclude domain="root" path="app_webview" />
+        <exclude domain="root" path="app_textures" />
+        <exclude domain="sharedpref" path="innertubex_player_config.xml" />
+        <exclude domain="sharedpref" path="audio_cache_state.xml" />
+        <exclude domain="sharedpref" path="bitchord_addon_auth.xml" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="bitchord_auth.xml" />
@@ -31,5 +53,27 @@
         <exclude domain="sharedpref" path="bitchord_last_played.xml" />
         <exclude domain="sharedpref" path="bitchord_bounded_context.xml" />
         <exclude domain="sharedpref" path="bitchord_party_queue_stash.xml" />
+        <!-- Heavy, or made again on the phone: Auto Backup stops at 25 MB and then skips the whole app,
+             so music files, models, caches and analyses are left out and the paid-for translations fit. -->
+        <exclude domain="file" path="beat_this_final0_q8.onnx" />
+        <exclude domain="file" path="vocals_umxhq_int8.onnx" />
+        <exclude domain="file" path="beat_this_int8.onnx" />
+        <exclude domain="file" path="downloads" />
+        <exclude domain="file" path="offline-hls" />
+        <exclude domain="file" path="download-artwork" />
+        <exclude domain="file" path="waveforms" />
+        <exclude domain="file" path="waveforms_played" />
+        <exclude domain="file" path="smart_analysis" />
+        <exclude domain="file" path="innertubex_players" />
+        <exclude domain="file" path="translate_ahead/download_waiting.json" />
+        <exclude domain="database" path="exoplayer_internal.db" />
+        <exclude domain="database" path="exoplayer_internal.db-journal" />
+        <exclude domain="database" path="exoplayer_internal.db-wal" />
+        <exclude domain="database" path="exoplayer_internal.db-shm" />
+        <exclude domain="root" path="app_webview" />
+        <exclude domain="root" path="app_textures" />
+        <exclude domain="sharedpref" path="innertubex_player_config.xml" />
+        <exclude domain="sharedpref" path="audio_cache_state.xml" />
+        <exclude domain="sharedpref" path="bitchord_addon_auth.xml" />
     </device-transfer>
 </data-extraction-rules>

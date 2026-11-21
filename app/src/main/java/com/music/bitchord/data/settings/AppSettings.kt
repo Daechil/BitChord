@@ -3027,6 +3027,7 @@ object AppSettings {
      * Downloads page would read as empty while the space stayed used.
      */
     private val DEVICE_LOCAL = setOf(
+        com.music.bitchord.data.RestoreGuard.KEY_INSTALL_TOKEN,
         "downloaded_tracks",
         "downloaded_tracks_metadata",
         "downloaded_collections",

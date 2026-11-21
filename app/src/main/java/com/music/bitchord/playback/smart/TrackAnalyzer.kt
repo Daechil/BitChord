@@ -93,13 +93,22 @@ class TrackAnalyzer(private val context: Context, private val cache: AudioCache)
      * became shared with the desktop build, which unpacks from the jar instead.
      */
     private fun unpackedAsset(name: String): String {
-        val file = java.io.File(context.filesDir, name)
-        if (!file.exists() || file.length() == 0L) {
-            context.assets.open(name).use { input ->
-                file.outputStream().use { output -> input.copyTo(output) }
-            }
-        }
-        return file.absolutePath
+        // Out of the files that Auto Backup carries (32 MB of weights would
+        // put the whole backup over its limit), and copies left there by
+        // earlier builds go.
+        java.io.File(context.filesDir, name).delete()
+        val updated = runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime
+        }.getOrDefault(0L)
+        // Known only where the asset is stored uncompressed; the size check is skipped otherwise.
+        val expected = runCatching { context.assets.openFd(name).use { it.length } }.getOrNull()
+        return ModelUnpack.ensure(
+            dir = java.io.File(context.noBackupFilesDir, "models"),
+            name = name,
+            open = { context.assets.open(name) },
+            expected = expected,
+            notOlderThan = updated,
+        ).absolutePath
     }
 
     /**

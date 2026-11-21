@@ -78,13 +78,32 @@ object BiniLyrics {
     internal fun accepts(hit: Hit, title: String, artist: String, durationMs: Long): Boolean =
         SongMatch.sameSong(title, artist, durationMs, hit.trackName, hit.artistName, hit.duration?.let { if (it > 10_000) it / 1000.0 else it.toDouble() })
 
-    /** Everything the search answered, best guess first, unchecked. */
+    /**
+     * Everything the search answered, best guess first, unchecked. A name with
+     * an apostrophe that finds nothing is asked again without it ("World's" →
+     * "Worlds"): the search reads nothing for a contraction. See [withoutApostrophes].
+     */
     internal suspend fun search(
         title: String,
         artist: String,
         durationMs: Long,
         album: String? = null,
         isrc: String? = null,
+    ): List<Hit> {
+        val first = searchOnce(title, artist, durationMs, album, isrc)
+        if (first.isNotEmpty() || !isrc.isNullOrBlank()) return first
+        val plainTitle = title.withoutApostrophes()
+        val plainArtist = artist.withoutApostrophes()
+        if (plainTitle == title && plainArtist == artist) return first
+        return searchOnce(plainTitle, plainArtist, durationMs, album?.withoutApostrophes(), null)
+    }
+
+    private suspend fun searchOnce(
+        title: String,
+        artist: String,
+        durationMs: Long,
+        album: String?,
+        isrc: String?,
     ): List<Hit> = withContext(Dispatchers.IO) {
         val url = BASE.toHttpUrl().newBuilder()
             .apply {

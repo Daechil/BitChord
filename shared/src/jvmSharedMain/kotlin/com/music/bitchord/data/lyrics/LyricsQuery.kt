@@ -43,6 +43,20 @@ fun String.artistForLyricsSearch(): String =
 
 private val WHITESPACE = Regex("""\s+""")
 
+/**
+ * The name with its apostrophes taken out: "World's" → "Worlds".
+ *
+ * lrc.red's search (and BiniLyrics', which is the same catalogue) finds
+ * nothing for a contraction — "World's Smallest Violin" and "Don't Stop Me
+ * Now" come back empty, straight or curly — while "Worlds" and "Dont" find
+ * the song at once. Asked again this way only when the first search found
+ * nothing, so a name the search does read keeps its own spelling.
+ */
+fun String.withoutApostrophes(): String =
+    replace(APOSTROPHES, "").replace(WHITESPACE, " ").trim()
+
+private val APOSTROPHES = Regex("[\u0027\u2019\u2018\u0060\u00B4\u02BC]")
+
 private val CREDITS = listOf(
     // Bracketed credits: (feat. X), [ft. X], (with X).
     Regex("""\s*[(\[]\s*(feat|ft|featuring|with)\b[^)\]]*[)\]]""", RegexOption.IGNORE_CASE),

@@ -71,13 +71,23 @@ object LrcRed {
         get(url)?.let(TtmlLyrics::parse)?.takeIf { it.isNotEmpty() }
 
     internal fun search(title: String, artist: String, durationMs: Long): Hit? {
-        val url = "${BASE}search.json".toHttpUrl().newBuilder()
-            .addQueryParameter("q", "$title $artist".trim())
-            .build()
-        val body = lyricsGet(url.toString()) ?: return null
-        val hits = runCatching { lyricsJson.decodeFromString<Response>(body) }.getOrNull()?.hits
-            ?: return null
-        return best(hits, title, artist, durationMs)
+        // The search reads nothing for a word with an apostrophe in it; see
+        // [withoutApostrophes]. The hits are still matched against the name as given.
+        return queries(title, artist).firstNotNullOfOrNull { query ->
+            val url = "${BASE}search.json".toHttpUrl().newBuilder()
+                .addQueryParameter("q", query)
+                .build()
+            val body = lyricsGet(url.toString()) ?: return@firstNotNullOfOrNull null
+            val hits = runCatching { lyricsJson.decodeFromString<Response>(body) }.getOrNull()?.hits
+                ?: return@firstNotNullOfOrNull null
+            best(hits, title, artist, durationMs)
+        }
+    }
+
+    /** What the search is asked, in turn: the name as given, then without its apostrophes. */
+    internal fun queries(title: String, artist: String): List<String> {
+        val plain = "$title $artist".trim()
+        return listOf(plain, plain.withoutApostrophes()).distinct()
     }
 
     /**

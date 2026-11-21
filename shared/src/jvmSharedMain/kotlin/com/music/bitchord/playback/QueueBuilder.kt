@@ -1,6 +1,8 @@
 package com.music.bitchord.playback
 
+import com.music.bitchord.data.lyrics.SongMatch
 import com.music.bitchord.data.model.Song
+import com.music.bitchord.data.model.durationMillis
 import java.util.Locale
 
 /**
@@ -87,15 +89,78 @@ object QueueBuilder {
      */
     fun isSameRecording(a: Song, b: Song): Boolean {
         if (a.videoId == b.videoId) return true
-        val title = normalisedTitle(a.title)
-        if (title.isEmpty() || title != normalisedTitle(b.title)) return false
-        // One shared name is enough. The two cuts of a track get billed in
-        // whatever order the upload used — "Pritam, Arijit Singh & Shilpa Rao"
-        // against "Shilpa Rao, Arijit Singh, & Pritam" is one song, twice.
+        val titleA = normalisedTitle(a.title)
+        val titleB = normalisedTitle(b.title)
+        if (titleA.isNotEmpty() && titleA == titleB) {
+            // One shared name is enough. The two cuts of a track get billed in
+            // whatever order the upload used — "Pritam, Arijit Singh & Shilpa Rao"
+            // against "Shilpa Rao, Arijit Singh, & Pritam" is one song, twice.
+            if (sameArtist(a, b)) return true
+            // The same title under another name and the same length: the
+            // producer's upload and the voice's — "テトリス - Tetoris" by Hiiragi
+            // Magnetite and by Kasane Teto. A cover with the same title is
+            // rarely the same length to the second.
+            return closeLength(a, b, SAME_TITLE_GAP_SECONDS)
+        }
+        // Past this point nothing in the two names agrees outright, so a
+        // remix, a live cut or an acoustic take must say the same of both.
+        if (SongMatch.versionOf(a.title) != SongMatch.versionOf(b.title)) return false
+        // The song's name written another way by the same artist — its
+        // Japanese and English titles ("きみも悪い人でよかった" and "I'm Glad
+        // You're Evil Too"), or a localised artist name on one of them
+        // ("YOASOBI" and "요아소비") — at the same length.
+        if (titleA.isNotEmpty() && titleB.isNotEmpty() && otherScript(titleA, titleB) &&
+            sameArtist(a, b) && closeLength(a, b, OTHER_SCRIPT_GAP_SECONDS)
+        ) {
+            return true
+        }
+        // "テトリス - Tetoris" against "テトリス": one name of the two in the title.
+        val piecesA = titlePieces(a.title)
+        val piecesB = titlePieces(b.title)
+        if ((piecesA.size > 1 || piecesB.size > 1) && piecesA.any { it in piecesB }) {
+            return sameArtist(a, b) || closeLength(a, b, SAME_TITLE_GAP_SECONDS)
+        }
+        return false
+    }
+
+    /** Lengths within [seconds] of each other; false where either is unknown. */
+    private fun closeLength(a: Song, b: Song, seconds: Double): Boolean {
+        val left = a.durationMillis()
+        val right = b.durationMillis()
+        return left > 0 && right > 0 && kotlin.math.abs(left - right) <= seconds * 1000
+    }
+
+    /** One credited artist in common, by name or by channel. Either side without a credit counts. */
+    private fun sameArtist(a: Song, b: Song): Boolean {
         val left = artistSet(a.artist)
         val right = artistSet(b.artist)
-        return left.isEmpty() || right.isEmpty() || left.any { it in right }
+        if (left.isEmpty() || right.isEmpty() || left.any { it in right }) return true
+        val idsA = (a.artists.mapNotNull { it.browseId } + listOfNotNull(a.artistId)).toSet()
+        val idsB = (b.artists.mapNotNull { it.browseId } + listOfNotNull(b.artistId)).toSet()
+        return idsA.any { it in idsB }
     }
+
+    /** One title in Latin letters and the other not: a translation or a reading, not a coincidence of spelling. */
+    private fun otherScript(a: String, b: String): Boolean = latinOnly(a) != latinOnly(b)
+
+    private fun latinOnly(value: String): Boolean {
+        val letters = value.filter { it.isLetter() }
+        return letters.isNotEmpty() && letters.all { it.code < 0x250 }
+    }
+
+    /** "テトリス - Tetoris" → its two names, each normalised; a title with one name gives one. */
+    private fun titlePieces(raw: String): Set<String> =
+        raw.substringBefore(" | ").replace(NOISE, " ")
+            .split(" - ", " / ", " – ")
+            .map { normalisedTitle(it) }
+            .filter { it.length >= 2 }
+            .toSet()
+
+    /** Same title, another credit: how close in length makes it one recording. */
+    private const val SAME_TITLE_GAP_SECONDS = 2.0
+
+    /** Same artist, the title in another script: closer still, as nothing in the names agrees. */
+    private const val OTHER_SCRIPT_GAP_SECONDS = 1.5
 
     /**
      * `Kesariya (From "Brahmastra") | Official Video` and `Kesariya` are one
@@ -120,6 +185,8 @@ object QueueBuilder {
     private val NOISE = Regex(
         """\((?:official|lyric|lyrics|lyrical|audio|video|visuali[sz]er|full song|hd|4k)[^)]*\)""" +
             """|\(from[^)]*\)""" +
+            // A credit is not part of the name: "Tetoris (feat. Kasane Teto)" is "Tetoris".
+            """|[(\[]\s*(?:feat|ft|featuring|with)\b[^)\]]*[)\]]""" +
             """|\[[^]]*]""" +
             """|\b(?:official (?:video|audio|music video)|lyrical video|full video|4k video)\b""",
         RegexOption.IGNORE_CASE,

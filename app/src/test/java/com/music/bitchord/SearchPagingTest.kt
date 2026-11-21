@@ -623,6 +623,50 @@ class SearchPagingTest {
     }
 
     @Test
+    fun `suggestions shelf is found whatever language its title is in`() {
+        fun row(id: String, title: String, setId: String?) = """
+            {
+              "musicResponsiveListItemRenderer": {
+                "playlistItemData": { "videoId": "$id"${if (setId != null) ", \"playlistSetVideoId\": \"$setId\"" else ""} },
+                "flexColumns": [
+                  { "musicResponsiveListItemFlexColumnRenderer": { "text": { "runs": [{ "text": "$title" }] } } },
+                  { "musicResponsiveListItemFlexColumnRenderer": { "text": { "runs": [{ "text": "Artist" }, { "text": " • " }, { "text": "3:21" }] } } }
+                ]
+              }
+            }
+        """.trimIndent()
+        val json = """
+        {
+          "contents": {
+            "twoColumnBrowseResultsRenderer": {
+              "secondaryContents": {
+                "sectionListRenderer": {
+                  "contents": [
+                    { "musicPlaylistShelfRenderer": { "contents": [ ${row("own-1", "My song", "SET1")} ] } },
+                    {
+                      "musicShelfRenderer": {
+                        "title": { "runs": [{ "text": "추천" }] },
+                        "contents": [ ${row("sug-1", "Suggested song", null)} ],
+                        "continuations": [ { "reloadContinuationData": { "continuation": "RELOAD_SUGGESTIONS" } } ]
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+        """.trimIndent()
+
+        val page = InnertubeParser.parsePlaylistShelf(Json.parseToJsonElement(json).jsonObject)
+
+        requireNotNull(page)
+        assertEquals(listOf("own-1"), page.songs.map { it.videoId })
+        assertEquals(listOf("sug-1"), page.suggested.map { it.videoId })
+        assertEquals("RELOAD_SUGGESTIONS", page.suggestionsToken)
+    }
+
+    @Test
     fun `album backing playlist comes from the header instead of recommendation shelves`() {
         val json = """
         {

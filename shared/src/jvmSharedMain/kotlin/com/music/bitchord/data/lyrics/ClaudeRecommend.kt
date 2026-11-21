@@ -5,11 +5,13 @@ import com.music.bitchord.data.model.SearchFilter
 import com.music.bitchord.data.model.SearchResult
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.model.durationMillis
+import com.music.bitchord.data.sources.TrackMatcher
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
@@ -43,6 +45,7 @@ object ClaudeRecommend {
     const val BASIS_SONG = "song"
     const val BASIS_QUEUE = "queue"
     const val BASIS_HISTORY = "history"
+    const val BASIS_PLAYLIST = "playlist"
 
     const val NOVELTY_FAMILIAR = "familiar"
     const val NOVELTY_MIXED = "mixed"
@@ -65,8 +68,12 @@ object ClaudeRecommend {
     data class Pick(val song: Song, val reason: String)
 
     sealed interface Outcome {
-        /** [asked] is how many Claude named; [picks] the ones found and playable. */
-        data class Found(val picks: List<Pick>, val asked: Int) : Outcome
+        /**
+         * [asked] is how many Claude named; [picks] the ones found and playable;
+         * [searchFailed] how many YouTube Music searches failed outright, as
+         * opposed to answering with nothing that matched.
+         */
+        data class Found(val picks: List<Pick>, val asked: Int, val searchFailed: Int = 0) : Outcome
         /** Not sent, or no usable answer: [failure] says why. */
         data class Failed(val failure: ClaudeFailure?) : Outcome
     }
@@ -127,43 +134,81 @@ object ClaudeRecommend {
             .filter { it.title.isNotEmpty() && key(it.title, it.artist) !in avoided }
             .distinctBy { key(it.title, it.artist) }
             .take(count)
-        val picks = resolve(suggestions)
-            .distinctBy { it.song.videoId }
-        return Outcome.Found(picks, suggestions.size)
+        val started = System.nanoTime()
+        val lookups = resolve(suggestions)
+        val picks = lookups.mapNotNull { it.pick }.distinctBy { it.song.videoId }
+        val searchFailed = lookups.count { it.searchFailed }
+        // What the lookup made of the answer, beside the request's own entry:
+        // "0 of 20 found" says nothing about whether YouTube Music answered.
+        ClaudeDiagnostics.record(
+            ClaudeDiagnostics.Entry(
+                at = System.currentTimeMillis(),
+                purpose = ClaudeDiagnostics.PURPOSE_RECOMMEND,
+                model = "YouTube Music",
+                failure = if (picks.isEmpty() && suggestions.isNotEmpty()) {
+                    if (searchFailed == suggestions.size) ClaudeFailure.NETWORK.name else ClaudeFailure.BAD_ANSWER.name
+                } else {
+                    null
+                },
+                elapsedMs = (System.nanoTime() - started) / 1_000_000L,
+                linesAsked = suggestions.size,
+                linesGot = picks.size,
+                detail = "lookup: found ${picks.size}/${suggestions.size}, search failed $searchFailed",
+            ),
+        )
+        return Outcome.Found(picks, suggestions.size, searchFailed)
     }
 
-    /** Each suggestion looked up on YouTube Music, a few at a time, in the order Claude gave them. */
-    private suspend fun resolve(suggestions: List<Suggestion>): List<Pick> = withContext(Dispatchers.IO) {
+    /** One suggestion's lookup: the song found, or whether the search itself failed. */
+    private class Lookup(val pick: Pick?, val searchFailed: Boolean)
+
+    /** Each suggestion looked up on YouTube Music, a couple at a time, in the order Claude gave them. */
+    private suspend fun resolve(suggestions: List<Suggestion>): List<Lookup> = withContext(Dispatchers.IO) {
         val gate = Semaphore(LOOKUPS_AT_ONCE)
         coroutineScope {
             suggestions.map { suggestion ->
                 async {
                     gate.withPermit {
-                        val song = try {
-                            find(suggestion.title, suggestion.artist)
+                        try {
+                            find(suggestion.title, suggestion.artist, suggestion.reason)
                         } catch (cancelled: CancellationException) {
                             throw cancelled
                         } catch (_: Exception) {
-                            null
+                            Lookup(null, searchFailed = true)
                         }
-                        song?.let { Pick(it, suggestion.reason) }
                     }
                 }
-            }.awaitAll().filterNotNull()
+            }.awaitAll()
         }
     }
 
-    /** The first song result that is this title by this artist; null when YouTube Music has none. */
-    private suspend fun find(title: String, artist: String): Song? {
-        val rows = YtMusicRepository.search("$title $artist".trim(), SearchFilter.SONGS).getOrNull().orEmpty()
+    /**
+     * The song result that is this title by this artist. Judged first by
+     * [TrackMatcher] — the app's own cross-catalogue matcher, which knows a
+     * "ピースサイン - Peace Sign" listing from "ピースサイン" and a featured credit
+     * from another artist — then by [SongMatch], then by [topHitIsSong] for an
+     * artist written in another script. A failed search is tried once more
+     * before it counts as one.
+     */
+    private suspend fun find(title: String, artist: String, reason: String): Lookup {
+        val query = "$title $artist".trim()
+        var result = YtMusicRepository.search(query, SearchFilter.SONGS)
+        if (result.isFailure) {
+            delay(RETRY_DELAY_MS)
+            result = YtMusicRepository.search(query, SearchFilter.SONGS)
+        }
+        val rows = result.getOrNull() ?: return Lookup(null, searchFailed = true)
         val songs = rows.asSequence()
             .mapNotNull { (it as? SearchResult.Track)?.song ?: (it as? SearchResult.TopTrack)?.song }
             .filter { it.videoId.isNotBlank() }
             .take(SEARCH_DEPTH)
             .toList()
-        return songs.firstOrNull { song ->
-            SongMatch.sameSong(title, artist, 0L, song.title, song.artist, song.durationMillis().takeIf { it > 0 }?.div(1000.0))
-        } ?: songs.take(TRUSTED_RANKS).firstOrNull { song -> topHitIsSong(title, song.title) }
+        val found = TrackMatcher.best(songs, TrackMatcher.Target(title, artist))
+            ?: songs.firstOrNull { song ->
+                SongMatch.sameSong(title, artist, 0L, song.title, song.artist, song.durationMillis().takeIf { it > 0 }?.div(1000.0))
+            }
+            ?: songs.take(TRUSTED_RANKS).firstOrNull { song -> topHitIsSong(title, song.title) }
+        return Lookup(found?.let { Pick(it, reason) }, searchFailed = false)
     }
 
     /**
@@ -174,13 +219,17 @@ object ClaudeRecommend {
      * title and the same version, is taken as the song: a cover rarely ranks
      * that high for its original's name.
      */
-    internal fun topHitIsSong(title: String, foundTitle: String): Boolean =
-        normalizedTitle(title).isNotEmpty() &&
-            normalizedTitle(title) == normalizedTitle(foundTitle) &&
-            SongMatch.versionOf(title) == SongMatch.versionOf(foundTitle)
-
-    private fun normalizedTitle(value: String): String =
-        java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFKC).lowercase().filter { it.isLetterOrDigit() }
+    internal fun topHitIsSong(title: String, foundTitle: String): Boolean {
+        val wanted = TrackMatcher.parseTitle(title)
+        val got = TrackMatcher.parseTitle(foundTitle)
+        if (wanted.core.isEmpty() || wanted.versions != got.versions) return false
+        if (SongMatch.versionOf(title) != SongMatch.versionOf(foundTitle)) return false
+        if (wanted.core == got.core || TrackMatcher.isTranslationMatch(wanted, got)) return true
+        // "ピースサイン - Peace Sign": the original and its English name, either
+        // side of a dash. One whole side has to be the title asked for.
+        return foundTitle.split(" - ", " – ", " — ").size > 1 &&
+            foundTitle.split(" - ", " – ", " — ").any { TrackMatcher.parseTitle(it).core == wanted.core }
+    }
 
     private fun key(title: String, artist: String): String =
         (title + "\u0000" + artist).lowercase().filter { it.isLetterOrDigit() || it == '\u0000' }
@@ -188,7 +237,9 @@ object ClaudeRecommend {
     private const val MAX_SEEDS = 30
     private const val MAX_AVOID = 120
     const val MAX_MOOD_CHARS = 200
-    private const val LOOKUPS_AT_ONCE = 4
+    /** Two at a time: twenty searches in a burst is what YouTube answers with a refusal. */
+    private const val LOOKUPS_AT_ONCE = 2
+    private const val RETRY_DELAY_MS = 1_500L
     private const val SEARCH_DEPTH = 5
     /** How far down a search a same-titled hit is trusted without its artist; see [topHitIsSong]. */
     private const val TRUSTED_RANKS = 2
@@ -220,7 +271,7 @@ object ClaudeRecommend {
 
     private val INSTRUCTION = """
         You recommend songs for a music player. The input is JSON:
-        - "basis": what the seeds are — "song" (the song playing now), "queue" (the songs queued), or "history" (the songs this listener plays most).
+        - "basis": what the seeds are — "song" (the song playing now), "queue" (the songs queued), "history" (the songs this listener plays most), or "playlist" (songs from one playlist: recommend songs that would fit in it).
         - "seeds": songs as {"title","artist"} to recommend from.
         - "avoid": songs not to recommend: already queued, already played a lot, or recommended before.
         - "mood": optional words from the listener about what they want, in any language. Follow them when given.

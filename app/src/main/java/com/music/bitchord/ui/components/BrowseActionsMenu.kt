@@ -122,6 +122,8 @@ fun BrowseActionsMenu(
     onTranslationStatus: (() -> Unit)? = null,
     /** Looks through the account's own playlist for one song held under two ids. */
     onFindDuplicates: (() -> Unit)? = null,
+    /** Claude's suggestions with the release's songs as the starting point. */
+    onRecommend: (() -> Unit)? = null,
     /**
      * Shares the release's own YouTube Music link — the album/playlist
      * counterpart to a track's own Share tile in [SongActionsMenu]. Null for
@@ -240,6 +242,9 @@ fun BrowseActionsMenu(
             }
             onFindDuplicates?.let {
                 ActionRow(SfIcons.Info, stringResource(R.string.duplicates_title), onClick = it)
+            }
+            onRecommend?.let {
+                ActionRow(SfIcons.AutoAwesome, stringResource(R.string.recommend_title), onClick = it)
             }
             onTranslateAhead?.let {
                 ActionRow(SfIcons.AutoAwesome, stringResource(R.string.translate_ahead), onClick = it)

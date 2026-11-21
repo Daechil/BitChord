@@ -837,6 +837,10 @@
     <string name="duplicates_confirm_title">%1$d곡을 지울까요?</string>
     <string name="duplicates_confirm_description">YouTube Music의 ‘%1$s’에서 지워져요. 곡마다 남기기로 한 것은 그대로 있어요.</string>
     <string name="duplicates_removed">%1$d곡을 지웠어요</string>
+    <string name="recommend_search_failed">YouTube Music 검색이 되지 않았어요. 잠시 후 다시 시도해 주세요.</string>
+    <string name="recommend_basis_playlist">이 재생목록: %1$s (%2$d곡)</string>
+    <string name="recommend_basis_playlist_detail">재생목록 곡 중 %1$d곡(고르게 뽑아서)의 제목과 아티스트를 보내요. 이미 들어 있는 곡은 추천에서 빼요.</string>
+    <string name="suggested_refresh">새로고침</string>
     <string name="ko_window_summary">요약</string>
     <string name="ko_window_songs">곡 · %1$d곡</string>
     <string name="ko_window_space">사용 공간</string>

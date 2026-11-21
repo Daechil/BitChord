@@ -876,6 +876,10 @@ Adding: %4$s
     <string name="duplicates_confirm_title">Remove %1$d songs?</string>
     <string name="duplicates_confirm_description">They are removed from ‘%1$s’ on YouTube Music. The copy kept of each song stays.</string>
     <string name="duplicates_removed">Removed %1$d songs</string>
+    <string name="recommend_search_failed">YouTube Music didn\'t answer the searches. Please try again in a moment.</string>
+    <string name="recommend_basis_playlist">This playlist: %1$s (%2$d songs)</string>
+    <string name="recommend_basis_playlist_detail">Sends the titles and artists of %1$d of its songs, spread across it. Songs already in it are left out of the suggestions.</string>
+    <string name="suggested_refresh">Refresh</string>
     <string name="ko_window_summary">Summary</string>
     <string name="ko_window_songs">Songs · %1$d</string>
     <string name="ko_window_space">Space used</string>

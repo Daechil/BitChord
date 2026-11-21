@@ -1206,6 +1206,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
+     * A fresh batch of the playlist's suggestions in place of the ones shown —
+     * YouTube Music's "Refresh" under its Suggestions shelf. Leaves the old
+     * ones up if the new batch doesn't come.
+     */
+    fun refreshSuggestions(browseId: String) {
+        val page = _detailStack.value.firstOrNull { it.browseId == browseId } ?: return
+        val token = page.suggestionsToken ?: return
+        viewModelScope.launch {
+            val fresh = YtMusicRepository.moreSongs(token).getOrNull() ?: return@launch
+            val inPlaylist = ((page.songs as? UiState.Success)?.data.orEmpty()).mapTo(HashSet()) { it.videoId }
+            val suggested = fresh.suggested.filter { it.videoId !in inPlaylist }.distinctBy { it.videoId }
+            if (suggested.isEmpty()) return@launch
+            _detailStack.value = _detailStack.value.map {
+                if (it.browseId != browseId) it
+                else it.copy(suggestedSongs = suggested, suggestionsToken = fresh.suggestionsToken ?: it.suggestionsToken)
+            }
+        }
+    }
+
+    /**
      * Takes [songs] — entries with a per-entry id — out of the playlist at
      * [browseId] in one request, and off its open page. True when it worked.
      */
@@ -2831,6 +2851,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             var more: String? = null
             /** Tracks YouTube offers to round the playlist out — see [DetailPage.suggestedSongs]. */
             var suggested: List<Song> = emptyList()
+            var suggestionsToken: String? = null
             /** Whether this release is already saved — see [DetailPage.library]. */
             var library: LibraryState? = null
             /** YouTube's own "About" blurb — see [DetailPage.description]. */
@@ -2927,6 +2948,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             } else {
                                 more = page.continuation
                                 suggested = page.suggested.withArtwork(thumbnailUrl ?: artwork)
+                                suggestionsToken = page.suggestionsToken
                                 library = page.library
                                 UiState.Success(page.songs.withArtwork(thumbnailUrl ?: artwork))
                             }
@@ -2949,6 +2971,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         title = name ?: it.title,
                         subtitle = credit ?: it.subtitle,
                         suggestedSongs = suggested,
+                        suggestionsToken = suggestionsToken,
                         continuation = more,
                         library = library,
                         description = description,
@@ -3228,6 +3251,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     current.copy(
                         songs = UiState.Success(existing + added),
                         suggestedSongs = current.suggestedSongs + addedSuggested,
+                        suggestionsToken = fetched.suggestionsToken ?: current.suggestionsToken,
                         continuation = fetched.continuation,
                     )
                 }

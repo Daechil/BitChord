@@ -26,4 +26,11 @@ class ClaudeRecommendTest {
         // script can't be told from another artist by [SongMatch] alone.
         assertFalse(SongMatch.sameSong("Love wins all", "아이유", 0L, "Love wins all", "IU", null))
     }
+
+    @Test
+    fun aListingWithItsEnglishNameIsTheSameSong() {
+        assertTrue(ClaudeRecommend.topHitIsSong("ピースサイン", "ピースサイン - Peace Sign"))
+        assertTrue(ClaudeRecommend.topHitIsSong("Pretender", "Pretender"))
+        assertFalse(ClaudeRecommend.topHitIsSong("ピースサイン", "Lemon"))
+    }
 }

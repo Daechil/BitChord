@@ -698,6 +698,8 @@ object YtMusicRepository {
         val songs: List<Song>,
         val continuation: String?,
         val suggested: List<Song> = emptyList(),
+        /** Reloads a playlist's suggestions with a fresh batch; see [InnertubeParser.PlaylistShelfPage]. */
+        val suggestionsToken: String? = null,
         /**
          * Whether the release this page describes is in the library. Only the
          * first page can answer — a continuation carries rows and nothing else
@@ -843,7 +845,7 @@ object YtMusicRepository {
         // parsePlaylistShelf. Anything else (album, library, history,
         // podcast) has no such shelf, and falls back to the layout-agnostic walk.
         InnertubeParser.parsePlaylistShelf(response)?.let { shelf ->
-            return SongPage(shelf.songs, shelf.continuation, shelf.suggested, library, header = header)
+            return SongPage(shelf.songs, shelf.continuation, shelf.suggested, shelf.suggestionsToken, library, header = header)
         }
         val podcast = InnertubeParser.podcastShow(response) ?: show
         val continuation = InnertubeParser.continuationToken(response)

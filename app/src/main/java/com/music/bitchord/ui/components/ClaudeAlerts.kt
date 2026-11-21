@@ -60,6 +60,9 @@ object KoAlerts {
      */
     val recommend = MutableStateFlow<com.music.bitchord.data.model.Song?>(null)
 
+    /** The suggestions window opened from a playlist's or album's menu, with its songs as the start. */
+    val recommendPlaylist = MutableStateFlow<RecommendPlaylist?>(null)
+
     /** A song held back from a playlist because another release of it is already there. */
     val similarSong = MutableStateFlow<SimilarAsk?>(null)
 

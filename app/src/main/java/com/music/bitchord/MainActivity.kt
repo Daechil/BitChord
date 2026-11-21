@@ -3342,6 +3342,7 @@ private fun BitChordApp(
                                     viewModel.openDetail(id, name, "Artist", null, BrowseType.ARTIST)
                                 },
                                 onAddSuggested = { song -> viewModel.addSuggestedSong(page.browseId, song) },
+                                onRefreshSuggested = page.suggestionsToken?.let { { viewModel.refreshSuggestions(page.browseId) } },
                                 // Saving is an account action, so it isn't offered to a
                                 // guest at all — same as the like and add-to-playlist rows
                                 // in the track menu.
@@ -5176,6 +5177,10 @@ private fun BitChordApp(
                             },
                     )
                 }.takeIf { downloadable },
+                onRecommend = act { songs ->
+                    com.music.bitchord.ui.components.KoAlerts.recommendPlaylist.value =
+                        com.music.bitchord.ui.components.RecommendPlaylist(target.title, songs)
+                }.takeIf { downloadable && target.type != BrowseType.ARTIST },
                 onFindDuplicates = target.browseId?.takeIf { playlist != null }?.let { id ->
                     act { songs ->
                         com.music.bitchord.ui.components.KoAlerts.duplicates.value =

@@ -582,6 +582,8 @@ data class DetailPage(
      * than folded into [songs] where they'd read as the user's own picks.
      */
     val suggestedSongs: List<Song> = emptyList(),
+    /** Reloads [suggestedSongs] with a fresh batch, as YouTube Music's "Refresh" does; null when not offered. */
+    val suggestionsToken: String? = null,
     /**
      * Whether this release can be saved to the library and whether it already
      * is — null when the page doesn't offer it at all. Only ever set for an

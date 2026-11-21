@@ -556,7 +556,13 @@ object InnertubeParser {
     }
 
     /** A playlist page's own tracks, the ones YouTube suggests adding, and the token for the rest. */
-    data class PlaylistShelfPage(val songs: List<Song>, val suggested: List<Song>, val continuation: String?)
+    data class PlaylistShelfPage(
+        val songs: List<Song>,
+        val suggested: List<Song>,
+        val continuation: String?,
+        /** Reloads the suggestions with a fresh batch — the shelf's "Refresh" button. */
+        val suggestionsToken: String? = null,
+    )
 
     /**
      * A playlist page's own track list, scoped rather than walked — plus
@@ -588,8 +594,19 @@ object InnertubeParser {
             ?: return null
         val playlistScope = scope.o("musicPlaylistShelfContinuation")
             ?: collectRenderers(scope, "musicPlaylistShelfRenderer").firstOrNull()
-        val suggestionShelves = collectRenderers(scope, "musicShelfRenderer")
-            .filter { it.o("title").runs() == "Suggestions" }
+        // Told apart by where they sit, not by their title: "Suggestions" is the
+        // English shelf, and every other language names it in its own (a
+        // Korean account's page says "추천"), which a title check read as no
+        // suggestions at all. On a playlist page the account's own tracks are
+        // the playlist shelf and nothing else, so any song shelf beside it is
+        // the suggestions. Without the playlist shelf in sight — a continuation
+        // — only a shelf carrying the Suggestions' own refresh token counts:
+        // a history or library page continues as a plain song shelf too.
+        val suggestionShelves = collectRenderers(scope, "musicShelfRenderer").filter { shelf ->
+            shelf.o("title").runs() == "Suggestions" ||
+                collectRenderers(shelf, "reloadContinuationData").isNotEmpty() ||
+                playlistScope != null
+        }
         if (playlistScope == null && suggestionShelves.isEmpty()) return null
 
         val pageCredit = pageCredit(root)
@@ -609,7 +626,9 @@ object InnertubeParser {
         // `reloadContinuationData` token). Only the playlist shelf's own
         // continuation means more real tracks.
         val token = playlistScope?.let { continuationToken(it) }
-        return PlaylistShelfPage(songs, suggested, token)
+        val suggestionsToken = suggestionShelves
+            .firstNotNullOfOrNull { shelf -> collectRenderers(shelf, "reloadContinuationData").firstOrNull().s("continuation") }
+        return PlaylistShelfPage(songs, suggested, token, suggestionsToken)
     }
 
     /** One page of saved library cards, plus the token for the next page. */

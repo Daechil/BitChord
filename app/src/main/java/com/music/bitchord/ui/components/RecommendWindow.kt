@@ -38,13 +38,24 @@ import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-/** Shows [RecommendWindow] while [KoAlerts.recommend] holds a song. */
+/** A playlist or album to recommend from: its name and its songs. */
+class RecommendPlaylist(val title: String, val songs: List<Song>)
+
+/** Shows [RecommendWindow] while [KoAlerts.recommend] holds a song, or [KoAlerts.recommendPlaylist] a playlist. */
 @Composable
 internal fun RecommendAlerts() {
     val song by KoAlerts.recommend.collectAsStateWithLifecycle()
-    val shown = song ?: return
-    RecommendWindow(shown) { KoAlerts.recommend.value = null }
+    val playlist by KoAlerts.recommendPlaylist.collectAsStateWithLifecycle()
+    val list = playlist?.takeIf { it.songs.isNotEmpty() }
+    when {
+        list != null -> RecommendWindow(list.songs.first(), list) { KoAlerts.recommendPlaylist.value = null }
+        song != null -> RecommendWindow(song!!, null) { KoAlerts.recommend.value = null }
+    }
 }
+
+/** Up to [limit] of [songs], spread across the whole list rather than its first few. */
+private fun spread(songs: List<Song>, limit: Int): List<Song> =
+    if (songs.size <= limit) songs else List(limit) { songs[it * songs.size / limit] }
 
 private enum class RecommendPage { SETUP, RESULTS, HISTORY, ENTRY }
 
@@ -60,13 +71,13 @@ private fun estimateUsd(seeds: Int, avoid: Int, count: Int): Double {
 }
 
 @Composable
-private fun RecommendWindow(song: Song, onDismiss: () -> Unit) {
+private fun RecommendWindow(song: Song, playlist: RecommendPlaylist?, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val app = context.applicationContext
     val scope = rememberCoroutineScope()
     val format = koFormat()
     var page by remember { mutableStateOf(RecommendPage.SETUP) }
-    var basis by remember { mutableStateOf(ClaudeRecommend.BASIS_SONG) }
+    var basis by remember { mutableStateOf(if (playlist != null) ClaudeRecommend.BASIS_PLAYLIST else ClaudeRecommend.BASIS_SONG) }
     var mood by remember { mutableStateOf("") }
     var count by remember { mutableStateOf(20) }
     var novelty by remember { mutableStateOf(ClaudeRecommend.NOVELTY_MIXED) }
@@ -95,6 +106,7 @@ private fun RecommendWindow(song: Song, onDismiss: () -> Unit) {
     }
 
     val failedText = stringResource(R.string.recommend_none_found)
+    val searchFailedText = stringResource(R.string.recommend_search_failed)
     val failedPrefix = stringResource(R.string.recommend_failed)
     val failureLabels = ClaudeFailure.entries.associateWith { claudeFailureLabel(it) }
     val fromQueue = stringResource(R.string.recommend_from_queue)
@@ -106,13 +118,18 @@ private fun RecommendWindow(song: Song, onDismiss: () -> Unit) {
     val seeds: List<Song> = when (basis) {
         ClaudeRecommend.BASIS_QUEUE -> queue.take(QUEUE_SEEDS)
         ClaudeRecommend.BASIS_HISTORY -> played.orEmpty()
+        ClaudeRecommend.BASIS_PLAYLIST -> spread(playlist?.songs.orEmpty(), PLAYLIST_SEEDS)
         else -> listOf(song)
     }
-    val avoidSongs = (queue.take(AVOID_FROM_QUEUE) + (if (basis == ClaudeRecommend.BASIS_HISTORY) played.orEmpty() else emptyList()))
+    val avoidSongs = queue.take(AVOID_FROM_QUEUE) +
+        (if (basis == ClaudeRecommend.BASIS_HISTORY) played.orEmpty() else emptyList()) +
+        // Everything already in the playlist, not just the ones sent as seeds.
+        (if (basis == ClaudeRecommend.BASIS_PLAYLIST) playlist?.songs.orEmpty().take(AVOID_FROM_PLAYLIST) else emptyList())
     val estimate = estimateUsd(seeds.size, avoidSongs.size + suggested.size, count)
     val fromLabel = when (basis) {
         ClaudeRecommend.BASIS_QUEUE -> fromQueue.format(seeds.size)
         ClaudeRecommend.BASIS_HISTORY -> fromHistory.format(seeds.size)
+        ClaudeRecommend.BASIS_PLAYLIST -> playlist?.title.orEmpty()
         else -> song.title
     }
 
@@ -141,7 +158,8 @@ private fun RecommendWindow(song: Song, onDismiss: () -> Unit) {
                     is ClaudeRecommend.Outcome.Found -> {
                         suggested = suggested + outcome.picks.map { ClaudeRecommend.Named(it.song.title, it.song.artist) }
                         if (outcome.picks.isEmpty()) {
-                            error = failedText
+                            // "Couldn't search" and "searched, nothing matched" want different next steps.
+                            error = if (outcome.asked > 0 && outcome.searchFailed >= outcome.asked) searchFailedText else failedText
                         } else {
                             val entry = RecommendHistory.Entry(
                                 at = System.currentTimeMillis(),
@@ -229,6 +247,7 @@ private fun RecommendWindow(song: Song, onDismiss: () -> Unit) {
         when (page) {
             RecommendPage.SETUP -> setupPage(
                 song = song,
+                playlist = playlist,
                 basis = basis,
                 onBasis = { basis = it },
                 queueSize = queue.size,
@@ -317,9 +336,12 @@ private class RecommendHeaders(val from: String, val count: String, val novelty:
 private const val QUEUE_SEEDS = 20
 private const val HISTORY_SEEDS = 20
 private const val AVOID_FROM_QUEUE = 60
+private const val PLAYLIST_SEEDS = 30
+private const val AVOID_FROM_PLAYLIST = 60
 
 private fun androidx.compose.foundation.lazy.LazyListScope.setupPage(
     song: Song,
+    playlist: RecommendPlaylist?,
     basis: String,
     onBasis: (String) -> Unit,
     queueSize: Int,
@@ -349,15 +371,26 @@ private fun androidx.compose.foundation.lazy.LazyListScope.setupPage(
             )
         }
     }
-    val bases = listOf(ClaudeRecommend.BASIS_SONG, ClaudeRecommend.BASIS_QUEUE, ClaudeRecommend.BASIS_HISTORY)
+    // From a playlist's menu the playlist takes the song's place: the song is only its first track.
+    val bases = listOfNotNull(
+        ClaudeRecommend.BASIS_PLAYLIST.takeIf { playlist != null },
+        ClaudeRecommend.BASIS_SONG.takeIf { playlist == null },
+        ClaudeRecommend.BASIS_QUEUE,
+        ClaudeRecommend.BASIS_HISTORY,
+    )
     windowCard(rows = bases, header = headers.from) { option ->
         val label = when (option) {
             ClaudeRecommend.BASIS_QUEUE -> stringResource(R.string.recommend_basis_queue, queueSize)
             ClaudeRecommend.BASIS_HISTORY -> stringResource(R.string.recommend_basis_history)
+            ClaudeRecommend.BASIS_PLAYLIST -> stringResource(R.string.recommend_basis_playlist, playlist?.title.orEmpty(), playlist?.songs?.size ?: 0)
             else -> stringResource(R.string.recommend_basis_song, song.title)
         }
         val detail = when (option) {
             ClaudeRecommend.BASIS_QUEUE -> if (queueSize == 0) stringResource(R.string.recommend_queue_empty) else null
+            ClaudeRecommend.BASIS_PLAYLIST -> stringResource(
+                R.string.recommend_basis_playlist_detail,
+                minOf(PLAYLIST_SEEDS, playlist?.songs?.size ?: 0),
+            )
             ClaudeRecommend.BASIS_HISTORY -> when {
                 playedSize == null -> null
                 playedSize == 0 -> stringResource(R.string.recommend_history_empty_seed)

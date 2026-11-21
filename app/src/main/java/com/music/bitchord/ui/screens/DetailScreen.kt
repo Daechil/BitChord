@@ -309,6 +309,8 @@ fun DetailScreen(
     onSectionItemClick: (ShelfItem) -> Unit,
     onArtistClick: (String, String) -> Unit,
     onAddSuggested: (Song) -> Unit,
+    /** A fresh batch of suggestions; null when YouTube offered no way to ask. */
+    onRefreshSuggested: (() -> Unit)? = null,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
     listState: LazyListState = rememberLazyListState(),
@@ -815,7 +817,25 @@ fun DetailScreen(
             // into the list above — see [DetailPage.suggestedSongs].
             if (suggested.isNotEmpty()) {
                 item(key = "suggested-heading") {
-                    SectionHeading(stringResource(R.string.suggested), palette)
+                    androidx.compose.foundation.layout.Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    ) {
+                        androidx.compose.foundation.layout.Box(Modifier.weight(1f)) {
+                            SectionHeading(stringResource(R.string.suggested), palette)
+                        }
+                        onRefreshSuggested?.let { refresh ->
+                            androidx.compose.material3.TextButton(
+                                onClick = refresh,
+                                modifier = Modifier.padding(end = 8.dp),
+                            ) {
+                                androidx.compose.material3.Text(
+                                    text = stringResource(R.string.suggested_refresh),
+                                    color = palette.accent,
+                                )
+                            }
+                        }
+                    }
                 }
                 val isSuggestedCurrent = playingRowMatcher(suggested, currentSong)
                 itemsIndexed(

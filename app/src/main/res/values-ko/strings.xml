@@ -824,7 +824,7 @@
     <string name="crash_reason_lmk">재생 중 메모리 부족으로 안드로이드가 종료</string>
     <string name="crash_reason_other">안드로이드가 종료</string>
     <string name="song_background">곡 배경 웹 검색</string>
-    <string name="song_background_subtitle">곡마다 한 번 나무위키·위키백과 등을 검색해 번역과 노래 해석에 반영해요 · 곡당 약 20~30원 (Haiku)</string>
+    <string name="song_background_subtitle">곡마다 한 번 나무위키·위키백과 등을 검색해 번역과 노래 해석에 반영해요 · 곡당 약 20~40원 (Haiku)</string>
     <string name="song_background_stored">%1$d곡 저장됨</string>
     <string name="song_background_widen">위키에 없으면 전체 웹에서 한 번 더 찾기</string>
     <string name="song_background_usage_label">웹 검색</string>

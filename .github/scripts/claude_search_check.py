@@ -70,13 +70,21 @@ def row(label, model, tool, code, data, seconds):
     )
 
 
-def research(model, tool, title, artist, json_format=False, max_uses=1):
+FORCE = (
+    " Always run exactly one web search for the title and artist before you answer, even if you think you know the song."
+)
+
+
+def research(model, tool, title, artist, json_format=False, max_uses=1, domains=None, force=False):
+    tool_def = {"type": tool, "name": "web_search", "max_uses": max_uses}
+    if domains:
+        tool_def["allowed_domains"] = domains
     body = {
         "model": model,
-        "max_tokens": 1500,
-        "system": SYSTEM,
+        "max_tokens": 2500,
+        "system": SYSTEM + (FORCE if force else ""),
         "messages": [{"role": "user", "content": json.dumps({"title": title, "artist": artist}, ensure_ascii=False)}],
-        "tools": [{"type": tool, "name": "web_search", "max_uses": max_uses}],
+        "tools": [tool_def],
     }
     if json_format:
         body["output_config"] = {
@@ -98,28 +106,46 @@ def main():
         print("No ANTHROPIC_API_KEY secret is set for this repository.")
         sys.exit(1)
     rows, notes, total = [], [], 0.0
-    cases = [
-        ("1 Haiku, 1 search", "claude-haiku-5-5", "アイドル", "YOASOBI", False),
-        ("2 Haiku, 1 search", "claude-haiku-5-5", "春を告げる", "yama", False),
-        ("3 Sonnet, 1 search", "claude-sonnet-5-5", "春を告げる", "yama", False),
-        ("4 Haiku, lesser-known", "claude-haiku-5-5", "Machine Love", "Jamie Paige", False),
-        ("5 Haiku + JSON format", "claude-haiku-5-5", "アイドル", "YOASOBI", True),
-    ]
-    for label, model, title, artist, as_json in cases:
+    namu = ["namu.wiki"]
+    if os.environ.get("CLAUDE_SEARCH_CASES") == "namu":
+        cases = [
+            ("N1 namu.wiki only", "claude-haiku-5-5", "春を告げる", "yama", True, namu, True),
+            ("N2 namu.wiki only", "claude-haiku-5-5", "テトリス", "柊マグネタイト", True, namu, True),
+            ("N3 namu.wiki only", "claude-haiku-5-5", "Machine Love", "Jamie Paige", True, namu, True),
+            ("N4 any site, forced", "claude-haiku-5-5", "春を告げる", "yama", True, None, True),
+        ]
+    else:
+        cases = [
+            ("1 Haiku, 1 search", "claude-haiku-5-5", "アイドル", "YOASOBI", False, None, False),
+            ("2 Haiku, 1 search", "claude-haiku-5-5", "春を告げる", "yama", False, None, False),
+            ("3 Sonnet, 1 search", "claude-sonnet-5-5", "春を告げる", "yama", False, None, False),
+            ("4 Haiku, lesser-known", "claude-haiku-5-5", "Machine Love", "Jamie Paige", False, None, False),
+            ("5 Haiku + JSON format", "claude-haiku-5-5", "アイドル", "YOASOBI", True, None, False),
+        ]
+    for label, model, title, artist, as_json, domains, force in cases:
         tool = "web_search_20260209"
-        code, data, seconds = research(model, tool, title, artist, as_json)
+        code, data, seconds = research(model, tool, title, artist, as_json, domains=domains, force=force)
         if code == 400 and "web_search" in json.dumps(data.get("error", {})):
             # The newer tool may not be offered for this model: the basic one instead.
             line, usd = row(label + " (newer tool refused)", model, tool, code, data, seconds)
             rows.append(line)
             total += usd
             tool = "web_search_20250305"
-            code, data, seconds = research(model, tool, title, artist, as_json)
+            code, data, seconds = research(model, tool, title, artist, as_json, domains=domains, force=force)
         line, usd = row(label, model, tool, code, data, seconds)
         rows.append(line)
         total += usd
         if code == 200:
-            notes.append(f"**{label} · {title} — {artist}**\n\n{text_of(data)[:900]}\n")
+            urls = []
+            for block in data.get("content", []):
+                if block.get("type") == "web_search_tool_result":
+                    content = block.get("content")
+                    if isinstance(content, list):
+                        urls += [r.get("url", "") for r in content if isinstance(r, dict)]
+                    elif isinstance(content, dict):
+                        urls.append("error: " + str(content.get("error_code", "")))
+            shown = ", ".join(u.split("/")[2] if "//" in u else u for u in urls[:8]) or "(none)"
+            notes.append(f"**{label} · {title} — {artist}**\n\nresult sites: {shown}\n\n{text_of(data)[:1200]}\n")
         time.sleep(2)
     out = [
         "# Claude web search check\n",

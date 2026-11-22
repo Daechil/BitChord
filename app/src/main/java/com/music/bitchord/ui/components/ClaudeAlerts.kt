@@ -63,6 +63,16 @@ object KoAlerts {
     /** A playlist being looked through for songs it holds twice. */
     val duplicates = MutableStateFlow<DuplicateAsk?>(null)
 
+    /** A song being grouped with its other uploads, and the queue to pick them from. */
+    val sameSong = MutableStateFlow<SameSongAsk?>(null)
+
+    /** All of the listener's groups of one song, on show. */
+    val sameSongList = MutableStateFlow(false)
+
+    fun openSameSong(song: com.music.bitchord.data.model.Song, queue: List<com.music.bitchord.data.model.Song>) {
+        sameSong.value = SameSongAsk(song, queue)
+    }
+
     /** A song whose stored translations are on show. */
     val songStatus = MutableStateFlow<com.music.bitchord.data.model.Song?>(null)
 
@@ -133,6 +143,7 @@ fun ClaudeAlerts(
     KoHealthAlerts(hazeState)
     TranslationStatusAlerts(hazeState)
     DuplicatesAlerts()
+    SameSongAlerts()
     SimilarSongAlert(hazeState)
     FloatingLyricsAlerts(hazeState)
     val showWatchInterval by KoAlerts.watchInterval.collectAsStateWithLifecycle()

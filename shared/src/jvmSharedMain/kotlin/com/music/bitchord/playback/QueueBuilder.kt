@@ -72,7 +72,11 @@ object QueueBuilder {
             if (out.size >= limit) break
             if (index in passedOver) continue
             val key = keys[index]
-            if (taken.any { same(it, key) }) continue
+            val held = taken.firstOrNull { same(it, key) }
+            if (held != null) {
+                if (!alike(held, key)) linkedSink?.invoke(candidate, held.name, held.id)
+                continue
+            }
 
             val artists = artistSet(candidate.artist)
             val capKey = artists.minOrNull()
@@ -99,8 +103,27 @@ object QueueBuilder {
      */
     fun isSameRecording(a: Song, b: Song): Boolean = same(Key(a), Key(b))
 
+    /** The listener's own groups of one song, as [SameSongLinks] keeps them; read for every comparison. */
+    @Volatile
+    private var linkKeys: List<List<Key>> = emptyList()
+
+    /** Told when a candidate is left out only because the listener grouped it with a song already there. */
+    @Volatile
+    var linkedSink: ((left: Song, kept: String, keptId: String) -> Unit)? = null
+
+    internal fun setLinks(groups: List<List<Song>>) {
+        linkKeys = groups.map { group -> group.map { Key(it, grouped = false) } }
+    }
+
+    /** The listener's group this song is in — one of its uploads, or another upload of one — or -1. */
+    private fun groupOf(key: Key): Int {
+        val groups = linkKeys
+        if (groups.isEmpty()) return -1
+        return groups.indexOfFirst { group -> group.any { alike(it, key) } }
+    }
+
     /** What a comparison reads of a song, worked out once. */
-    private class Key(song: Song) {
+    private class Key(song: Song, grouped: Boolean = true) {
         val id = song.videoId
         val title = normalisedTitle(song.title)
         val pieces = titlePieces(song.title)
@@ -117,9 +140,16 @@ object QueueBuilder {
          */
         val voiceBilled = artists.isNotEmpty() && artists.all { it in NOT_THE_MAKER }
         val ms = song.durationMillis()
+        val name = song.title
+        /** Worked out last, from the fields above; -1 for none, and for a group's own members. */
+        val group: Int = if (grouped) groupOf(this) else -1
     }
 
-    private fun same(a: Key, b: Key): Boolean {
+    private fun same(a: Key, b: Key): Boolean = alike(a, b) || linked(a, b)
+
+    private fun linked(a: Key, b: Key): Boolean = a.group >= 0 && a.group == b.group
+
+    private fun alike(a: Key, b: Key): Boolean {
         if (a.id == b.id) return true
         if (a.title.isNotEmpty() && a.title == b.title) {
             // One shared name is enough. The two cuts of a track get billed in

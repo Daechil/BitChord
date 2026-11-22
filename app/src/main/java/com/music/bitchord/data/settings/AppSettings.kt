@@ -1398,6 +1398,12 @@ object AppSettings {
         songBackgroundWiden.value = prefs.getBoolean(KEY_SONG_BACKGROUND_WIDEN, true)
         com.music.bitchord.data.lyrics.SongBackgrounds.enabled = songBackground.value
         com.music.bitchord.data.lyrics.SongBackgrounds.widenWhenMissing = songBackgroundWiden.value
+        // The listener's groups of one song, for radio and AutoPlay; kept in this file so a settings backup carries them.
+        com.music.bitchord.playback.SameSongLinks.load(prefs.getString(KEY_SAME_SONG_LINKS, null))
+        com.music.bitchord.playback.SameSongLinks.sink = { encoded -> prefs.edit().putString(KEY_SAME_SONG_LINKS, encoded).apply() }
+        com.music.bitchord.playback.QueueBuilder.linkedSink = { left, kept, keptId ->
+            com.music.bitchord.data.TrackLog.i("Radio", "left out \"${left.title}\" (${left.videoId}): grouped by you with \"$kept\"", about = keptId)
+        }
         claudeMonthlyCap.value = prefs.getFloat(KEY_CLAUDE_MONTHLY_CAP, 0f).toDouble()
         moneyDisplay.value = prefs.getString(KEY_MONEY_DISPLAY, null)
             ?.takeIf { it == MONEY_USD || it == MONEY_KRW || it == MONEY_BOTH } ?: MONEY_BOTH
@@ -3172,6 +3178,7 @@ object AppSettings {
     private const val KEY_CLAUDE_INSTRUCTIONS = "ko_claude_instructions"
     private const val KEY_SONG_BACKGROUND = "ko_song_background"
     private const val KEY_SONG_BACKGROUND_WIDEN = "ko_song_background_widen"
+    private const val KEY_SAME_SONG_LINKS = "ko_same_song_links"
     private const val KEY_CLAUDE_INSTRUCTIONS_MEANING = "ko_claude_instructions_meaning"
     private const val KEY_KRW_RATE_MODE = "ko_krw_rate_mode"
     private const val KEY_KRW_RATE_SOURCE = "ko_krw_rate_source"

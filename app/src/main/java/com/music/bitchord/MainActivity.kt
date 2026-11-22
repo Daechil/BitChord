@@ -4471,6 +4471,7 @@ private fun BitChordApp(
                     songActions = null
                     com.music.bitchord.ui.components.KoAlerts.songStatus.value = song
                 },
+                onSameSong = { songActions = null; com.music.bitchord.ui.components.KoAlerts.openSameSong(song, player.queue) },
                 likeStatus = likeStatusOf(song),
                 onPlayNext = { playNext(song); songActions = null },
                 onAddToQueue = { addToQueue(song); songActions = null },

@@ -171,6 +171,8 @@ fun SongActionsMenu(
     onCopyLog: (() -> Unit)? = null,
     /** Opens this song's stored translations; null hides the row. */
     onTranslationStatus: (() -> Unit)? = null,
+    /** Opens the window that groups this song with its other uploads, for radio; null hides the row. */
+    onSameSong: (() -> Unit)? = null,
     /** Opens the timing control offered only by the main player's menu. */
     onLyricsOffset: (() -> Unit)? = null,
     /**
@@ -378,6 +380,7 @@ fun SongActionsMenu(
         }
         if (song.videoId.isNotBlank()) {
             onTranslationStatus?.let { TranslationStatusRow(song, palette.accent, it) }
+            onSameSong?.let { SameSongRow(song, palette.accent, it) }
         }
 
         // The player's own: about the track playing right now rather than

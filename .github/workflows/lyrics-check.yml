@@ -26,6 +26,10 @@ on:
         description: 'A song to translate the way the app does and have Sonnet review (needs ANTHROPIC_API_KEY; about 100 won)'
         required: false
         default: ''
+      sources_ko:
+        description: 'Songs to look for Korean lyric translations made by people, separated by semicolons'
+        required: false
+        default: ''
       claude_search:
         description: 'Set to yes to try Claude web search (needs the ANTHROPIC_API_KEY secret; costs a few cents)'
         required: false
@@ -50,7 +54,7 @@ jobs:
           cache: gradle
 
       - name: Check
-        if: inputs.probe == '' && inputs.radio == '' && inputs.claude_search == '' && inputs.sources == '' && inputs.namu == '' && inputs.translate == ''
+        if: inputs.probe == '' && inputs.radio == '' && inputs.claude_search == '' && inputs.sources == '' && inputs.namu == '' && inputs.translate == '' && inputs.sources_ko == ''
         env:
           LIVE_LYRICS: '1'
           LIVE_LYRICS_REPORT: ${{ github.workspace }}/live-lyrics.md
@@ -78,6 +82,13 @@ jobs:
           BACKGROUND_SONGS: 'テトリス — 柊マグネタイト; 人マニア — 原口沙輔'
           LIVE_LYRICS_REPORT: ${{ github.workspace }}/live-lyrics.md
         run: ./gradlew :shared:jvmTest --tests 'com.music.bitchord.data.lyrics.SongBackgroundProbe' --rerun --no-daemon
+
+      - name: Korean translations by people
+        if: inputs.sources_ko != ''
+        env:
+          TRANSLATION_SOURCES: ${{ inputs.sources_ko }}
+          LIVE_LYRICS_REPORT: ${{ github.workspace }}/live-lyrics.md
+        run: ./gradlew :shared:jvmTest --tests 'com.music.bitchord.data.lyrics.TranslationSourcesProbe' --rerun --no-daemon
 
       - name: Translation review
         if: inputs.translate != ''

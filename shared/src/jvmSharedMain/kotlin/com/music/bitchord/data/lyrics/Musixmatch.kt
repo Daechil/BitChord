@@ -123,6 +123,29 @@ object Musixmatch {
         return body.message.body?.trackList?.map { it.track }
     }
 
+    /**
+     * Whether Musixmatch's listeners have translated this song into [language],
+     * for the translation-sources check: the track it matched, and the raw
+     * answer of its translations call. Not used by the app.
+     */
+    internal suspend fun translationsRaw(title: String, artist: String, durationMs: Long, language: String): Pair<String, String?>? =
+        withContext(Dispatchers.IO) {
+            val track = bestTrack(title, artist, (durationMs / 1000).toInt()) ?: return@withContext null
+            val raw = signedGet { token ->
+                "$BASE/crowd.track.translations.get".toHttpUrl().newBuilder()
+                    .addQueryParameter("app_id", APP_ID)
+                    .addQueryParameter("format", "json")
+                    .addQueryParameter("track_id", track.trackId.toString())
+                    .addQueryParameter("selected_language", language)
+                    .addQueryParameter("translation_fields_set", "minimal")
+                    .addQueryParameter("comment_format", "text")
+                    .addQueryParameter("part", "user")
+                    .addQueryParameter("usertoken", token)
+                    .build()
+            }
+            "${track.trackName} — ${track.artistName} (${track.trackId})" to raw
+        }
+
     private suspend fun fetchSubtitle(trackId: Long): String? {
         val response = signedGet { token ->
             "$BASE/track.subtitle.get".toHttpUrl().newBuilder()

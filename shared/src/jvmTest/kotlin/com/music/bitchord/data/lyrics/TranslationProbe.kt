@@ -32,11 +32,23 @@ import kotlin.test.Test
  * written out. Needs the ANTHROPIC_API_KEY secret.
  */
 class TranslationProbe {
+    private var compare: String? = null
+    private val judgeModel get() = if (compare != null) "claude-opus-5-5" else LyricsTranslation.CLAUDE_SONNET
     private fun cell(text: Any?) = text.toString().replace("|", "/").replace("\n", " ")
 
     @Test
     fun probe() {
-        val query = System.getenv("TRANSLATION_PROBE")?.trim().orEmpty()
+        // "song @sonnet": both translations with the background, A on Haiku and B
+        // on the model named, reviewed blind by Opus rather than by one of the two.
+        val raw = System.getenv("TRANSLATION_PROBE")?.trim().orEmpty()
+        val query = raw.substringBefore(" @").trim()
+        compare = raw.substringAfter(" @", "").trim().lowercase().takeIf { it.isNotEmpty() }?.let {
+            when (it) {
+                "sonnet" -> LyricsTranslation.CLAUDE_SONNET
+                "haiku" -> LyricsTranslation.CLAUDE_HAIKU
+                else -> it
+            }
+        }
         val key = System.getenv("ANTHROPIC_API_KEY").orEmpty()
         if (query.isEmpty() || key.isBlank()) return
         LyricsTranslation.claudeApiKey = key
@@ -59,7 +71,11 @@ class TranslationProbe {
                 .append(" · searches ").append(e.searches).append(" · ").append(e.elapsedMs).append("ms\n")
         }
         val usd = entries.sumOf {
-            val (inPrice, outPrice) = if (it.model.contains("sonnet")) 2.0 to 10.0 else 0.10 to 0.50
+            val (inPrice, outPrice) = when {
+                it.model.contains("opus") -> 4.0 to 20.0
+                it.model.contains("sonnet") -> 2.0 to 10.0
+                else -> 0.10 to 0.50
+            }
             (it.inputTokens ?: 0L) * inPrice / 1e6 + (it.outputTokens ?: 0L) * outPrice / 1e6
         } + entries.sumOf { it.searches ?: 0 } * 0.01
         out.append("\nTotal about $").append(String.format(Locale.US, "%.4f", usd)).append(" (~").append((usd * 1400).toInt()).append("원)\n")
@@ -88,16 +104,29 @@ class TranslationProbe {
         val name = SongBackgrounds.SongName(song.title.forLyricsSearch(), song.artist.artistForLyricsSearch())
         SongBackgrounds.noteSong(song.videoId, song.title, song.artist)
 
-        // A: what a short tap sends when no background is kept: the song's name only.
-        SongBackgrounds.enabled = false
-        val a = LyricsTranslation.translate(song.videoId, lines, "ko")
-        out.append("- A (name only): ${describe(a)}\n")
-
-        // B: a long press with the setting on: the background first, then a fresh translation.
-        SongBackgrounds.enabled = true
-        val background = SongBackgrounds.ensure(name, "ko", lines.map { it.text })
-        val b = LyricsTranslation.translate(song.videoId, lines, "ko", fresh = true)
-        out.append("- B (with background): ${describe(b)}\n\n")
+        val a: LyricsTranslation.Result
+        val b: LyricsTranslation.Result
+        val background: SongBackgrounds.Background?
+        val other = compare
+        if (other == null) {
+            // A: what a short tap sends when no background is kept: the song's name only.
+            SongBackgrounds.enabled = false
+            a = LyricsTranslation.translate(song.videoId, lines, "ko")
+            out.append("- A (name only): ${describe(a)}\n")
+            // B: a long press with the setting on: the background first, then a fresh translation.
+            SongBackgrounds.enabled = true
+            background = SongBackgrounds.ensure(name, "ko", lines.map { it.text })
+            b = LyricsTranslation.translate(song.videoId, lines, "ko", fresh = true)
+            out.append("- B (with background): ${describe(b)}\n\n")
+        } else {
+            SongBackgrounds.enabled = true
+            background = SongBackgrounds.ensure(name, "ko", lines.map { it.text })
+            a = LyricsTranslation.translate(song.videoId, lines, "ko")
+            out.append("- A (${LyricsTranslation.claudeModel}, with background): ${describe(a)}\n")
+            LyricsTranslation.claudeModel = other
+            b = LyricsTranslation.translate(song.videoId, lines, "ko", fresh = true)
+            out.append("- B ($other, with background): ${describe(b)}\n\n")
+        }
         if (background != null) {
             out.append("### background (${background.confidence} · ${background.sources.joinToString()})\n\n")
             out.append(background.background).append("\n\n")
@@ -149,11 +178,15 @@ class TranslationProbe {
         }.toString()
         val system = buildString {
             appendLine("You are a strict reviewer of Korean song-lyric translations, fluent in the source language and in Korean.")
-            appendLine("Each line has the source lyric and two Korean translations, A and B. B was written with the song's background and phrase notes in hand; A without.")
+            if (compare == null) {
+                appendLine("Each line has the source lyric and two Korean translations, A and B. B was written with the song's background and phrase notes in hand; A without.")
+            } else {
+                appendLine("Each line has the source lyric and two Korean translations, A and B, written independently with the same background and phrase notes in hand. Judge them on their merits alone.")
+            }
             appendLine("Use what you know about this song, and the background given, to judge meaning, imagery, wordplay and tone.")
             appendLine("Write every comment in Korean, in 해요체.")
             appendLine("- \"score_a\", \"score_b\": 1 to 10 for the whole song (10 = a fluent Korean speaker would understand the song exactly as a native listener does).")
-            appendLine("- \"summary\": 3 to 5 sentences: how good the translations are, and whether B's background made it better or worse.")
+            appendLine(if (compare == null) "- \"summary\": 3 to 5 sentences: how good the translations are, and whether B's background made it better or worse." else "- \"summary\": 3 to 5 sentences: how good each translation is, and which reads better and why.")
             appendLine("- \"title_meaning\": what the title means and whether the translations carried that sense.")
             appendLine("- \"issues\": up to 15 real problems, most serious first: mistranslations, lost wordplay or double meaning, wrong subject, wrong tone, unnatural Korean, words added that are not in the source. Skip matters of taste.")
             appendLine("  Each issue: \"line\" (the i), \"which\" (\"A\", \"B\" or \"both\"), \"kind\", \"fragment\" (at most 8 characters of the source, never a whole line), \"problem\", and \"better\" (at most 15 Korean characters).")
@@ -189,7 +222,7 @@ class TranslationProbe {
         val result = LyricsTranslation.askClaude(
             purpose = "review",
             system = system,
-            model = LyricsTranslation.CLAUDE_SONNET,
+            model = judgeModel,
             input = input,
             schema = schema,
             effort = "high",
@@ -201,8 +234,8 @@ class TranslationProbe {
         }
         val review = result.value ?: run { out.append("review failed: ${result.failure}\n"); return }
         fun s(key: String) = review[key]?.jsonPrimitive?.content.orEmpty()
-        out.append("## Review (Sonnet)\n\n")
-        out.append("- score A (name only): **${s("score_a")}/10** · score B (with background): **${s("score_b")}/10**\n\n")
+        out.append("## Review ($judgeModel)\n\n")
+        out.append("- score A: **${s("score_a")}/10** · score B: **${s("score_b")}/10**\n\n")
         out.append(s("summary")).append("\n\n")
         out.append("**title:** ").append(s("title_meaning")).append("\n\n")
         out.append("| line | which | kind | fragment | problem | better |\n|---|---|---|---|---|---|\n")

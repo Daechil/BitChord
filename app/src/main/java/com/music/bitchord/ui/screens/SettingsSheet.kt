@@ -739,12 +739,6 @@ fun SettingsScreen(
                 }
             }
             if (claudeApiKey.isNotBlank()) {
-                val songBackgroundTitle = stringResource(R.string.song_background)
-                row(songBackgroundTitle, "claude", "background", "web", "search", "배경", "검색", "나무위키") {
-                    com.music.bitchord.ui.components.SongBackgroundRows(songBackgroundTitle)
-                }
-            }
-            if (claudeApiKey.isNotBlank()) {
                 val claudeModelTitle = stringResource(R.string.claude_model)
                 row(claudeModelTitle, "claude", "model", "haiku", "sonnet", "ai") {
                     SettingsRow(
@@ -768,7 +762,7 @@ fun SettingsScreen(
                 val claudeModeTitle = stringResource(R.string.claude_mode)
                 row(claudeModeTitle, "claude", "translate", "style", "literal", "직역", "의역") {
                     SettingsRow(
-                        icon = SfIcons.Translate,
+                        icon = SfIcons.Pencil,
                         title = claudeModeTitle,
                         subtitle = stringResource(claudeModeLabelRes(claudeMode)),
                         trailing = { Chevron() },
@@ -781,7 +775,7 @@ fun SettingsScreen(
                     "발음", "독음", "로마자", "지시문", "프롬프트", "번역 규칙",
                 ) {
                     SettingsRow(
-                        icon = SfIcons.Translate,
+                        icon = SfIcons.Notes,
                         title = lyricsAdvancedTitle,
                         subtitleContent = { com.music.bitchord.ui.components.LyricsAdvancedSubtitle() },
                         trailing = { Chevron() },
@@ -803,159 +797,187 @@ fun SettingsScreen(
                         onClick = { AppSettings.setClaudeSonnetStandIn(!claudeSonnetStandIn) },
                     )
                 }
-                val claudeUsageTitle = stringResource(R.string.claude_usage)
-                row(claudeUsageTitle, "claude", "usage", "tokens", "cost", "사용량", "비용") {
-                    SettingsRow(
-                        icon = SfIcons.AutoAwesome,
-                        title = claudeUsageTitle,
-                        subtitle = if (claudeUsage.isEmpty) {
-                            stringResource(R.string.claude_usage_none)
-                        } else {
-                            stringResource(
-                                R.string.claude_usage_subtitle,
-                                compactTokens(claudeUsage.inputTokens),
-                                compactTokens(claudeUsage.outputTokens),
-                                com.music.bitchord.ui.components.koFormat().money(claudeUsage.estimatedUsd()),
-                            )
-                        },
-                        trailing = { Chevron() },
-                        onClick = onClaudeUsage,
-                    )
+            }
+        }
+        if (shows(SettingsCategory.KO_FEATURES) && claudeApiKey.isNotBlank()) SearchableSettingsGroup(
+            search,
+            header = stringResource(R.string.ko_group_background),
+            headerInPage = true,
+        ) {
+            val songBackgroundTitle = stringResource(R.string.song_background)
+            row(songBackgroundTitle, "claude", "background", "web", "search", "배경", "검색", "나무위키") {
+                com.music.bitchord.ui.components.SongBackgroundRows(songBackgroundTitle)
+            }
+        }
+        if (shows(SettingsCategory.KO_FEATURES) && claudeApiKey.isNotBlank()) SearchableSettingsGroup(
+            search,
+            header = stringResource(R.string.ko_group_ahead),
+            headerInPage = true,
+        ) {
+            val aheadLogTitle = stringResource(R.string.translate_ahead_log)
+            row(aheadLogTitle, "claude", "batch", "translate", "ahead", "playlist", "log", "미리", "번역", "기록", "재생목록") {
+                SettingsRow(
+                    icon = SfIcons.History,
+                    title = aheadLogTitle,
+                    subtitle = if (aheadJobs.isEmpty()) {
+                        stringResource(R.string.translate_ahead_log_empty)
+                    } else {
+                        stringResource(
+                            R.string.translate_ahead_log_subtitle,
+                            aheadJobs.size,
+                            aheadJobs.count { it.active },
+                        )
+                    },
+                    trailing = { Chevron() },
+                    onClick = { com.music.bitchord.ui.components.KoAlerts.aheadLog.value = true },
+                )
+            }
+            val watchIntervalTitle = stringResource(R.string.translate_ahead_watch_interval)
+            row(watchIntervalTitle, "claude", "batch", "playlist", "new", "watch", "미리", "새 곡", "확인", "주기") {
+                SettingsRow(
+                    icon = SfIcons.Clock,
+                    title = watchIntervalTitle,
+                    subtitle = stringResource(
+                        R.string.translate_ahead_watch_interval_subtitle,
+                        aheadWatchHours,
+                        aheadWatches.size,
+                    ),
+                    trailing = { Chevron() },
+                    onClick = { com.music.bitchord.ui.components.KoAlerts.watchInterval.value = true },
+                )
+            }
+            val aheadIntroTitle = stringResource(R.string.translate_ahead_intro_setting)
+            row(aheadIntroTitle, "claude", "batch", "translate", "ahead", "ask", "미리", "번역", "안내") {
+                SettingsRow(
+                    icon = SfIcons.Info,
+                    title = aheadIntroTitle,
+                    subtitle = stringResource(R.string.translate_ahead_intro_setting_subtitle),
+                    trailing = {
+                        IosSwitch(
+                            checked = aheadIntro,
+                            onCheckedChange = AppSettings::setTranslateAheadIntro,
+                        )
+                    },
+                    onClick = { AppSettings.setTranslateAheadIntro(!aheadIntro) },
+                )
+            }
+            val chunkTitle = stringResource(R.string.translate_ahead_chunk)
+            row(chunkTitle, "claude", "batch", "translate", "ahead", "size", "chunk", "미리", "번역", "묶음", "크기") {
+                SettingsRow(
+                    icon = SfIcons.Reorder,
+                    title = chunkTitle,
+                    subtitleContent = { com.music.bitchord.ui.components.ChunkSizeSubtitle() },
+                    trailing = { Chevron() },
+                    onClick = { com.music.bitchord.ui.components.KoAlerts.chunkSize.value = true },
+                )
+            }
+            if (android.os.Build.VERSION.SDK_INT >= 36) {
+                val liveTitle = stringResource(R.string.ahead_live_updates)
+                row(liveTitle, "live update", "notification", "status bar", "미리", "번역", "실시간", "알림", "상태바") {
+                    com.music.bitchord.ui.components.AheadLiveUpdatesRow(liveTitle)
                 }
-                val claudeMonthlyCapTitle = stringResource(R.string.claude_monthly_cap)
-                row(claudeMonthlyCapTitle, "claude", "limit", "budget", "cost", "한도", "요금", "비용") {
-                    SettingsRow(
-                        icon = SfIcons.AutoAwesome,
-                        title = claudeMonthlyCapTitle,
-                        subtitleContent = { com.music.bitchord.ui.components.MonthlyCapSubtitle(claudeMonthlyCap, claudeUsage) },
-                        trailing = { Chevron() },
-                        onClick = { com.music.bitchord.ui.components.KoAlerts.monthlyCap.value = true },
-                    )
-                }
-                val costSettingsTitle = stringResource(R.string.claude_cost_settings)
-                row(costSettingsTitle, "claude", "won", "krw", "exchange", "limit", "daily", "warning", "원화", "환율", "한도", "하루", "경고", "금액") {
-                    SettingsRow(
-                        icon = SfIcons.AutoAwesome,
-                        title = costSettingsTitle,
-                        subtitleContent = { com.music.bitchord.ui.components.CostSettingsSubtitle() },
-                        trailing = { Chevron() },
-                        onClick = { com.music.bitchord.ui.components.KoAlerts.costSettings.value = true },
-                    )
-                }
-                val claudeLogTitle = stringResource(R.string.claude_log)
-                row(claudeLogTitle, "claude", "log", "debug", "diagnostics", "error", "로그", "진단", "오류") {
-                    SettingsRow(
-                        icon = SfIcons.AutoAwesome,
-                        title = claudeLogTitle,
-                        subtitle = if (claudeLog.isEmpty()) {
-                            stringResource(R.string.claude_log_empty)
-                        } else {
-                            stringResource(
-                                R.string.claude_log_subtitle,
-                                claudeLog.size,
-                                claudeLog.count { it.failed },
-                            )
-                        },
-                        trailing = { Chevron() },
-                        onClick = onClaudeLog,
-                    )
-                }
-                val keepClaudeTitle = stringResource(R.string.keep_claude_translations)
-                row(keepClaudeTitle, "claude", "keep", "cache", "saved", "보관", "캐시", "번역") {
-                    SettingsRow(
-                        icon = SfIcons.AutoAwesome,
-                        title = keepClaudeTitle,
-                        subtitle = stringResource(R.string.keep_claude_translations_subtitle),
-                        trailing = {
-                            IosSwitch(
-                                checked = keepClaudeTranslations,
-                                onCheckedChange = AppSettings::setKeepClaudeTranslations,
-                            )
-                        },
-                        onClick = { AppSettings.setKeepClaudeTranslations(!keepClaudeTranslations) },
-                    )
-                }
-                val storageTitle = stringResource(R.string.translation_storage)
-                row(storageTitle, "claude", "translation", "cache", "storage", "saved", "번역", "캐시", "저장소", "보관") {
-                    SettingsRow(
-                        icon = SfIcons.AutoAwesome,
-                        title = storageTitle,
-                        subtitle = storageUse?.let { use ->
-                            stringResource(
-                                R.string.translation_storage_use,
-                                megabytes(use.keptBytes),
-                                keptLimitMb,
-                                megabytes(use.cacheBytes),
-                                com.music.bitchord.data.lyrics.LyricsTranslation.CACHE_LIMIT_BYTES / (1024 * 1024),
-                            )
-                        } ?: stringResource(R.string.translation_storage_subtitle),
-                        trailing = { Chevron() },
-                        onClick = { com.music.bitchord.ui.components.KoAlerts.storage.value = true },
-                    )
-                }
-                val aheadLogTitle = stringResource(R.string.translate_ahead_log)
-                row(aheadLogTitle, "claude", "batch", "translate", "ahead", "playlist", "log", "미리", "번역", "기록", "재생목록") {
-                    SettingsRow(
-                        icon = SfIcons.AutoAwesome,
-                        title = aheadLogTitle,
-                        subtitle = if (aheadJobs.isEmpty()) {
-                            stringResource(R.string.translate_ahead_log_empty)
-                        } else {
-                            stringResource(
-                                R.string.translate_ahead_log_subtitle,
-                                aheadJobs.size,
-                                aheadJobs.count { it.active },
-                            )
-                        },
-                        trailing = { Chevron() },
-                        onClick = { com.music.bitchord.ui.components.KoAlerts.aheadLog.value = true },
-                    )
-                }
-                val watchIntervalTitle = stringResource(R.string.translate_ahead_watch_interval)
-                row(watchIntervalTitle, "claude", "batch", "playlist", "new", "watch", "미리", "새 곡", "확인", "주기") {
-                    SettingsRow(
-                        icon = SfIcons.AutoAwesome,
-                        title = watchIntervalTitle,
-                        subtitle = stringResource(
-                            R.string.translate_ahead_watch_interval_subtitle,
-                            aheadWatchHours,
-                            aheadWatches.size,
-                        ),
-                        trailing = { Chevron() },
-                        onClick = { com.music.bitchord.ui.components.KoAlerts.watchInterval.value = true },
-                    )
-                }
-                val aheadIntroTitle = stringResource(R.string.translate_ahead_intro_setting)
-                row(aheadIntroTitle, "claude", "batch", "translate", "ahead", "ask", "미리", "번역", "안내") {
-                    SettingsRow(
-                        icon = SfIcons.AutoAwesome,
-                        title = aheadIntroTitle,
-                        subtitle = stringResource(R.string.translate_ahead_intro_setting_subtitle),
-                        trailing = {
-                            IosSwitch(
-                                checked = aheadIntro,
-                                onCheckedChange = AppSettings::setTranslateAheadIntro,
-                            )
-                        },
-                        onClick = { AppSettings.setTranslateAheadIntro(!aheadIntro) },
-                    )
-                }
-                val chunkTitle = stringResource(R.string.translate_ahead_chunk)
-                row(chunkTitle, "claude", "batch", "translate", "ahead", "size", "chunk", "미리", "번역", "묶음", "크기") {
-                    SettingsRow(
-                        icon = SfIcons.AutoAwesome,
-                        title = chunkTitle,
-                        subtitleContent = { com.music.bitchord.ui.components.ChunkSizeSubtitle() },
-                        trailing = { Chevron() },
-                        onClick = { com.music.bitchord.ui.components.KoAlerts.chunkSize.value = true },
-                    )
-                }
-                if (android.os.Build.VERSION.SDK_INT >= 36) {
-                    val liveTitle = stringResource(R.string.ahead_live_updates)
-                    row(liveTitle, "live update", "notification", "status bar", "미리", "번역", "실시간", "알림", "상태바") {
-                        com.music.bitchord.ui.components.AheadLiveUpdatesRow(liveTitle)
-                    }
-                }
+            }
+        }
+        if (shows(SettingsCategory.KO_FEATURES) && claudeApiKey.isNotBlank()) SearchableSettingsGroup(
+            search,
+            header = stringResource(R.string.ko_group_cost),
+            headerInPage = true,
+        ) {
+            val claudeUsageTitle = stringResource(R.string.claude_usage)
+            row(claudeUsageTitle, "claude", "usage", "tokens", "cost", "사용량", "비용") {
+                SettingsRow(
+                    icon = SfIcons.BarChart,
+                    title = claudeUsageTitle,
+                    subtitle = if (claudeUsage.isEmpty) {
+                        stringResource(R.string.claude_usage_none)
+                    } else {
+                        stringResource(
+                            R.string.claude_usage_subtitle,
+                            compactTokens(claudeUsage.inputTokens),
+                            compactTokens(claudeUsage.outputTokens),
+                            com.music.bitchord.ui.components.koFormat().money(claudeUsage.estimatedUsd()),
+                        )
+                    },
+                    trailing = { Chevron() },
+                    onClick = onClaudeUsage,
+                )
+            }
+            val claudeMonthlyCapTitle = stringResource(R.string.claude_monthly_cap)
+            row(claudeMonthlyCapTitle, "claude", "limit", "budget", "cost", "한도", "요금", "비용") {
+                SettingsRow(
+                    icon = SfIcons.Warning,
+                    title = claudeMonthlyCapTitle,
+                    subtitleContent = { com.music.bitchord.ui.components.MonthlyCapSubtitle(claudeMonthlyCap, claudeUsage) },
+                    trailing = { Chevron() },
+                    onClick = { com.music.bitchord.ui.components.KoAlerts.monthlyCap.value = true },
+                )
+            }
+            val costSettingsTitle = stringResource(R.string.claude_cost_settings)
+            row(costSettingsTitle, "claude", "won", "krw", "exchange", "limit", "daily", "warning", "원화", "환율", "한도", "하루", "경고", "금액") {
+                SettingsRow(
+                    icon = SfIcons.Tune,
+                    title = costSettingsTitle,
+                    subtitleContent = { com.music.bitchord.ui.components.CostSettingsSubtitle() },
+                    trailing = { Chevron() },
+                    onClick = { com.music.bitchord.ui.components.KoAlerts.costSettings.value = true },
+                )
+            }
+            val claudeLogTitle = stringResource(R.string.claude_log)
+            row(claudeLogTitle, "claude", "log", "debug", "diagnostics", "error", "로그", "진단", "오류") {
+                SettingsRow(
+                    icon = SfIcons.Bug,
+                    title = claudeLogTitle,
+                    subtitle = if (claudeLog.isEmpty()) {
+                        stringResource(R.string.claude_log_empty)
+                    } else {
+                        stringResource(
+                            R.string.claude_log_subtitle,
+                            claudeLog.size,
+                            claudeLog.count { it.failed },
+                        )
+                    },
+                    trailing = { Chevron() },
+                    onClick = onClaudeLog,
+                )
+            }
+        }
+        if (shows(SettingsCategory.KO_FEATURES) && claudeApiKey.isNotBlank()) SearchableSettingsGroup(
+            search,
+            header = stringResource(R.string.ko_group_storage),
+            headerInPage = true,
+        ) {
+            val keepClaudeTitle = stringResource(R.string.keep_claude_translations)
+            row(keepClaudeTitle, "claude", "keep", "cache", "saved", "보관", "캐시", "번역") {
+                SettingsRow(
+                    icon = SfIcons.Lock,
+                    title = keepClaudeTitle,
+                    subtitle = stringResource(R.string.keep_claude_translations_subtitle),
+                    trailing = {
+                        IosSwitch(
+                            checked = keepClaudeTranslations,
+                            onCheckedChange = AppSettings::setKeepClaudeTranslations,
+                        )
+                    },
+                    onClick = { AppSettings.setKeepClaudeTranslations(!keepClaudeTranslations) },
+                )
+            }
+            val storageTitle = stringResource(R.string.translation_storage)
+            row(storageTitle, "claude", "translation", "cache", "storage", "saved", "번역", "캐시", "저장소", "보관") {
+                SettingsRow(
+                    icon = SfIcons.Storage,
+                    title = storageTitle,
+                    subtitle = storageUse?.let { use ->
+                        stringResource(
+                            R.string.translation_storage_use,
+                            megabytes(use.keptBytes),
+                            keptLimitMb,
+                            megabytes(use.cacheBytes),
+                            com.music.bitchord.data.lyrics.LyricsTranslation.CACHE_LIMIT_BYTES / (1024 * 1024),
+                        )
+                    } ?: stringResource(R.string.translation_storage_subtitle),
+                    trailing = { Chevron() },
+                    onClick = { com.music.bitchord.ui.components.KoAlerts.storage.value = true },
+                )
             }
         }
         if (shows(SettingsCategory.KO_FEATURES)) SearchableSettingsGroup(
@@ -3205,13 +3227,24 @@ internal fun SettingsSubRow(
     badge: String? = null,
     subtitle: String? = null,
     enabled: Boolean = true,
+    /**
+     * Lined up under the parent row's title rather than its icon, with room
+     * for a two-line title and a gap before the switch — the KO page's own
+     * sub-rows; upstream's keep their look.
+     */
+    aligned: Boolean = false,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(enabled = enabled) { onCheckedChange(!checked) }
             .alpha(if (enabled) 1f else 0.45f)
-            .padding(start = ROW_INSET, end = ROW_INSET, top = 0.dp, bottom = 10.dp),
+            .padding(
+                start = if (aligned) ROW_INSET + ICON_SIZE + ICON_GAP else ROW_INSET,
+                end = ROW_INSET,
+                top = 0.dp,
+                bottom = if (aligned) 12.dp else 10.dp,
+            ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
@@ -3220,7 +3253,7 @@ internal fun SettingsSubRow(
                     text = title,
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onBackground,
-                    maxLines = 1,
+                    maxLines = if (aligned) 2 else 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 if (badge != null) {
@@ -3237,6 +3270,7 @@ internal fun SettingsSubRow(
                 )
             }
         }
+        if (aligned) Spacer(Modifier.width(12.dp))
         IosSwitch(
             checked = checked,
             onCheckedChange = onCheckedChange,

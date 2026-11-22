@@ -172,15 +172,21 @@ fun AutoBackupSizeRow(title: String) {
 fun SongBackgroundRows(title: String) {
     val on by com.music.bitchord.data.settings.AppSettings.songBackground.collectAsStateWithLifecycle()
     val widen by com.music.bitchord.data.settings.AppSettings.songBackgroundWiden.collectAsStateWithLifecycle()
+    val sonnet by com.music.bitchord.data.settings.AppSettings.songBackgroundSonnet.collectAsStateWithLifecycle()
     val stored = androidx.compose.runtime.produceState(0, on) {
         value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             com.music.bitchord.data.lyrics.SongBackgrounds.storedCount().first
         }
     }.value
+    val cost = androidx.compose.ui.res.stringResource(
+        com.music.bitchord.R.string.song_background_cost,
+        androidx.compose.ui.res.stringResource(if (sonnet) com.music.bitchord.R.string.song_background_cost_sonnet else com.music.bitchord.R.string.song_background_cost_haiku),
+        if (sonnet) "Sonnet" else "Haiku",
+    )
     com.music.bitchord.ui.screens.SettingsRow(
         icon = com.music.bitchord.ui.icons.SfIcons.Language,
         title = title,
-        subtitle = androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.song_background_subtitle) +
+        subtitle = androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.song_background_subtitle) + "\n" + cost +
             if (stored > 0) " · " + androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.song_background_stored, stored) else "",
         trailing = {
             IosSwitch(checked = on, onCheckedChange = com.music.bitchord.data.settings.AppSettings::setSongBackground)
@@ -190,14 +196,17 @@ fun SongBackgroundRows(title: String) {
     if (on) {
         com.music.bitchord.ui.screens.SettingsSubRow(
             title = androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.song_background_widen),
+            subtitle = androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.song_background_widen_subtitle),
             checked = widen,
             onCheckedChange = com.music.bitchord.data.settings.AppSettings::setSongBackgroundWiden,
+            aligned = true,
         )
-        val sonnet by com.music.bitchord.data.settings.AppSettings.songBackgroundSonnet.collectAsStateWithLifecycle()
         com.music.bitchord.ui.screens.SettingsSubRow(
             title = androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.song_background_sonnet),
+            subtitle = androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.song_background_sonnet_subtitle),
             checked = sonnet,
             onCheckedChange = com.music.bitchord.data.settings.AppSettings::setSongBackgroundSonnet,
+            aligned = true,
         )
     }
 }

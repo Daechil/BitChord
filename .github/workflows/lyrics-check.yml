@@ -93,12 +93,19 @@ jobs:
         run: ./gradlew :shared:jvmTest --tests 'com.music.bitchord.data.lyrics.TranslationProbe' --rerun --no-daemon
 
       - name: Claude web search
-        if: inputs.claude_search != '' && inputs.claude_search != 'app'
+        if: inputs.claude_search != '' && inputs.claude_search != 'app' && inputs.claude_search != 'fetch'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           CLAUDE_SEARCH_CASES: ${{ inputs.claude_search }}
           LIVE_LYRICS_REPORT: ${{ github.workspace }}/live-lyrics.md
         run: python3 .github/scripts/claude_search_check.py
+
+      - name: namu.wiki fetch (Claude)
+        if: inputs.claude_search == 'fetch'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          LIVE_LYRICS_REPORT: ${{ github.workspace }}/live-lyrics.md
+        run: python3 .github/scripts/namu_fetch_check.py
 
       - name: Background sources
         if: inputs.sources != ''

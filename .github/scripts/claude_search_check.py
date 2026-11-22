@@ -75,10 +75,13 @@ FORCE = (
 )
 
 
-def research(model, tool, title, artist, json_format=False, max_uses=1, domains=None, force=False):
+def research(model, tool, title, artist, json_format=False, max_uses=1, domains=None, force=False, direct=False):
     tool_def = {"type": tool, "name": "web_search", "max_uses": max_uses}
     if domains:
         tool_def["allowed_domains"] = domains
+    if direct:
+        # Searched by Claude itself rather than from the filtering code.
+        tool_def["allowed_callers"] = ["direct"]
     body = {
         "model": model,
         "max_tokens": 2500,
@@ -107,31 +110,37 @@ def main():
         sys.exit(1)
     rows, notes, total = [], [], 0.0
     namu = ["namu.wiki"]
-    if os.environ.get("CLAUDE_SEARCH_CASES") == "namu":
+    if os.environ.get("CLAUDE_SEARCH_CASES") == "namu2":
         cases = [
-            ("N1 namu.wiki only", "claude-haiku-5-5", "春を告げる", "yama", True, namu, True),
-            ("N2 namu.wiki only", "claude-haiku-5-5", "テトリス", "柊マグネタイト", True, namu, True),
-            ("N3 namu.wiki only", "claude-haiku-5-5", "Machine Love", "Jamie Paige", True, namu, True),
-            ("N4 any site, forced", "claude-haiku-5-5", "春を告げる", "yama", True, None, True),
+            ("M1 namu.wiki, direct, up to 3", "claude-haiku-5-5", "春を告げる", "yama", True, namu, False, 3, True),
+            ("M2 namu.wiki, direct, up to 3", "claude-haiku-5-5", "テトリス", "柊マグネタイト", True, namu, False, 3, True),
+            ("M3 namu.wiki, filtered, up to 3", "claude-haiku-5-5", "アイドル", "YOASOBI", True, namu, False, 3, False),
+        ]
+    elif os.environ.get("CLAUDE_SEARCH_CASES") == "namu":
+        cases = [
+            ("N1 namu.wiki only", "claude-haiku-5-5", "春を告げる", "yama", True, namu, True, 1, False),
+            ("N2 namu.wiki only", "claude-haiku-5-5", "テトリス", "柊マグネタイト", True, namu, True, 1, False),
+            ("N3 namu.wiki only", "claude-haiku-5-5", "Machine Love", "Jamie Paige", True, namu, True, 1, False),
+            ("N4 any site, forced", "claude-haiku-5-5", "春を告げる", "yama", True, None, True, 1, False),
         ]
     else:
         cases = [
-            ("1 Haiku, 1 search", "claude-haiku-5-5", "アイドル", "YOASOBI", False, None, False),
-            ("2 Haiku, 1 search", "claude-haiku-5-5", "春を告げる", "yama", False, None, False),
-            ("3 Sonnet, 1 search", "claude-sonnet-5-5", "春を告げる", "yama", False, None, False),
-            ("4 Haiku, lesser-known", "claude-haiku-5-5", "Machine Love", "Jamie Paige", False, None, False),
-            ("5 Haiku + JSON format", "claude-haiku-5-5", "アイドル", "YOASOBI", True, None, False),
+            ("1 Haiku, 1 search", "claude-haiku-5-5", "アイドル", "YOASOBI", False, None, False, 1, False),
+            ("2 Haiku, 1 search", "claude-haiku-5-5", "春を告げる", "yama", False, None, False, 1, False),
+            ("3 Sonnet, 1 search", "claude-sonnet-5-5", "春を告げる", "yama", False, None, False, 1, False),
+            ("4 Haiku, lesser-known", "claude-haiku-5-5", "Machine Love", "Jamie Paige", False, None, False, 1, False),
+            ("5 Haiku + JSON format", "claude-haiku-5-5", "アイドル", "YOASOBI", True, None, False, 1, False),
         ]
-    for label, model, title, artist, as_json, domains, force in cases:
+    for label, model, title, artist, as_json, domains, force, uses, direct in cases:
         tool = "web_search_20260209"
-        code, data, seconds = research(model, tool, title, artist, as_json, domains=domains, force=force)
+        code, data, seconds = research(model, tool, title, artist, as_json, max_uses=uses, domains=domains, force=force, direct=direct)
         if code == 400 and "web_search" in json.dumps(data.get("error", {})):
             # The newer tool may not be offered for this model: the basic one instead.
             line, usd = row(label + " (newer tool refused)", model, tool, code, data, seconds)
             rows.append(line)
             total += usd
             tool = "web_search_20250305"
-            code, data, seconds = research(model, tool, title, artist, as_json, domains=domains, force=force)
+            code, data, seconds = research(model, tool, title, artist, as_json, max_uses=uses, domains=domains, force=force)
         line, usd = row(label, model, tool, code, data, seconds)
         rows.append(line)
         total += usd

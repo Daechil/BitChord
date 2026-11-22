@@ -120,7 +120,10 @@ class TranslationProbe {
         val newInstructions = instructionsB
         if (batch) {
             SongBackgrounds.enabled = false
-            a = LyricsTranslation.translate(song.videoId, lines, "ko")
+            // Under another id: answers are held in memory by song, and A's must not be read back as B's.
+            val idA = song.videoId + "-a"
+            SongBackgrounds.noteSong(idA, song.title, song.artist)
+            a = LyricsTranslation.translate(idA, lines, "ko")
             out.append("- A (live, name only): ${describe(a)}\n")
             // Another store for B, so A's answer is not taken for B's.
             val dirB = Files.createTempDirectory("trb").toFile()

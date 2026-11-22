@@ -162,3 +162,36 @@ fun AutoBackupSizeRow(title: String) {
         },
     )
 }
+
+/**
+ * "Song background": each song looked up on the web once, for its
+ * translation and explanation; and, under it while it is on, whether to try
+ * the whole web when the wikis have nothing. Shows how many are kept.
+ */
+@androidx.compose.runtime.Composable
+fun SongBackgroundRows(title: String) {
+    val on by com.music.bitchord.data.settings.AppSettings.songBackground.collectAsStateWithLifecycle()
+    val widen by com.music.bitchord.data.settings.AppSettings.songBackgroundWiden.collectAsStateWithLifecycle()
+    val stored = androidx.compose.runtime.produceState(0, on) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            com.music.bitchord.data.lyrics.SongBackgrounds.storedCount().first
+        }
+    }.value
+    com.music.bitchord.ui.screens.SettingsRow(
+        icon = com.music.bitchord.ui.icons.SfIcons.Language,
+        title = title,
+        subtitle = androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.song_background_subtitle) +
+            if (stored > 0) " · " + androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.song_background_stored, stored) else "",
+        trailing = {
+            IosSwitch(checked = on, onCheckedChange = com.music.bitchord.data.settings.AppSettings::setSongBackground)
+        },
+        onClick = { com.music.bitchord.data.settings.AppSettings.setSongBackground(!on) },
+    )
+    if (on) {
+        com.music.bitchord.ui.screens.SettingsSubRow(
+            title = androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.song_background_widen),
+            checked = widen,
+            onCheckedChange = com.music.bitchord.data.settings.AppSettings::setSongBackgroundWiden,
+        )
+    }
+}

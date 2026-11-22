@@ -418,6 +418,8 @@ private fun ClaudeUsageWindow(hazeState: HazeState, onDismiss: () -> Unit) {
     }
     val haikuLabel = stringResource(R.string.claude_model_haiku)
     val sonnetLabel = stringResource(R.string.claude_model_sonnet)
+    val webSearchLabel = stringResource(R.string.song_background_usage_label)
+    val webSearchCount = stringResource(R.string.song_background_usage_count)
     val noteLine = stringResource(R.string.claude_usage_note)
     val monthsTitle = stringResource(R.string.claude_usage_months)
     val monthDetail = stringResource(R.string.claude_usage_month_detail)
@@ -427,6 +429,10 @@ private fun ClaudeUsageWindow(hazeState: HazeState, onDismiss: () -> Unit) {
         // Tokens that went through a batch are tallied apart: they cost half.
         val batch = model.endsWith(suffix)
         val plain = model.removeSuffix(suffix)
+        if (plain == AppSettings.WEB_SEARCH_MODEL) {
+            // Searches are counted, not tokens.
+            return@map webSearchLabel to webSearchCount.format(usage.inputByModel[model] ?: 0L)
+        }
         val label = (if (plain == com.music.bitchord.data.lyrics.LyricsTranslation.CLAUDE_SONNET) sonnetLabel else haikuLabel) +
             if (batch) " (Batch)" else ""
         label to format.inOut(usage.inputByModel[model] ?: 0L, usage.outputByModel[model] ?: 0L)
@@ -523,6 +529,8 @@ private fun ClaudeLogWindow(onDismiss: () -> Unit) {
         "pause_turn" to stringResource(R.string.claude_stop_pause_turn),
     )
     val inOutLabel = stringResource(R.string.ko_tokens_in_out)
+    val purposeBackground = stringResource(R.string.song_background_purpose)
+    val searchesLabel = stringResource(R.string.song_background_searches)
     // The copy keeps the raw values, for a bug report; the screen says what they mean.
     val raw = remember { SimpleDateFormat("MM-dd HH:mm:ss", Locale.US) }
     val copyLines = entries.map { entry ->
@@ -536,6 +544,7 @@ private fun ClaudeLogWindow(onDismiss: () -> Unit) {
             if (entry.inputTokens != null || entry.outputTokens != null) {
                 append(" · in ").append(entry.inputTokens ?: 0).append("/out ").append(entry.outputTokens ?: 0)
             }
+            entry.searches?.takeIf { it > 0 }?.let { append(" · searches ").append(it) }
             entry.detail?.let { append('\n').append("  ").append(it) }
         }
     }
@@ -547,6 +556,7 @@ private fun ClaudeLogWindow(onDismiss: () -> Unit) {
             ClaudeDiagnostics.PURPOSE_READING -> purposeReading
             ClaudeDiagnostics.PURPOSE_BATCH -> purposeBatch
             ClaudeDiagnostics.PURPOSE_RECOMMEND -> purposeRecommend
+            ClaudeDiagnostics.PURPOSE_BACKGROUND -> purposeBackground
             else -> entry.purpose
         }
         val model = when (entry.model) {
@@ -570,6 +580,7 @@ private fun ClaudeLogWindow(onDismiss: () -> Unit) {
             if (entry.inputTokens != null || entry.outputTokens != null) {
                 append(" · ").append(inOutLabel.format(format.tokens(entry.inputTokens ?: 0L), format.tokens(entry.outputTokens ?: 0L)))
             }
+            entry.searches?.takeIf { it > 0 }?.let { append(" · ").append(searchesLabel.format(it)) }
             entry.detail?.let { append('\n').append(it) }
         }
         head to body

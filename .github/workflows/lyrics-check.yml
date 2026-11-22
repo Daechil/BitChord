@@ -66,8 +66,16 @@ jobs:
           LIVE_LYRICS_REPORT: ${{ github.workspace }}/live-lyrics.md
         run: ./gradlew :shared:jvmTest --tests 'com.music.bitchord.playback.RadioDedupeProbe' --rerun --no-daemon
 
+      - name: Song background (app code)
+        if: inputs.claude_search == 'app'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SONG_BACKGROUND_PROBE: '1'
+          LIVE_LYRICS_REPORT: ${{ github.workspace }}/live-lyrics.md
+        run: ./gradlew :shared:jvmTest --tests 'com.music.bitchord.data.lyrics.SongBackgroundProbe' --rerun --no-daemon
+
       - name: Claude web search
-        if: inputs.claude_search != ''
+        if: inputs.claude_search != '' && inputs.claude_search != 'app'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           CLAUDE_SEARCH_CASES: ${{ inputs.claude_search }}

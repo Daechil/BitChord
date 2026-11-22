@@ -64,6 +64,8 @@ object ClaudeDiagnostics {
     const val PURPOSE_BATCH = "batch"
     /** Songs Claude suggests to play next. */
     const val PURPOSE_RECOMMEND = "recommend"
+    /** A song's background, looked up on the web; see [SongBackgrounds]. */
+    const val PURPOSE_BACKGROUND = "background"
 
     @Serializable
     data class Entry(
@@ -83,6 +85,8 @@ object ClaudeDiagnostics {
         val linesGot: Int? = null,
         val inputTokens: Long? = null,
         val outputTokens: Long? = null,
+        /** Web searches the request made, each billed apart from the tokens. */
+        val searches: Int? = null,
         /** The API's error message, an exception, or what was wrong with the answer — cut short. */
         val detail: String? = null,
     ) {

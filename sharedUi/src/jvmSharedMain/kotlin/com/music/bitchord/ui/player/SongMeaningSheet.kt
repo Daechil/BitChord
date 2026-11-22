@@ -211,6 +211,37 @@ private fun MeaningBody(meaning: LyricsTranslation.SongMeaning) {
                 }
             }
         }
+        // The web search's background, apart from the explanation and marked as such.
+        if (meaning.background.isNotBlank()) {
+            Text(
+                text = stringResource(Res.string.song_background_title),
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                color = Color.White.copy(alpha = 0.6f),
+                modifier = Modifier.padding(top = 6.dp),
+            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(ROW_SHAPE)
+                    .background(Color.White.copy(alpha = 0.06f))
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+            ) {
+                Text(
+                    text = meaning.background,
+                    style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 21.sp),
+                    color = Color.White.copy(alpha = 0.8f),
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = stringResource(
+                        Res.string.song_background_source,
+                        meaning.backgroundSources.joinToString(", ").ifBlank { "web" },
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White.copy(alpha = 0.45f),
+                )
+            }
+        }
         Text(
             text = stringResource(Res.string.song_meaning_footer),
             style = MaterialTheme.typography.labelSmall,

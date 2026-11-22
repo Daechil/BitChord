@@ -862,6 +862,14 @@ Adding: %4$s
     <string name="crash_reason_anr">Not responding (ANR)</string>
     <string name="crash_reason_lmk">Closed by Android for memory while playing</string>
     <string name="crash_reason_other">Closed by Android</string>
+    <string name="song_background">Song background (web search)</string>
+    <string name="song_background_subtitle">Each song is looked up once on namu.wiki, Wikipedia and the like, for its translation and explanation · about 20–30 won a song (Haiku)</string>
+    <string name="song_background_stored">%1$d songs kept</string>
+    <string name="song_background_widen">Search the whole web when the wikis have nothing</string>
+    <string name="song_background_usage_label">Web search</string>
+    <string name="song_background_usage_count">%1$d searches</string>
+    <string name="song_background_purpose">Song background</string>
+    <string name="song_background_searches">%1$d searches</string>
     <string name="ko_window_summary">Summary</string>
     <string name="ko_window_songs">Songs · %1$d</string>
     <string name="ko_window_space">Space used</string>

@@ -225,6 +225,16 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
         if (cacheOnly) {
             return mapped(LyricsTranslation.translate(trackId, lines, targetLanguageTag, cacheOnly = true), standIn = awaiting)
         }
+        // A long press asks again: with Settings' "song background" on, the
+        // song is looked up first (once per song), so the new translation
+        // reads it knowing what it is about.
+        if (fresh && claudeLive) {
+            com.music.bitchord.data.lyrics.SongBackgrounds.nameOf(trackId)?.let { name ->
+                runCatching {
+                    com.music.bitchord.data.lyrics.SongBackgrounds.ensure(name, targetLanguageTag, lines.map { it.text })
+                }.onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+            }
+        }
         if (awaiting) {
             val stored = LyricsTranslation.translate(trackId, lines, targetLanguageTag, cacheOnly = true)
             if (stored !is LyricsTranslation.Result.Unavailable) return mapped(stored, standIn = true)

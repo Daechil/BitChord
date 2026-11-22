@@ -713,6 +713,7 @@ object TranslateAhead {
             var status = if (found is LyricsLookup.Failed) TrackStatus.LYRICS_ERROR else TrackStatus.NO_LYRICS
             var readingStatus: String? = if (job.reading) status else null
             if (lines != null && lines.any { it.text.isNotBlank() }) {
+                com.music.bitchord.data.lyrics.SongBackgrounds.noteSong(track.videoId, track.title, track.artist, track.album)
                 val translation = LyricsTranslation.aheadRequest("t$index", track.videoId, lines, job.target, job.model, reading = false)
                 status = statusOf(translation)
                 pending.add(translation, track.videoId)

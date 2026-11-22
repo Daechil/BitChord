@@ -656,6 +656,15 @@ object AppSettings {
     /** The instructions go with the song explanations too. */
     val claudeInstructionsForMeaning = MutableStateFlow(false)
 
+    /** Look up each song's background on the web, once, for its translation and explanation. Off unless chosen: it costs a search. */
+    val songBackground = MutableStateFlow(false)
+
+    /** When the wikis have nothing on a song, search the whole web once more. */
+    val songBackgroundWiden = MutableStateFlow(true)
+
+    /** The usage tallies' name for web searches: counted one "token" per search, priced per search. */
+    const val WEB_SEARCH_MODEL = "web_search"
+
     const val MAX_INSTRUCTIONS_CHARS = 500
 
     /** A small bar of the current lyric line over other apps while playing. See FloatingLyrics. */
@@ -810,6 +819,8 @@ object AppSettings {
         }
         return when (model) {
             com.music.bitchord.data.lyrics.LyricsTranslation.CLAUDE_SONNET -> 2.0 to 10.0
+            // $10 per 1,000 searches, tallied one per search as if a token.
+            WEB_SEARCH_MODEL -> 10_000.0 to 0.0
             else -> 0.10 to 0.50
         }
     }
@@ -1382,6 +1393,11 @@ object AppSettings {
         com.music.bitchord.data.lyrics.LyricsTranslation.keepClaudeAlways = keepClaudeTranslations.value
         com.music.bitchord.data.lyrics.LyricsTranslation.keptLimitBytes = keptStoreLimitMb.value * 1024L * 1024L
         com.music.bitchord.data.lyrics.LyricsTranslation.usageSink = ::recordClaudeUsage
+        com.music.bitchord.data.lyrics.LyricsTranslation.searchSink = { searches -> recordClaudeUsage(WEB_SEARCH_MODEL, searches.toLong(), 0L) }
+        songBackground.value = prefs.getBoolean(KEY_SONG_BACKGROUND, false)
+        songBackgroundWiden.value = prefs.getBoolean(KEY_SONG_BACKGROUND_WIDEN, true)
+        com.music.bitchord.data.lyrics.SongBackgrounds.enabled = songBackground.value
+        com.music.bitchord.data.lyrics.SongBackgrounds.widenWhenMissing = songBackgroundWiden.value
         claudeMonthlyCap.value = prefs.getFloat(KEY_CLAUDE_MONTHLY_CAP, 0f).toDouble()
         moneyDisplay.value = prefs.getString(KEY_MONEY_DISPLAY, null)
             ?.takeIf { it == MONEY_USD || it == MONEY_KRW || it == MONEY_BOTH } ?: MONEY_BOTH
@@ -2110,6 +2126,18 @@ object AppSettings {
         claudeInstructions.value = clean
         prefs.edit().putString(KEY_CLAUDE_INSTRUCTIONS, clean).apply()
         com.music.bitchord.data.lyrics.LyricsTranslation.listenerInstructions = clean
+    }
+
+    fun setSongBackground(value: Boolean) {
+        songBackground.value = value
+        com.music.bitchord.data.lyrics.SongBackgrounds.enabled = value
+        prefs.edit().putBoolean(KEY_SONG_BACKGROUND, value).apply()
+    }
+
+    fun setSongBackgroundWiden(value: Boolean) {
+        songBackgroundWiden.value = value
+        com.music.bitchord.data.lyrics.SongBackgrounds.widenWhenMissing = value
+        prefs.edit().putBoolean(KEY_SONG_BACKGROUND_WIDEN, value).apply()
     }
 
     fun setClaudeInstructionsForMeaning(value: Boolean) {
@@ -3142,6 +3170,8 @@ object AppSettings {
     private const val KEY_FLOATING_LYRICS_OFFSET = "ko_floating_lyrics_offset"
     private const val KEY_PRONUNCIATION_MODE = "ko_pronunciation_mode"
     private const val KEY_CLAUDE_INSTRUCTIONS = "ko_claude_instructions"
+    private const val KEY_SONG_BACKGROUND = "ko_song_background"
+    private const val KEY_SONG_BACKGROUND_WIDEN = "ko_song_background_widen"
     private const val KEY_CLAUDE_INSTRUCTIONS_MEANING = "ko_claude_instructions_meaning"
     private const val KEY_KRW_RATE_MODE = "ko_krw_rate_mode"
     private const val KEY_KRW_RATE_SOURCE = "ko_krw_rate_source"

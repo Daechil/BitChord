@@ -739,6 +739,12 @@ fun SettingsScreen(
                 }
             }
             if (claudeApiKey.isNotBlank()) {
+                val songBackgroundTitle = stringResource(R.string.song_background)
+                row(songBackgroundTitle, "claude", "background", "web", "search", "배경", "검색", "나무위키") {
+                    com.music.bitchord.ui.components.SongBackgroundRows(songBackgroundTitle)
+                }
+            }
+            if (claudeApiKey.isNotBlank()) {
                 val claudeModelTitle = stringResource(R.string.claude_model)
                 row(claudeModelTitle, "claude", "model", "haiku", "sonnet", "ai") {
                     SettingsRow(

@@ -539,6 +539,10 @@ object LyricsTranslation {
     @Volatile
     var usageSink: ((model: String, inputTokens: Long, outputTokens: Long) -> Unit)? = null
 
+    /** Told how many web searches an answer made: billed per search, beside the tokens. */
+    @Volatile
+    var searchSink: ((searches: Int) -> Unit)? = null
+
     const val CLAUDE_HAIKU = "claude-haiku-5-5"
     const val CLAUDE_SONNET = "claude-sonnet-5-5"
     const val SPEECH_AUTO = "auto"
@@ -634,12 +638,12 @@ object LyricsTranslation {
         }
         if (cacheOnly) return ClaudeAttempt(null, fromCache = false, failure = null)
         val model = claudeModel
-        var reply = requestClaudeTranslation(slots, target, model)
+        var reply = requestClaudeTranslation(slots, target, model, trackId = trackId)
         // Haiku turns some songs down as copyrighted text that Sonnet
         // translates; one more request, to Sonnet, before Google stands in.
         // Only for a refusal: any other failure would fail Sonnet the same way.
         val standIn = reply.failure == ClaudeFailure.REFUSAL && model == CLAUDE_HAIKU && sonnetStandInEnabled
-        if (standIn) reply = requestClaudeTranslation(slots, target, CLAUDE_SONNET)
+        if (standIn) reply = requestClaudeTranslation(slots, target, CLAUDE_SONNET, trackId = trackId)
         val fresh = reply.value ?: return ClaudeAttempt(null, fromCache = false, failure = reply.failure ?: ClaudeFailure.ERROR)
         val entry = CachedTranslation(
             sourceLanguage = fresh.sourceLanguage,
@@ -720,6 +724,7 @@ object LyricsTranslation {
             appendLine("7. Output only the translated text. No quotes around lines, no notes, no romanisation, no explanations.")
             appendLine("8. Set \"source_language\" to the ISO 639-1 code of the song's main original language.")
             appendLine("9. Leave \"declined_reason\" as an empty string. Only if you will not translate this song, write the reason there in one short sentence and leave every translation empty. Never write a refusal, a warning or a note in place of a translation.")
+            appendLine("10. The input may name the song (\"song\": title, artist) and give its \"background\" and \"phrase_notes\" from a web search. Use them only to choose the tone and the words, and to carry wordplay and double meanings across. They can be wrong: the lyrics come first. Never add to a line anything that is not in it.")
             appendListenerInstructions()
         }
     }
@@ -792,8 +797,10 @@ object LyricsTranslation {
         model: String,
         /** How each line sounds, in [target]'s script, rather than what it means — see [claudeReading]. */
         reading: Boolean = false,
+        /** The song, for its name and any background kept for it; see [SongBackgrounds]. */
+        trackId: String? = null,
     ): ClaudeResult<BatchAnswer> {
-        val input = translationInput(slots, target)
+        val input = translationInput(slots, target, trackId)
         suspend fun ask(shape: AnswerShape) = askClaude(
             purpose = if (reading) ClaudeDiagnostics.PURPOSE_READING else ClaudeDiagnostics.PURPOSE_TRANSLATE,
             model = model,
@@ -820,9 +827,12 @@ object LyricsTranslation {
     }
 
     /** The user's turn of a translation or reading request: the lines, numbered, each with its role. */
-    private fun translationInput(slots: List<TextSlot>, target: String): String = buildJsonObject {
+    private fun translationInput(slots: List<TextSlot>, target: String, trackId: String? = null): String = buildJsonObject {
         put("target_language", target)
         put("line_count", slots.size)
+        // The song's name, and its background where one was looked up: read
+        // for tone and word choice, never added to the lines.
+        SongBackgrounds.context(trackId)?.let { put("song", it) }
         putJsonArray("lines") {
             slots.forEachIndexed { index, slot ->
                 add(buildJsonObject {
@@ -963,6 +973,8 @@ object LyricsTranslation {
         maxTokens: Int = 16_000,
         /** Lines sent, for a translation: logged beside the count that came back. */
         linesAsked: Int? = null,
+        /** Server tools the request may use; see [claudeBody]. */
+        tools: kotlinx.serialization.json.JsonArray? = null,
         parse: (String) -> Parsed<T>,
     ): ClaudeResult<T> {
         val key = cleanClaudeKey()
@@ -977,6 +989,7 @@ object LyricsTranslation {
             outputTokens: Long? = null,
             detail: String? = null,
             sent: Boolean = true,
+            searches: Int? = null,
         ): ClaudeResult<T> {
             ClaudeDiagnostics.record(
                 ClaudeDiagnostics.Entry(
@@ -991,6 +1004,7 @@ object LyricsTranslation {
                     linesGot = linesGot,
                     inputTokens = inputTokens,
                     outputTokens = outputTokens,
+                    searches = searches,
                     detail = detail,
                 ),
             )
@@ -1011,7 +1025,7 @@ object LyricsTranslation {
             val seconds = (claudeCooldownUntil - now + 999) / 1000
             return done(ClaudeFailure.COOLDOWN, detail = "not sent: resting ${seconds}s after a rate limit or overload", sent = false)
         }
-        val body = claudeBody(model, system, input, schema, effort, maxTokens).toString()
+        val body = claudeBody(model, system, input, schema, effort, maxTokens, tools).toString()
         val request = Request.Builder()
             .url(CLAUDE_ENDPOINT)
             .header("x-api-key", key)
@@ -1031,19 +1045,23 @@ object LyricsTranslation {
         if (code in 200..299) {
             recordUsage(model, text)
             val meta = responseMeta(text)
+            // Each web search is billed on its own, beside the tokens.
+            meta.searches?.takeIf { it > 0 }?.let { searches -> searchSink?.invoke(searches) }
             when (meta.stopReason) {
                 "refusal" -> return done(
                     ClaudeFailure.REFUSAL, httpCode = code, stopReason = meta.stopReason,
                     inputTokens = meta.inputTokens, outputTokens = meta.outputTokens, detail = meta.refusalCategory,
+                    searches = meta.searches,
                 )
                 "max_tokens" -> return done(
                     ClaudeFailure.CUT_OFF, httpCode = code, stopReason = meta.stopReason,
-                    inputTokens = meta.inputTokens, outputTokens = meta.outputTokens,
+                    inputTokens = meta.inputTokens, outputTokens = meta.outputTokens, searches = meta.searches,
                 )
             }
             val answer = claudeText(text) ?: return done(
                 ClaudeFailure.BAD_ANSWER, httpCode = code, stopReason = meta.stopReason,
                 inputTokens = meta.inputTokens, outputTokens = meta.outputTokens, detail = "no text block in the answer",
+                searches = meta.searches,
             )
             val parsed = try {
                 parse(answer)
@@ -1054,7 +1072,7 @@ object LyricsTranslation {
             return done(
                 failure, value = parsed.value?.takeIf { failure == null }, httpCode = code, stopReason = meta.stopReason,
                 linesGot = parsed.linesGot, inputTokens = meta.inputTokens, outputTokens = meta.outputTokens,
-                detail = parsed.detail,
+                detail = parsed.detail, searches = meta.searches,
             )
         }
         val failure = when {
@@ -1093,10 +1111,13 @@ object LyricsTranslation {
         schema: JsonObject,
         effort: String,
         maxTokens: Int = 16_000,
+        /** Server tools the request may use — the web search; null for none. */
+        tools: kotlinx.serialization.json.JsonArray? = null,
     ): JsonObject = buildJsonObject {
         put("model", model)
         put("max_tokens", maxTokens)
         put("system", system)
+        if (tools != null) put("tools", tools)
         putJsonArray("messages") {
             add(buildJsonObject {
                 put("role", "user")
@@ -1117,6 +1138,7 @@ object LyricsTranslation {
         val refusalCategory: String?,
         val inputTokens: Long?,
         val outputTokens: Long?,
+        val searches: Int? = null,
     )
 
     /** The stop reason, refusal category and token counts of an answer, whatever else it holds. */
@@ -1133,6 +1155,8 @@ object LyricsTranslation {
             },
             inputTokens = usage?.get("input_tokens")?.jsonPrimitive?.contentOrNull?.toLongOrNull(),
             outputTokens = usage?.get("output_tokens")?.jsonPrimitive?.contentOrNull?.toLongOrNull(),
+            searches = (usage?.get("server_tool_use") as? JsonObject)
+                ?.get("web_search_requests")?.jsonPrimitive?.contentOrNull?.toIntOrNull(),
         )
     }.getOrElse { ResponseMeta(null, null, null, null) }
 
@@ -1755,10 +1779,10 @@ object LyricsTranslation {
         }
         if (storedOnly) return null
         val model = claudeModel
-        var reply = requestClaudeTranslation(slots, target, model, reading = true)
+        var reply = requestClaudeTranslation(slots, target, model, reading = true, trackId = trackId)
         var readingModel = model
         if (reply.failure == ClaudeFailure.REFUSAL && model == CLAUDE_HAIKU && sonnetStandInEnabled) {
-            reply = requestClaudeTranslation(slots, target, CLAUDE_SONNET, reading = true)
+            reply = requestClaudeTranslation(slots, target, CLAUDE_SONNET, reading = true, trackId = trackId)
             readingModel = CLAUDE_SONNET
         }
         val answer = reply.value ?: return null
@@ -1896,7 +1920,7 @@ object LyricsTranslation {
         val params = claudeBody(
             model = model,
             system = if (reading) readingInstruction(target, slots.size, shape) else translationInstruction(target, slots.size, shape),
-            input = translationInput(slots, target),
+            input = translationInput(slots, target, trackId),
             schema = schemaFor(shape, slots.size),
             effort = "medium",
         )
@@ -2750,7 +2774,7 @@ object LyricsTranslation {
     private const val BACKUP_MARKER = "bitchord-ko-translations"
     private const val BACKUP_INDEX = "index.json"
     private val BACKUP_KEY = Regex("^[0-9a-f]{64}$")
-    private val BACKUP_ENTRY = Regex("^(kept|cache|meaning)/([0-9a-f]{64}\\.json(?:\\.gz)?)$")
+    private val BACKUP_ENTRY = Regex("^(kept|cache|meaning|background)/([0-9a-f]{32}(?:[0-9a-f]{32})?\\.json(?:\\.gz)?)$")
     private const val MAX_BACKUP_ENTRY_BYTES = 4 * 1024 * 1024
 
     /** How a backup went back in: answers [added], and ones [skipped] — already here, or not readable. */
@@ -2807,6 +2831,11 @@ object LyricsTranslation {
                     ?.listFiles { file -> file.name.endsWith(".json") }
                     .orEmpty()
                     .forEach { add("meaning", it) }
+                // Each song's background from the web: a search paid for, like the answers.
+                (keepDir ?: cacheDir)?.let { File(it, SongBackgrounds.DIRECTORY) }
+                    ?.listFiles { file -> file.name.endsWith(".json") }
+                    .orEmpty()
+                    .forEach { add("background", it) }
                 // What each answer is, so the other phone can say which song it belongs to.
                 val listing = withIndex { map -> json.encodeToString(indexSerializer, map.values.toList()) }
                 zip.putNextEntry(java.util.zip.ZipEntry(BACKUP_INDEX))
@@ -2850,10 +2879,18 @@ object LyricsTranslation {
                     if (entry.isDirectory || match == null) continue
                     val folder = match.groupValues[1]
                     val name = match.groupValues[2]
-                    val meaning = folder == "meaning"
+                    // Plain JSON, not a compressed translation: an explanation or a background.
+                    val meaning = folder == "meaning" || folder == "background"
                     if (meaning == name.endsWith(".gz")) continue
                     val bytes = readLimited(zip, MAX_BACKUP_ENTRY_BYTES)
-                    val directory = File(root, if (meaning) MEANING_DIRECTORY else KEPT_DIRECTORY)
+                    val directory = File(
+                        root,
+                        when (folder) {
+                            "meaning" -> MEANING_DIRECTORY
+                            "background" -> SongBackgrounds.DIRECTORY
+                            else -> KEPT_DIRECTORY
+                        },
+                    )
                     val destination = File(directory, name)
                     val inCache = !meaning && cacheDir?.let { File(File(it, CACHE_DIRECTORY), name).isFile } == true
                     val valid = bytes != null && !destination.isFile && !inCache && runCatching {
@@ -2914,6 +2951,9 @@ object LyricsTranslation {
         /** A few short paragraphs, separated by blank lines. */
         val meaning: String,
         val highlights: List<MeaningHighlight> = emptyList(),
+        /** The song's background from a web search, shown apart and marked as such; empty for none. */
+        val background: String = "",
+        val backgroundSources: List<String> = emptyList(),
     )
 
     /** One line of the song quoted, and what it says. */
@@ -2957,13 +2997,19 @@ object LyricsTranslation {
     ): MeaningResult {
         val target = targetLanguageTag.trim().ifBlank { "en" }
         val key = cacheKey("meaning\u0000$trackId", target, emptyList())
-        meanings.get(key)?.let { return MeaningResult.Ready(it) }
+        // A background looked up since the explanation was written is shown with it too.
+        fun withBackground(value: SongMeaning): SongMeaning {
+            if (value.background.isNotBlank()) return value
+            val found = SongBackgrounds.stored(title, artist)?.takeIf { it.found } ?: return value
+            return value.copy(background = found.background, backgroundSources = found.sources)
+        }
+        meanings.get(key)?.let { return MeaningResult.Ready(withBackground(it)) }
         readStored(MEANING_DIRECTORY, key)
             ?.let { text -> runCatching { json.decodeFromString<SongMeaning>(text) }.getOrNull() }
             ?.let {
                 meanings.put(key, it)
                 noteMeaning(key, trackId, target, title, artist, model = null, via = null)
-                return MeaningResult.Ready(it)
+                return MeaningResult.Ready(withBackground(it))
             }
         if (!claudeKeyUsable) return MeaningResult.NoKey
 
@@ -2974,10 +3020,21 @@ object LyricsTranslation {
             .take(MAX_MEANING_LYRIC_CHARS)
         if (lyricText.isBlank()) return MeaningResult.Unavailable
 
+        // The song's background first, where Settings allows looking it up:
+        // the explanation is then written knowing what the song was made for.
+        val background = runCatching {
+            SongBackgrounds.ensure(SongBackgrounds.SongName(title, artist), target, lines.map { it.text })
+        }.getOrElse { if (it is CancellationException) throw it else null }
         val input = buildJsonObject {
             put("title", title)
             put("artist", artist)
             put("lyrics", lyricText)
+            if (background != null) {
+                put("background", background.background)
+                if (background.notes.isNotEmpty()) {
+                    put("phrase_notes", kotlinx.serialization.json.JsonArray(background.notes.map { note -> buildJsonObject { put("phrase", note.phrase); put("meaning", note.meaning) } }))
+                }
+            }
         }
         val answer = try {
             askClaude(
@@ -3001,7 +3058,7 @@ object LyricsTranslation {
         meanings.put(key, answer)
         writeStored(MEANING_DIRECTORY, key, json.encodeToString(answer), MAX_MEANING_BYTES)
         noteMeaning(key, trackId, target, title, artist, model = claudeModel, via = VIA_PLAYER)
-        return MeaningResult.Ready(answer)
+        return MeaningResult.Ready(withBackground(answer))
     }
 
     private val MEANING_SCHEMA: JsonObject by lazy {
@@ -3052,6 +3109,7 @@ object LyricsTranslation {
             appendLine("- \"highlights\": up to four items. Each has \"line\", copied exactly from the lyrics given, and \"note\", one or two sentences on what that line means.")
             appendLine()
             appendLine("Base everything on the lyrics given. Mention background about the artist or the song only if you are certain it is true. Never invent facts, chart records, interviews or quotes.")
+            appendLine("The input may hold \"background\" and \"phrase_notes\" from a web search about the song. Use them where they fit the lyrics, as fan or official views as they say; they can be wrong, and the lyrics come first.")
             appendLine("Plain text only: no markdown, no bullet characters, no emojis.")
             if (listenerInstructionsForMeaning) appendListenerInstructions()
         }

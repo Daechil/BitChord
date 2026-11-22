@@ -125,6 +125,8 @@
     <string name="song_meaning_unavailable">Couldn’t explain this song right now</string>
     <string name="song_meaning_no_key">Add a Claude API key in Settings to use this</string>
     <string name="song_meaning_highlights">Lines to note</string>
+    <string name="song_background_title">Song background (web search)</string>
+    <string name="song_background_source">From %1$s · a web search summary, may be wrong</string>
     <string name="song_meaning_retry">Try again</string>
     <string name="song_meaning_footer">Written by Claude from the lyrics. It can be wrong.</string>
     <string name="lyrics_translation_unavailable">Translation is unavailable right now</string>

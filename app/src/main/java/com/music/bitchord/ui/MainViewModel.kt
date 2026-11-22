@@ -389,6 +389,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         album: String? = null,
         localUri: String? = null,
     ) {
+        // Named for the translation requests about this track: Claude reads the song by its name too.
+        com.music.bitchord.data.lyrics.SongBackgrounds.noteSong(videoId, title, artist, album)
         val sources = if (AppSettings.syncedLyrics.value) {
             AppSettings.lyricsSources.value
         } else {

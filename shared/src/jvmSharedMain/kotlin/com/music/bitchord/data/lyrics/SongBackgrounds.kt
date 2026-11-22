@@ -72,7 +72,9 @@ object SongBackgrounds {
     private const val MAX_PHRASE_CHARS = 12
     private const val WHOLE_LINE_CHARS = 8
     private const val QUOTE_RUN_CHARS = 12
-    private val WIKIS = listOf("namu.wiki", "wikipedia.org", "genius.com", "vocadb.net")
+    // Not genius.com: Claude's search refuses it as a domain ("not accessible to
+    // our user agent"), and one refused domain fails the whole request.
+    private val WIKIS = listOf("namu.wiki", "wikipedia.org", "vocadb.net")
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val names = ConcurrentHashMap<String, SongName>()

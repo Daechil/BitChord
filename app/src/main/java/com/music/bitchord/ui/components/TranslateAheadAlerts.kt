@@ -145,7 +145,8 @@ private suspend fun sendFromMenu(context: Context, title: String, songs: List<So
         Toast.makeText(context, context.getString(R.string.translate_ahead_nothing), Toast.LENGTH_LONG).show()
         return
     }
-    val estimate = TranslateAhead.estimateUsd(plan.requests, model)
+    val research = if (com.music.bitchord.data.lyrics.SongBackgrounds.enabled && LyricsTranslation.claudeKeyUsable) plan.send else 0
+    val estimate = TranslateAhead.estimateUsd(plan.requests, model, research)
     val remaining = remainingCapUsd()
     if (remaining != null && estimate > remaining) {
         Toast.makeText(
@@ -246,8 +247,11 @@ private fun TranslateAheadAskAlert(hazeState: HazeState, ask: AheadAsk, onDismis
         stringResource(claudeSpeechLabelRes(LyricsTranslation.translationSpeech)),
         stringResource(claudeModeLabelRes(LyricsTranslation.translationMode)),
     ).joinToString(" · ")
-    val haikuUsd = TranslateAhead.estimateUsd(requests, LyricsTranslation.CLAUDE_HAIKU)
-    val sonnetUsd = TranslateAhead.estimateUsd(requests, LyricsTranslation.CLAUDE_SONNET)
+    // With the background setting on, each song sent may have its background looked up too.
+    val researching = com.music.bitchord.data.lyrics.SongBackgrounds.enabled && LyricsTranslation.claudeKeyUsable
+    val research = if (researching) plan?.send ?: count else 0
+    val haikuUsd = TranslateAhead.estimateUsd(requests, LyricsTranslation.CLAUDE_HAIKU, research)
+    val sonnetUsd = TranslateAhead.estimateUsd(requests, LyricsTranslation.CLAUDE_SONNET, research)
     val estimate = if (model == LyricsTranslation.CLAUDE_SONNET) sonnetUsd else haikuUsd
     val remaining = remainingCapUsd()
     val overCap = remaining != null && estimate > remaining
@@ -270,6 +274,7 @@ private fun TranslateAheadAskAlert(hazeState: HazeState, ask: AheadAsk, onDismis
         },
         stringResource(R.string.translate_ahead_scope_chunks, chunk, (count + chunk - 1) / chunk.coerceAtLeast(1))
             .takeIf { count > chunk },
+        stringResource(R.string.translate_ahead_background).takeIf { research > 0 && plan?.requests != 0 },
         stringResource(R.string.translate_ahead_over_cap, usd(estimate), usd(remaining ?: 0.0)).takeIf { overCap },
     ).joinToString("\n\n")
     AlertScaffold(hazeState = hazeState, onDismiss = onDismiss) {

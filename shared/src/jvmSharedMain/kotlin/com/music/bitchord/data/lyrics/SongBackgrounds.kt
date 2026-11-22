@@ -90,6 +90,13 @@ object SongBackgrounds {
 
     fun nameOf(trackId: String): SongName? = names[trackId]
 
+    /** The song, when its background is to be looked up: the setting on, Claude usable, and nothing kept for it yet. */
+    fun toLookUp(trackId: String): SongName? {
+        if (!enabled || !LyricsTranslation.claudeKeyUsable) return null
+        val name = nameOf(trackId) ?: return null
+        return name.takeIf { stored(it.title, it.artist) == null && running[keyOf(it.title, it.artist)] == null }
+    }
+
     /** One key per song whatever the upload: its name, cleaned the way lyric searches clean it. */
     internal fun keyOf(title: String, artist: String): String {
         fun clean(value: String) = Normalizer.normalize(value, Normalizer.Form.NFKC).lowercase(Locale.ROOT)
@@ -178,18 +185,7 @@ object SongBackgrounds {
 
     private suspend fun research(song: SongName, target: String, domains: List<String>?, lyrics: List<String>): Background? =
         withContext(Dispatchers.IO) {
-            val tools = buildJsonArray {
-                add(
-                    buildJsonObject {
-                        put("type", "web_search_20260209")
-                        put("name", "web_search")
-                        put("max_uses", 2)
-                        // Searched by Claude itself: the filtering code's calls failed four times in five in tests.
-                        putJsonArray("allowed_callers") { add("direct") }
-                        if (domains != null) putJsonArray("allowed_domains") { domains.forEach { add(it) } }
-                    },
-                )
-            }
+            val tools = searchTools(domains)
             val input = buildJsonObject {
                 put("title", song.title)
                 put("artist", song.artist)
@@ -208,12 +204,60 @@ object SongBackgrounds {
             result.value
         }
 
+    /** The web search as this research asks it: twice at most, by Claude itself, on [domains] or anywhere. */
+    internal fun searchTools(domains: List<String>?): kotlinx.serialization.json.JsonArray = buildJsonArray {
+        add(
+            buildJsonObject {
+                put("type", "web_search_20260209")
+                put("name", "web_search")
+                put("max_uses", 2)
+                // Searched by Claude itself: the filtering code's calls failed four times in five in tests.
+                putJsonArray("allowed_callers") { add("direct") }
+                if (domains != null) putJsonArray("allowed_domains") { domains.forEach { add(it) } }
+            },
+        )
+    }
+
+    /** The sites a batch's research may search: one try, no wider second search. */
+    internal val batchDomains: List<String> get() = WIKIS
+
+    /** The background's own answer, as one field of a translation batch's answer. */
+    internal val batchSchema: JsonObject get() = SCHEMA
+
+    /** The key the background goes under in a translation batch's answer. */
+    const val BATCH_FIELD = "song_background"
+
+    /**
+     * What a translation batch is told when the song's background is to be
+     * looked up in the same request: research first, filed under [BATCH_FIELD],
+     * then read only for tone and word choice.
+     */
+    internal fun batchInstruction(target: String): String = buildString {
+        appendLine()
+        appendLine("Before you translate, research the song named in \"song\" with the web search. Put what you find in \"$BATCH_FIELD\", following these rules:")
+        append(instruction(target))
+        appendLine("Then translate. Use what you found only for tone and word choice, as rule 10 says.")
+    }
+
+    /**
+     * Files the background a translation batch looked up for [song]: the
+     * answer's [BATCH_FIELD], kept out of the lyrics as [parse] keeps any
+     * other. A song not found is kept as such, so it is not searched again for
+     * a month. Nothing when the field is missing or unreadable.
+     */
+    internal fun fileBatchAnswer(song: SongName, target: String, field: kotlinx.serialization.json.JsonElement?, lyrics: List<String>, searches: Int): Background? {
+        val text = (field as? JsonObject)?.toString() ?: return null
+        val value = parse(text, target, lyrics)?.copy(searches = searches) ?: return null
+        save(song.title, song.artist, value)
+        return value
+    }
+
     private fun instruction(target: String): String {
         val language = Locale.forLanguageTag(target.replace('_', '-')).getDisplayName(Locale.ENGLISH).ifBlank { target }
         return buildString {
             appendLine("You research one song for a lyric translator in a music app.")
             appendLine("Search the web for this exact song by its title and artist before you answer.")
-            appendLine("Write in $language ($target):")
+            appendLine("Write in $language ($target), whatever language the sources are in: the background and every note's meaning in $language, only the phrases themselves as the song writes them.")
             appendLine("- \"background\": 3 to 5 short sentences: what the song was written for (anime, drama, game, film) if anything, what it is about, and what the artist or official sources said about it. Say which parts are fan interpretation.")
             appendLine("- \"notes\": up to $MAX_NOTES hard expressions in the song, each as a short \"phrase\" of a few words and its \"meaning\". Never copy a whole lyric line.")
             appendLine("  Put first what a translator would miss: wordplay and puns, above all two words read alike (in Japanese, one reading written with two sets of kanji; in Korean or Chinese, one sound with two meanings), double meanings, a title hidden in the words; then slang, archaic or literary words, and references.")
@@ -222,6 +266,7 @@ object SongBackgrounds {
             appendLine("- \"sources\": the sites you used, by name.")
             appendLine("Use only what the search results say about this exact song. Never quote the lyrics. Never invent facts, credits or interviews.")
             appendLine("If you cannot find this exact song, set \"found\" to false and leave the other fields empty.")
+            appendLine("Before you answer, check that the background and the meanings are written in $language.")
         }
     }
 

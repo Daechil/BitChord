@@ -434,7 +434,7 @@ object TranslateAhead {
      * batch with [model], in dollars: from what this device's own translations
      * have taken where the log has a few, otherwise from a typical song.
      */
-    fun estimateUsd(requests: Int, model: String): Double {
+    fun estimateUsd(requests: Int, model: String, research: Int = 0): Double {
         val past = com.music.bitchord.data.lyrics.ClaudeDiagnostics.entries.value.filter {
             it.purpose == com.music.bitchord.data.lyrics.ClaudeDiagnostics.PURPOSE_TRANSLATE &&
                 !it.failed && it.inputTokens != null && it.outputTokens != null
@@ -442,8 +442,15 @@ object TranslateAhead {
         val input = if (past.size >= 3) past.sumOf { it.inputTokens ?: 0L } / past.size else TYPICAL_INPUT_TOKENS
         val output = if (past.size >= 3) past.sumOf { it.outputTokens ?: 0L } / past.size else TYPICAL_OUTPUT_TOKENS
         val (inPrice, outPrice) = AppSettings.claudePricePerMillion(model + LyricsTranslation.BATCH_MODEL_SUFFIX)
-        return (input * inPrice / 1_000_000.0 + output * outPrice / 1_000_000.0) * requests
+        // A song's background looked up in its request: two searches at most, and what they bring back read as input.
+        val researchUsd = research * (SEARCHES_PER_SONG * AppSettings.claudePricePerMillion(AppSettings.WEB_SEARCH_MODEL).first / 1_000_000.0 +
+            RESEARCH_INPUT_TOKENS * inPrice / 1_000_000.0)
+        return (input * inPrice / 1_000_000.0 + output * outPrice / 1_000_000.0) * requests + researchUsd
     }
+
+    /** The searches a song's background takes at most, and the tokens they bring back, measured on real songs. */
+    private const val SEARCHES_PER_SONG = 2
+    private const val RESEARCH_INPUT_TOKENS = 20_000
 
     /**
      * What the batches still out are expected to cost. Their tokens are only
@@ -714,7 +721,9 @@ object TranslateAhead {
             var readingStatus: String? = if (job.reading) status else null
             if (lines != null && lines.any { it.text.isNotBlank() }) {
                 com.music.bitchord.data.lyrics.SongBackgrounds.noteSong(track.videoId, track.title, track.artist, track.album)
-                val translation = LyricsTranslation.aheadRequest("t$index", track.videoId, lines, job.target, job.model, reading = false)
+                // With the setting on, a song with no background kept has it looked up in its own request.
+                val research = com.music.bitchord.data.lyrics.SongBackgrounds.toLookUp(track.videoId)
+                val translation = LyricsTranslation.aheadRequest("t$index", track.videoId, lines, job.target, job.model, reading = false, research = research)
                 status = statusOf(translation)
                 pending.add(translation, track.videoId)
                 if (job.reading) {
@@ -788,7 +797,7 @@ object TranslateAhead {
     private suspend fun sendChunk(app: Context, job: Job, pending: Pending): ClaudeFailure? {
         val index = (_jobs.value.firstOrNull { it.id == job.id }?.chunks?.maxOfOrNull { it.index } ?: -1) + 1
         val songs = pending.videoIds.toSet()
-        val estimate = estimateUsd(pending.requests.size, job.model)
+        val estimate = estimateUsd(pending.requests.size, job.model, research = pending.items.count { it.researchTitle != null })
         // Over the monthly limit with this batch on top of what is spent and what is still out:
         // not sent, and nothing after it either.
         val left = AppSettings.claudeBudgetLeft()

@@ -34,6 +34,8 @@ import kotlin.test.Test
 class TranslationProbe {
     private var compare: String? = null
     private var instructionsB: String? = null
+    private var batch = false
+    private var batchSearches = 0
     private val judgeModel get() = if (compare != null) "claude-opus-5-5" else LyricsTranslation.CLAUDE_SONNET
     private fun cell(text: Any?) = text.toString().replace("|", "/").replace("\n", " ")
 
@@ -47,7 +49,9 @@ class TranslationProbe {
         // TRANSLATION_INSTRUCTIONS and B with TRANSLATION_INSTRUCTIONS_B.
         val suffix = raw.substringAfter(" @", "").trim().lowercase()
         if (suffix == "instructions") instructionsB = System.getenv("TRANSLATION_INSTRUCTIONS_B").orEmpty()
-        compare = suffix.takeIf { it.isNotEmpty() && it != "instructions" }?.let {
+        // "song @batch": A live with the name only; B as translate-ahead sends it, the background looked up in the same batch request.
+        batch = suffix == "batch"
+        compare = suffix.takeIf { it.isNotEmpty() && it != "instructions" && it != "batch" }?.let {
             when (it) {
                 "sonnet" -> LyricsTranslation.CLAUDE_SONNET
                 "haiku" -> LyricsTranslation.CLAUDE_HAIKU
@@ -82,7 +86,7 @@ class TranslationProbe {
                 else -> 0.10 to 0.50
             }
             (it.inputTokens ?: 0L) * inPrice / 1e6 + (it.outputTokens ?: 0L) * outPrice / 1e6
-        } + entries.sumOf { it.searches ?: 0 } * 0.01
+        } + (entries.sumOf { it.searches ?: 0 } + batchSearches) * 0.01
         out.append("\nTotal about $").append(String.format(Locale.US, "%.4f", usd)).append(" (~").append((usd * 1400).toInt()).append("원)\n")
         val file = File(System.getenv("LIVE_LYRICS_REPORT") ?: "build/translation.md")
         file.parentFile?.mkdirs()
@@ -114,7 +118,40 @@ class TranslationProbe {
         val background: SongBackgrounds.Background?
         val other = compare
         val newInstructions = instructionsB
-        if (newInstructions != null) {
+        if (batch) {
+            SongBackgrounds.enabled = false
+            a = LyricsTranslation.translate(song.videoId, lines, "ko")
+            out.append("- A (live, name only): ${describe(a)}\n")
+            // Another store for B, so A's answer is not taken for B's.
+            val dirB = Files.createTempDirectory("trb").toFile()
+            LyricsTranslation.cacheDir = dirB
+            LyricsTranslation.keepDir = dirB
+            SongBackgrounds.enabled = true
+            LyricsTranslation.searchSink = { batchSearches += it }
+            val research = SongBackgrounds.toLookUp(song.videoId)
+            val request = LyricsTranslation.aheadRequest("t0", song.videoId, lines, "ko", LyricsTranslation.claudeModel, reading = false, research = research)
+            val item = request.item
+            val params = request.params
+            if (item == null || params == null) { out.append("- B: no request (${request.skip})\n"); return }
+            out.append("- B request: research ${research != null} · tools ${params["tools"] != null}\n")
+            val started = System.currentTimeMillis()
+            val sent = LyricsTranslation.submitAhead(listOf(item.customId to params), LyricsTranslation.claudeModel)
+            val id = sent.batchId ?: run { out.append("- B not sent: ${sent.failure} ${sent.detail?.take(200)}\n"); return }
+            var status: LyricsTranslation.AheadStatus? = null
+            while (System.currentTimeMillis() - started < 60 * 60_000L) {
+                kotlinx.coroutines.delay(20_000)
+                status = LyricsTranslation.aheadStatus(id)
+                if (status?.ended == true) break
+            }
+            if (status?.ended != true) { out.append("- B batch did not end in an hour\n"); LyricsTranslation.cancelAhead(id); return }
+            val outcomes = LyricsTranslation.collectAhead(id, status.resultsUrl, listOf(item)).orEmpty()
+            outcomes.forEach { o ->
+                out.append("- B batch: ${o.failure ?: "ok"} ${o.detail?.take(200).orEmpty()} · in ${o.inputTokens}/out ${o.outputTokens} · searches $batchSearches · ${(System.currentTimeMillis() - started) / 1000}s\n")
+            }
+            background = SongBackgrounds.storedFor(song.videoId)
+            b = LyricsTranslation.translate(song.videoId, lines, "ko", cacheOnly = true)
+            out.append("- B (batch with research): ${describe(b)}\n\n")
+        } else if (newInstructions != null) {
             SongBackgrounds.enabled = true
             background = SongBackgrounds.ensure(name, "ko", lines.map { it.text })
             a = LyricsTranslation.translate(song.videoId, lines, "ko")
@@ -192,7 +229,7 @@ class TranslationProbe {
         }.toString()
         val system = buildString {
             appendLine("You are a strict reviewer of Korean song-lyric translations, fluent in the source language and in Korean.")
-            if (compare == null && instructionsB == null) {
+            if (compare == null && instructionsB == null && !batch) {
                 appendLine("Each line has the source lyric and two Korean translations, A and B. B was written with the song's background and phrase notes in hand; A without.")
             } else {
                 appendLine("Each line has the source lyric and two Korean translations, A and B, written independently with the same background and phrase notes in hand. Judge them on their merits alone.")
@@ -200,7 +237,7 @@ class TranslationProbe {
             appendLine("Use what you know about this song, and the background given, to judge meaning, imagery, wordplay and tone.")
             appendLine("Write every comment in Korean, in 해요체.")
             appendLine("- \"score_a\", \"score_b\": 1 to 10 for the whole song (10 = a fluent Korean speaker would understand the song exactly as a native listener does).")
-            appendLine(if (compare == null && instructionsB == null) "- \"summary\": 3 to 5 sentences: how good the translations are, and whether B's background made it better or worse." else "- \"summary\": 3 to 5 sentences: how good each translation is, and which reads better and why.")
+            appendLine(if (compare == null && instructionsB == null && !batch) "- \"summary\": 3 to 5 sentences: how good the translations are, and whether B's background made it better or worse." else "- \"summary\": 3 to 5 sentences: how good each translation is, and which reads better and why.")
             appendLine("- \"title_meaning\": what the title means and whether the translations carried that sense.")
             appendLine("- \"issues\": up to 15 real problems, most serious first: mistranslations, lost wordplay or double meaning, wrong subject, wrong tone, unnatural Korean, words added that are not in the source. Skip matters of taste.")
             appendLine("  Each issue: \"line\" (the i), \"which\" (\"A\", \"B\" or \"both\"), \"kind\", \"fragment\" (at most 8 characters of the source, never a whole line), \"problem\", and \"better\" (at most 15 Korean characters).")

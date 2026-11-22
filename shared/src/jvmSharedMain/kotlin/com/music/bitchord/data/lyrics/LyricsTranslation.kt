@@ -1189,13 +1189,17 @@ object LyricsTranslation {
         val root = json.parseToJsonElement(response).jsonObject
         val stop = root["stop_reason"]?.jsonPrimitive?.contentOrNull
         if (stop == "refusal" || stop == "max_tokens") return@runCatching null
-        root["content"]!!.jsonArray
+        val texts = root["content"]!!.jsonArray
             .map { it.jsonObject }
             .filter { it["type"]?.jsonPrimitive?.contentOrNull == "text" }
-            .joinToString("") { it["text"]?.jsonPrimitive?.contentOrNull.orEmpty() }
-            .trim()
+            .map { it["text"]?.jsonPrimitive?.contentOrNull.orEmpty() }
+        fun clean(text: String) = text.trim()
             .removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
-            .takeIf { it.isNotEmpty() }
+        val joined = clean(texts.joinToString(""))
+        // A request that searched can say a word before its answer, in a text
+        // block of its own: the answer is then the last block.
+        val answer = if (texts.size > 1 && !joined.startsWith("{")) clean(texts.last()) else joined
+        answer.takeIf { it.isNotEmpty() }
     }.getOrNull()
 
     internal fun parseTranslation(text: String, sources: List<String>, answerShape: AnswerShape): Parsed<BatchAnswer> {
@@ -1870,6 +1874,9 @@ object LyricsTranslation {
         /** The style a translation was asked in, for [storedAnswers]; empty for a pronunciation. */
         val speech: String = "",
         val mode: String = "",
+        /** The song's name, when its background is looked up in this same request; see [SongBackgrounds]. */
+        val researchTitle: String? = null,
+        val researchArtist: String? = null,
     )
 
     enum class AheadSkip { NOTHING_TO_TRANSLATE, ALREADY_TRANSLATED, SAME_LANGUAGE }
@@ -1888,6 +1895,12 @@ object LyricsTranslation {
         targetLanguageTag: String,
         model: String,
         reading: Boolean,
+        /**
+         * The song, when its background is to be looked up in the same request
+         * — a web search before the translation, its answer filed by
+         * [SongBackgrounds]. Null for none; never for a pronunciation.
+         */
+        research: SongBackgrounds.SongName? = null,
     ): AheadRequest {
         val target = targetLanguageTag.trim()
         val slots = if (target.isBlank()) emptyList() else flatten(lines)
@@ -1917,12 +1930,18 @@ object LyricsTranslation {
         // refused for every song. So a batch asks the way the player's request
         // succeeds: the numbered array, where a line split in two is joined back.
         val shape = AnswerShape.INDEXED
+        val lookUp = research?.takeIf { !reading }
         val params = claudeBody(
             model = model,
-            system = if (reading) readingInstruction(target, slots.size, shape) else translationInstruction(target, slots.size, shape),
+            system = if (reading) {
+                readingInstruction(target, slots.size, shape)
+            } else {
+                translationInstruction(target, slots.size, shape) + (lookUp?.let { SongBackgrounds.batchInstruction(target) } ?: "")
+            },
             input = translationInput(slots, target, trackId),
-            schema = schemaFor(shape, slots.size),
+            schema = schemaFor(shape, slots.size).let { if (lookUp != null) withBackgroundField(it) else it },
             effort = "medium",
+            tools = lookUp?.let { SongBackgrounds.searchTools(SongBackgrounds.batchDomains) },
         )
         val item = AheadItem(
             customId = customId,
@@ -1937,8 +1956,27 @@ object LyricsTranslation {
             sources = slots.map { it.text },
             speech = if (reading) "" else translationSpeech,
             mode = if (reading) "" else translationMode,
+            researchTitle = lookUp?.title,
+            researchArtist = lookUp?.artist,
         )
         return AheadRequest(item, params, null)
+    }
+
+    /** [schema] with the song's background as one more required field, for a request that looks it up too. */
+    private fun withBackgroundField(schema: JsonObject): JsonObject = buildJsonObject {
+        schema.forEach { (key, value) ->
+            when (key) {
+                "properties" -> putJsonObject("properties") {
+                    (value as JsonObject).forEach { (name, property) -> put(name, property) }
+                    put(SongBackgrounds.BATCH_FIELD, SongBackgrounds.batchSchema)
+                }
+                "required" -> putJsonArray("required") {
+                    (value as kotlinx.serialization.json.JsonArray).forEach { add(it) }
+                    add(SongBackgrounds.BATCH_FIELD)
+                }
+                else -> put(key, value)
+            }
+        }
     }
 
     private fun aheadKey(prefix: String, target: String): String = cacheKey(AHEAD_PREFIX + prefix, target, emptyList())
@@ -2286,6 +2324,17 @@ object LyricsTranslation {
             "max_tokens" -> return out(ClaudeFailure.CUT_OFF)
         }
         val answer = claudeText(message) ?: return out(ClaudeFailure.BAD_ANSWER, "no text block in the answer")
+        // The background looked up in the same request is filed whatever becomes of the translation.
+        if (item.researchTitle != null) {
+            meta.searches?.takeIf { it > 0 }?.let { searchSink?.invoke(it) }
+            runCatching {
+                val field = json.parseToJsonElement(answer).jsonObject[SongBackgrounds.BATCH_FIELD]
+                SongBackgrounds.fileBatchAnswer(
+                    SongBackgrounds.SongName(item.researchTitle, item.researchArtist.orEmpty()),
+                    item.target, field, item.sources, meta.searches ?: 0,
+                )
+            }
+        }
         val parsed = try {
             parseTranslation(
                 answer,

@@ -24,13 +24,17 @@ class SongBackgroundProbe {
         SongBackgrounds.widenWhenMissing = true
         var searches = 0
         LyricsTranslation.searchSink = { searches += it }
-        val songs = listOf(
-            SongBackgrounds.SongName("アイドル", "YOASOBI"),
-            SongBackgrounds.SongName("春を告げる", "yama"),
-            SongBackgrounds.SongName("テトリス", "柊マグネタイト"),
-            SongBackgrounds.SongName("Machine Love", "Jamie Paige"),
-            SongBackgrounds.SongName("HOPE", "NF"),
-        )
+        // BACKGROUND_SONGS: "title — artist; title — artist", for other songs than these.
+        val songs = System.getenv("BACKGROUND_SONGS")?.takeIf { it.isNotBlank() }?.split(';')
+            ?.map { it.split(" — ", " - ", limit = 2) }?.filter { it.size == 2 }
+            ?.map { SongBackgrounds.SongName(it[0].trim(), it[1].trim()) }
+            ?: listOf(
+                SongBackgrounds.SongName("アイドル", "YOASOBI"),
+                SongBackgrounds.SongName("春を告げる", "yama"),
+                SongBackgrounds.SongName("テトリス", "柊マグネタイト"),
+                SongBackgrounds.SongName("Machine Love", "Jamie Paige"),
+                SongBackgrounds.SongName("HOPE", "NF"),
+            )
         val out = StringBuilder("# Song background (app code)\n\n")
         runBlocking {
             songs.forEach { song ->

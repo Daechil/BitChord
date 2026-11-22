@@ -14,6 +14,10 @@ on:
         description: 'Radio seeds to check for songs held to be one, separated by semicolons'
         required: false
         default: ''
+      claude_search:
+        description: 'Set to yes to try Claude web search (needs the ANTHROPIC_API_KEY secret; costs a few cents)'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -34,7 +38,7 @@ jobs:
           cache: gradle
 
       - name: Check
-        if: inputs.probe == '' && inputs.radio == ''
+        if: inputs.probe == '' && inputs.radio == '' && inputs.claude_search == ''
         env:
           LIVE_LYRICS: '1'
           LIVE_LYRICS_REPORT: ${{ github.workspace }}/live-lyrics.md
@@ -53,6 +57,13 @@ jobs:
           LIVE_RADIO: ${{ inputs.radio }}
           LIVE_LYRICS_REPORT: ${{ github.workspace }}/live-lyrics.md
         run: ./gradlew :shared:jvmTest --tests 'com.music.bitchord.playback.RadioDedupeProbe' --rerun --no-daemon
+
+      - name: Claude web search
+        if: inputs.claude_search != ''
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          LIVE_LYRICS_REPORT: ${{ github.workspace }}/live-lyrics.md
+        run: python3 .github/scripts/claude_search_check.py
 
       - name: Report
         if: always()

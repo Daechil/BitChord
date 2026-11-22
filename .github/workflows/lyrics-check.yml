@@ -79,7 +79,8 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           SONG_BACKGROUND_PROBE: '1'
-          BACKGROUND_SONGS: 'テトリス — 柊マグネタイト; 人マニア — 原口沙輔'
+          BACKGROUND_SONGS: '抜錨 / ナナホシ管弦楽団 — 월피스 카터; テトリス — 柊マグネタイト; 人マニア — 原口沙輔'
+          BACKGROUND_MODELS: 'haiku,sonnet'
           LIVE_LYRICS_REPORT: ${{ github.workspace }}/live-lyrics.md
         run: ./gradlew :shared:jvmTest --tests 'com.music.bitchord.data.lyrics.SongBackgroundProbe' --rerun --no-daemon
 

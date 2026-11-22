@@ -887,6 +887,7 @@ Adding: %4$s
     <string name="same_song_all_none">No songs are grouped yet.</string>
     <string name="same_song_footer">Songs already in the queue stay where they are; this applies from the next time radio or AutoPlay adds songs. Kept in the settings backup.</string>
     <string name="translate_ahead_background">Song background search is on: a song with no background yet has it looked up in the same request, about 30 won more a song, included in the estimate.</string>
+    <string name="song_background_sonnet">Look songs up with Sonnet (closer reading, about 140 won a song; translate-ahead looks up with its own model)</string>
     <string name="ko_window_summary">Summary</string>
     <string name="ko_window_songs">Songs · %1$d</string>
     <string name="ko_window_space">Space used</string>

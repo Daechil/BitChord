@@ -110,7 +110,8 @@ class TranslationProbe {
         out.append("- lyrics: ${found.source.label}, ${lines.size} lines\n")
         out.append("- model: ${LyricsTranslation.claudeModel} · own instructions: ${if (LyricsTranslation.listenerInstructions.isBlank()) "none" else "yes"}\n\n")
 
-        val name = SongBackgrounds.SongName(song.title.forLyricsSearch(), song.artist.artistForLyricsSearch())
+        val name = SongBackgrounds.nameFor(song.title, song.artist)
+        out.append("- looked up as: `${name.title}` — `${name.artist}`${name.sungBy?.let { " (sung by $it)" }.orEmpty()}\n")
         SongBackgrounds.noteSong(song.videoId, song.title, song.artist)
 
         val a: LyricsTranslation.Result
@@ -192,6 +193,13 @@ class TranslationProbe {
 
         val aLines = (a as? LyricsTranslation.Result.Translated)?.lines?.map { it.text }
         val bLines = (b as? LyricsTranslation.Result.Translated)?.lines?.map { it.text }
+        // Lines that sing the title, and how many of A's and B's carry the Korean title kept for it.
+        val koreanTitle = background?.title.orEmpty()
+        if (aLines != null && bLines != null) {
+            val sung = lines.indices.filter { lines[it].text.contains(name.title) }
+            fun carried(texts: List<String>) = if (koreanTitle.isBlank()) "-" else sung.count { texts.getOrNull(it)?.contains(koreanTitle) == true }.toString()
+            out.append("- title `${name.title}` sung in ${sung.size} lines · Korean title `${koreanTitle.ifBlank { "none" }}` · in A ${carried(aLines)} · in B ${carried(bLines)}\n\n")
+        }
         if (aLines == null || bLines == null) { out.append("no translation to review\n"); return }
         judge(song.title, song.artist, lines.map { it.text }, aLines, bLines, background, out)
     }

@@ -848,6 +848,7 @@
     <string name="same_song_all_none">아직 묶은 곡이 없어요.</string>
     <string name="same_song_footer">이미 대기열에 들어 있는 곡은 그대로예요. 다음에 라디오나 자동 재생이 곡을 넣을 때부터 적용돼요. 설정 백업에도 들어가요.</string>
     <string name="translate_ahead_background">곡 배경 웹 검색이 켜져 있어서, 배경이 아직 없는 곡은 같은 요청에서 배경도 함께 찾아요. 곡당 약 30원이 더 들고, 예상 금액에 포함했어요.</string>
+    <string name="song_background_sonnet">Sonnet으로 조사 (더 꼼꼼함 · 곡당 약 140원 · 미리 번역은 번역 모델로 함께 조사)</string>
     <string name="ko_window_summary">요약</string>
     <string name="ko_window_songs">곡 · %1$d곡</string>
     <string name="ko_window_space">사용 공간</string>

@@ -53,10 +53,16 @@ object SongBackgrounds {
         val searches: Int = 0,
         /** The language it was written in. */
         val language: String = "",
+        /** The title as readers of [language] write it — official, or the wikis' and fans' — or empty. */
+        val title: String = "",
     )
 
-    /** The song as the player names it: what is searched for. */
-    data class SongName(val title: String, val artist: String, val album: String? = null)
+    /**
+     * The song as the player names it: what is searched for. [sungBy] is the
+     * upload's own artist when the title named someone else as the maker — a
+     * cover's "抜錨 / ナナホシ管弦楽団" sung by Wolpis Carter.
+     */
+    data class SongName(val title: String, val artist: String, val album: String? = null, val sungBy: String? = null)
 
     /** Settings' switch; nothing is looked up while it is off. Stored backgrounds are still used. */
     @Volatile
@@ -66,9 +72,15 @@ object SongBackgrounds {
     @Volatile
     var widenWhenMissing: Boolean = true
 
+    /** Who looks the song up when it is looked up on its own: Haiku by default, Sonnet for a closer read at about four times the cost. */
+    @Volatile
+    var researchModel: String = LyricsTranslation.CLAUDE_HAIKU
+
     const val DIRECTORY = "song_background_v1"
     private const val MISSING_KEPT_MS = 30L * 24L * 60L * 60L * 1000L
     private const val MAX_NOTES = 8
+    private const val MAX_MAKER_CHARS = 40
+    private const val MAX_TITLE_CHARS = 60
     private const val MAX_PHRASE_CHARS = 12
     private const val WHOLE_LINE_CHARS = 8
     private const val QUOTE_RUN_CHARS = 12
@@ -85,7 +97,26 @@ object SongBackgrounds {
     fun noteSong(trackId: String, title: String, artist: String, album: String? = null) {
         if (trackId.isBlank() || title.isBlank()) return
         if (names.size > 500) names.clear()
-        names[trackId] = SongName(title, artist, album?.takeIf { it.isNotBlank() })
+        names[trackId] = nameFor(title, artist, album)
+    }
+
+    /**
+     * The song's name with a maker the title carries after a slash taken out
+     * of it: a cover is uploaded as "抜錨 / ナナホシ管弦楽団" under the singer
+     * who covered it, and is looked up — and kept — as the original's. A
+     * slash naming the upload's own artist is only dropped.
+     */
+    internal fun nameFor(title: String, artist: String, album: String? = null): SongName {
+        val albumName = album?.takeIf { it.isNotBlank() }
+        val parts = title.split(" / ", " ／ ", "／").map { it.trim() }
+        if (parts.size != 2 || parts.any { it.isEmpty() }) return SongName(title, artist, albumName)
+        val (name, after) = parts
+        val singer = artist.artistForLyricsSearch()
+        fun same(a: String, b: String) = a.lowercase(Locale.ROOT).replace(" ", "") == b.lowercase(Locale.ROOT).replace(" ", "")
+        if (same(after, singer)) return SongName(name, artist, albumName)
+        // Too long to be a credit, or a credit run together: left as it is.
+        if (after.length > MAX_MAKER_CHARS) return SongName(title, artist, albumName)
+        return SongName(name, after, albumName, sungBy = artist)
     }
 
     fun nameOf(trackId: String): SongName? = names[trackId]
@@ -189,12 +220,13 @@ object SongBackgrounds {
             val input = buildJsonObject {
                 put("title", song.title)
                 put("artist", song.artist)
+                song.sungBy?.let { put("sung_by", it) }
                 song.album?.let { put("album", it) }
             }
             val result = LyricsTranslation.askClaude(
                 purpose = ClaudeDiagnostics.PURPOSE_BACKGROUND,
                 system = instruction(target),
-                model = LyricsTranslation.CLAUDE_HAIKU,
+                model = researchModel,
                 input = input.toString(),
                 schema = SCHEMA,
                 effort = "medium",
@@ -256,12 +288,13 @@ object SongBackgrounds {
         val language = Locale.forLanguageTag(target.replace('_', '-')).getDisplayName(Locale.ENGLISH).ifBlank { target }
         return buildString {
             appendLine("You research one song for a lyric translator in a music app.")
-            appendLine("Search the web for this exact song by its title and artist before you answer.")
+            appendLine("Search the web for this exact song by its title and artist before you answer. When \"sung_by\" is given, the upload is that singer's cover: research the original song by \"artist\".")
             appendLine("Write in $language ($target), whatever language the sources are in: the background and every note's meaning in $language, only the phrases themselves as the song writes them.")
             appendLine("- \"background\": 3 to 5 short sentences: what the song was written for (anime, drama, game, film) if anything, what it is about, and what the artist or official sources said about it. Say which parts are fan interpretation.")
             appendLine("- \"notes\": up to $MAX_NOTES hard expressions in the song, each as a short \"phrase\" of a few words and its \"meaning\". Never copy a whole lyric line.")
             appendLine("  Put first what a translator would miss: wordplay and puns, above all two words read alike (in Japanese, one reading written with two sets of kanji; in Korean or Chinese, one sound with two meanings), double meanings, a title hidden in the words; then slang, archaic or literary words, and references.")
             appendLine("  Look for them in what the song's wiki pages and fan explanations say about its words. Leave out plain words a dictionary explains, and the song's or artist's own name.")
+            appendLine("- \"title\": the song's title as $language readers write it: the official $language title if there is one, else the one $language wikis and fans use (for Korean, the name of the song's namu.wiki article). Empty when there is none; never a translation of your own.")
             appendLine("- \"confidence\": \"high\" if official or well-sourced, \"medium\" if from a reliable wiki, \"low\" otherwise.")
             appendLine("- \"sources\": the sites you used, by name.")
             appendLine("Use only what the search results say about this exact song. Never quote the lyrics. Never invent facts, credits or interviews.")
@@ -291,6 +324,7 @@ object SongBackgrounds {
                         put("additionalProperties", false)
                     }
                 }
+                putJsonObject("title") { put("type", "string") }
                 putJsonObject("confidence") { put("type", "string") }
                 putJsonObject("sources") {
                     put("type", "array")
@@ -301,6 +335,7 @@ object SongBackgrounds {
                 add("found")
                 add("background")
                 add("notes")
+                add("title")
                 add("confidence")
                 add("sources")
             }
@@ -315,6 +350,7 @@ object SongBackgrounds {
         val notes: List<Note> = emptyList(),
         val confidence: String = "",
         val sources: List<String> = emptyList(),
+        val title: String = "",
     )
 
     internal fun parse(text: String, target: String, lyrics: List<String>, now: Long = System.currentTimeMillis()): Background? {
@@ -327,6 +363,8 @@ object SongBackgrounds {
             sources = answer.sources.map { it.trim() }.filter { it.isNotEmpty() }.distinct().take(6),
             at = now,
             language = target,
+            // A title, not a sentence: anything longer is not one.
+            title = answer.title.trim().takeIf { it.length <= MAX_TITLE_CHARS }.orEmpty(),
         )
         return clean(raw, lyrics)
     }
@@ -337,7 +375,7 @@ object SongBackgrounds {
      * [QUOTE_RUN_CHARS] characters of a lyric line, are dropped.
      */
     internal fun clean(value: Background, lyrics: List<String>): Background {
-        if (!value.found) return value.copy(background = "", notes = emptyList())
+        if (!value.found) return value.copy(background = "", notes = emptyList(), title = "")
         val allLines = lyrics.map(::squash)
         val lines = allLines.filter { it.length >= QUOTE_RUN_CHARS }
         // A whole lyric line given as a "phrase" is a quote, however short the line.
@@ -374,6 +412,7 @@ object SongBackgrounds {
             put("title", name.title)
             put("artist", name.artist)
             if (found != null) {
+                if (found.title.isNotBlank()) put("title_in_language", found.title)
                 put("background", found.background)
                 if (found.notes.isNotEmpty()) {
                     put(

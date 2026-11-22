@@ -105,4 +105,29 @@ class SongBackgroundsTest {
         assertEquals(2, kept.searches)
         assertEquals(null, SongBackgrounds.fileBatchAnswer(song, "ko", null, lyrics, searches = 0))
     }
+
+    @Test
+    fun aCoverIsLookedUpAsTheOriginal() {
+        val cover = SongBackgrounds.nameFor("抜錨 / ナナホシ管弦楽団", "월피스 카터")
+        assertEquals("抜錨", cover.title)
+        assertEquals("ナナホシ管弦楽団", cover.artist)
+        assertEquals("월피스 카터", cover.sungBy)
+        // The slash naming the upload's own artist is only dropped.
+        val own = SongBackgrounds.nameFor("Lemon / 米津玄師", "米津玄師")
+        assertEquals("Lemon", own.title)
+        assertEquals(null, own.sungBy)
+        // No slash, nothing changes.
+        assertEquals(SongBackgrounds.SongName("アイドル", "YOASOBI"), SongBackgrounds.nameFor("アイドル", "YOASOBI"))
+        // The cover and the original share what is kept.
+        assertEquals(SongBackgrounds.keyOf("抜錨", "ナナホシ管弦楽団"), SongBackgrounds.keyOf(cover.title, cover.artist))
+    }
+
+    @Test
+    fun theTitleInTheReadersLanguageIsKeptAndSent() {
+        val text = "{\"found\":true,\"background\":\"오리지널 곡이에요.\",\"notes\":[],\"title\":\"발묘\",\"confidence\":\"medium\",\"sources\":[\"나무위키\"]}"
+        val value = assertNotNull(SongBackgrounds.parse(text, "ko", lyrics))
+        assertEquals("발묘", value.title)
+        val missing = assertNotNull(SongBackgrounds.parse(text.replace("true", "false"), "ko", lyrics))
+        assertEquals("", missing.title)
+    }
 }

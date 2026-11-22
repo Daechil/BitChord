@@ -193,5 +193,11 @@ fun SongBackgroundRows(title: String) {
             checked = widen,
             onCheckedChange = com.music.bitchord.data.settings.AppSettings::setSongBackgroundWiden,
         )
+        val sonnet by com.music.bitchord.data.settings.AppSettings.songBackgroundSonnet.collectAsStateWithLifecycle()
+        com.music.bitchord.ui.screens.SettingsSubRow(
+            title = androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.song_background_sonnet),
+            checked = sonnet,
+            onCheckedChange = com.music.bitchord.data.settings.AppSettings::setSongBackgroundSonnet,
+        )
     }
 }

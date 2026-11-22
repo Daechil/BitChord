@@ -725,6 +725,7 @@ object LyricsTranslation {
             appendLine("8. Set \"source_language\" to the ISO 639-1 code of the song's main original language.")
             appendLine("9. Leave \"declined_reason\" as an empty string. Only if you will not translate this song, write the reason there in one short sentence and leave every translation empty. Never write a refusal, a warning or a note in place of a translation.")
             appendLine("10. The input may name the song (\"song\": title, artist) and give its \"background\" and \"phrase_notes\" from a web search. Use them only to choose the tone and the words, and to carry wordplay and double meanings across. They can be wrong: the lyrics come first. Never add to a line anything that is not in it.")
+            appendLine("11. When \"song\" gives \"title_in_language\" — the title as readers of the target language know it — and the song's title is sung in a line, write it as that title every time, never spelled out in other words.")
             appendListenerInstructions()
         }
     }

@@ -144,12 +144,11 @@ object QueueBuilder {
         ) {
             return sameMaker || ((a.voiceBilled || b.voiceBilled) && closeLength(a, b, SAME_LENGTH_SECONDS))
         }
-        // The song's name written another way by the same maker — its Japanese
-        // and English titles ("きみも悪い人でよかった" and "I'm Glad You're
-        // Evil Too"), or the maker under a localised name ("YOASOBI" and
-        // "요아소비", one channel) — at the same length, to the second.
-        return a.title.isNotEmpty() && b.title.isNotEmpty() && a.latin != b.latin &&
-            sameMaker && closeLength(a, b, SAME_LENGTH_SECONDS)
+        // Not joined: the same maker, a title in another script, the same
+        // length. Measured on twenty real stations it joined eight pairs and
+        // every one was two songs — Kanaria's "KING" and "エンヴィーベイビー",
+        // Stray Kids' "MANIAC" and "락 (樂)", both 183 s — and no true pair.
+        return false
     }
 
     /** One maker, by name or by channel; a voice or a label shared by thousands of songs is not one. */

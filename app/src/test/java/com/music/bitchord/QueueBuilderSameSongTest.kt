@@ -29,22 +29,6 @@ class QueueBuilderSameSongTest {
     )
 
     @Test
-    fun `the japanese and english titles by one artist at one length`() = assertTrue(
-        QueueBuilder.isSameRecording(
-            song("a", "きみも悪い人でよかった", "PinocchioP", "3:52"),
-            song("b", "I'm Glad You're Evil Too (feat. Hatsune Miku)", "PinocchioP", "3:52"),
-        ),
-    )
-
-    @Test
-    fun `a localised artist name is the same channel`() = assertTrue(
-        QueueBuilder.isSameRecording(
-            song("a", "アイドル", "YOASOBI", "3:33", artistId = "UCvpredjG93ifbCP1Y77JyFA"),
-            song("b", "Idol", "요아소비", "3:33", artistId = "UCvpredjG93ifbCP1Y77JyFA"),
-        ),
-    )
-
-    @Test
     fun `two songs of one artist in two scripts but different lengths stay apart`() = assertFalse(
         QueueBuilder.isSameRecording(
             song("a", "アイドル", "YOASOBI", "3:33"),
@@ -76,12 +60,10 @@ class QueueBuilderSameSongTest {
             candidates = listOf(
                 song("a", "テトリス - Tetoris", "Hiiragi Magnetite", "2:47"),
                 song("b", "テトリス - Tetoris (feat. Kasane Teto)", "Kasane Teto", "2:47"),
-                song("c", "きみも悪い人でよかった", "PinocchioP", "3:52"),
-                song("d", "I'm Glad You're Evil Too (feat. Hatsune Miku)", "PinocchioP", "3:52"),
             ),
             limit = 10,
         )
-        assertEquals(listOf("a", "c"), extra.map { it.videoId })
+        assertEquals(listOf("a"), extra.map { it.videoId })
     }
 
     @Test
@@ -125,18 +107,33 @@ class QueueBuilderSameSongTest {
     )
 
     @Test
-    fun `the maker's upload in its own language is the one kept`() {
+    fun `the maker's upload is the one kept over the voice's`() {
         val seed = song("s", "Machine Love", "Jamie Paige", "3:00")
         val extra = QueueBuilder.extend(
             existing = listOf(seed),
             candidates = listOf(
-                song("en", "I'm Glad You're Evil Too (feat. Hatsune Miku)", "PinocchioP", "3:52"),
                 song("voice", "テトリス - Tetoris (feat. Kasane Teto)", "Kasane Teto", "2:47"),
-                song("ja", "きみも悪い人でよかった", "PinocchioP", "3:52"),
                 song("maker", "テトリス - Tetoris", "Hiiragi Magnetite", "2:47"),
             ),
             limit = 10,
         )
-        assertEquals(listOf("ja", "maker"), extra.map { it.videoId })
+        assertEquals(listOf("maker"), extra.map { it.videoId })
     }
+
+    // Pairs the other-script rule joined on real stations: every one two songs.
+    @Test
+    fun `one maker's two songs of one length in two scripts stay apart`() {
+        assertFalse(QueueBuilder.isSameRecording(song("a", "KING", "Kanaria", "2:16"), song("b", "エンヴィーベイビー", "Kanaria", "2:16")))
+        assertFalse(QueueBuilder.isSameRecording(song("a", "MANIAC", "Stray Kids", "3:03"), song("b", "락 (樂) LALALALA", "Stray Kids", "3:03")))
+        assertFalse(QueueBuilder.isSameRecording(song("a", "春を告げる - Haru wo Tsugeru", "yama", "3:17"), song("b", "Film", "yama", "3:16")))
+        assertFalse(QueueBuilder.isSameRecording(song("a", "アドレナ", "YOASOBI", "3:06"), song("b", "KILLA", "YOASOBI", "3:05")))
+    }
+
+    @Test
+    fun `a two-name title and its first name are one song`() = assertTrue(
+        QueueBuilder.isSameRecording(
+            song("a", "春を告げる - Haru wo Tsugeru", "yama", "3:17"),
+            song("b", "春を告げる", "yama", "3:17"),
+        ),
+    )
 }

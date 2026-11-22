@@ -14,6 +14,10 @@ on:
         description: 'Radio seeds to check for songs held to be one, separated by semicolons'
         required: false
         default: ''
+      sources:
+        description: 'Set to yes to try free song-background sources (VocaDB, Wikipedia, Genius, AnimeThemes)'
+        required: false
+        default: ''
       claude_search:
         description: 'Set to yes to try Claude web search (needs the ANTHROPIC_API_KEY secret; costs a few cents)'
         required: false
@@ -38,7 +42,7 @@ jobs:
           cache: gradle
 
       - name: Check
-        if: inputs.probe == '' && inputs.radio == '' && inputs.claude_search == ''
+        if: inputs.probe == '' && inputs.radio == '' && inputs.claude_search == '' && inputs.sources == ''
         env:
           LIVE_LYRICS: '1'
           LIVE_LYRICS_REPORT: ${{ github.workspace }}/live-lyrics.md
@@ -64,6 +68,12 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           LIVE_LYRICS_REPORT: ${{ github.workspace }}/live-lyrics.md
         run: python3 .github/scripts/claude_search_check.py
+
+      - name: Background sources
+        if: inputs.sources != ''
+        env:
+          LIVE_LYRICS_REPORT: ${{ github.workspace }}/live-lyrics.md
+        run: python3 .github/scripts/background_sources_check.py
 
       - name: Report
         if: always()

@@ -67,4 +67,42 @@ class SongBackgroundsTest {
         assertEquals("アイドル", (context["title"] as kotlinx.serialization.json.JsonPrimitive).content)
         assertEquals(null, SongBackgrounds.context("unknown"))
     }
+
+    @Test
+    fun aBatchRequestLooksTheSongUpWhenAsked() = kotlinx.coroutines.runBlocking {
+        val dir = java.nio.file.Files.createTempDirectory("bgbatch").toFile()
+        LyricsTranslation.cacheDir = dir
+        LyricsTranslation.keepDir = dir
+        SongBackgrounds.noteSong("vid2", "アイドル", "YOASOBI")
+        val lines = listOf(LyricLine(0, "無敵の笑顔で荒らすメディア"), LyricLine(1000, "知りたいその秘密ミステリアス"))
+        val plain = LyricsTranslation.aheadRequest("t0", "vid2", lines, "ko", LyricsTranslation.CLAUDE_HAIKU, reading = false)
+        assertEquals(null, plain.params?.get("tools"))
+        val asked = LyricsTranslation.aheadRequest(
+            "t0", "vid2", lines, "ko", LyricsTranslation.CLAUDE_HAIKU, reading = false,
+            research = SongBackgrounds.SongName("アイドル", "YOASOBI"),
+        )
+        val params = assertNotNull(asked.params)
+        assertNotNull(params["tools"])
+        val schema = params.toString()
+        assertTrue(schema.contains(SongBackgrounds.BATCH_FIELD))
+        assertEquals("アイドル", asked.item?.researchTitle)
+        // A pronunciation never looks anything up.
+        val reading = LyricsTranslation.aheadRequest(
+            "r0", "vid2", lines, "ko", LyricsTranslation.CLAUDE_HAIKU, reading = true,
+            research = SongBackgrounds.SongName("アイドル", "YOASOBI"),
+        )
+        assertEquals(null, reading.params?.get("tools"))
+    }
+
+    @Test
+    fun aBatchAnswerFilesTheBackground() {
+        val dir = java.nio.file.Files.createTempDirectory("bgfile").toFile()
+        LyricsTranslation.keepDir = dir
+        val field = kotlinx.serialization.json.Json.parseToJsonElement(answer("오프닝이에요.", "推し" to "최애"))
+        val song = SongBackgrounds.SongName("アイドル (Official)", "YOASOBI")
+        assertNotNull(SongBackgrounds.fileBatchAnswer(song, "ko", field, lyrics, searches = 2))
+        val kept = assertNotNull(SongBackgrounds.stored("アイドル", "YOASOBI"))
+        assertEquals(2, kept.searches)
+        assertEquals(null, SongBackgrounds.fileBatchAnswer(song, "ko", null, lyrics, searches = 0))
+    }
 }

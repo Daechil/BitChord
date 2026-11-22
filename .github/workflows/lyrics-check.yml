@@ -22,6 +22,10 @@ on:
         description: 'Set to yes to try free song-background sources (VocaDB, Wikipedia, Genius, AnimeThemes)'
         required: false
         default: ''
+      translate:
+        description: 'A song to translate the way the app does and have Sonnet review (needs ANTHROPIC_API_KEY; about 100 won)'
+        required: false
+        default: ''
       claude_search:
         description: 'Set to yes to try Claude web search (needs the ANTHROPIC_API_KEY secret; costs a few cents)'
         required: false
@@ -46,7 +50,7 @@ jobs:
           cache: gradle
 
       - name: Check
-        if: inputs.probe == '' && inputs.radio == '' && inputs.claude_search == '' && inputs.sources == '' && inputs.namu == ''
+        if: inputs.probe == '' && inputs.radio == '' && inputs.claude_search == '' && inputs.sources == '' && inputs.namu == '' && inputs.translate == ''
         env:
           LIVE_LYRICS: '1'
           LIVE_LYRICS_REPORT: ${{ github.workspace }}/live-lyrics.md
@@ -73,6 +77,15 @@ jobs:
           SONG_BACKGROUND_PROBE: '1'
           LIVE_LYRICS_REPORT: ${{ github.workspace }}/live-lyrics.md
         run: ./gradlew :shared:jvmTest --tests 'com.music.bitchord.data.lyrics.SongBackgroundProbe' --rerun --no-daemon
+
+      - name: Translation review
+        if: inputs.translate != ''
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TRANSLATION_PROBE: ${{ inputs.translate }}
+          TRANSLATION_INSTRUCTIONS: '노래에 대해 검색 후 노래의 배경에 맞게 의역할 것'
+          LIVE_LYRICS_REPORT: ${{ github.workspace }}/live-lyrics.md
+        run: ./gradlew :shared:jvmTest --tests 'com.music.bitchord.data.lyrics.TranslationProbe' --rerun --no-daemon
 
       - name: Claude web search
         if: inputs.claude_search != '' && inputs.claude_search != 'app'

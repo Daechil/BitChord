@@ -33,6 +33,7 @@ import kotlin.test.Test
  */
 class TranslationProbe {
     private var compare: String? = null
+    private var instructionsB: String? = null
     private val judgeModel get() = if (compare != null) "claude-opus-5-5" else LyricsTranslation.CLAUDE_SONNET
     private fun cell(text: Any?) = text.toString().replace("|", "/").replace("\n", " ")
 
@@ -42,7 +43,11 @@ class TranslationProbe {
         // on the model named, reviewed blind by Opus rather than by one of the two.
         val raw = System.getenv("TRANSLATION_PROBE")?.trim().orEmpty()
         val query = raw.substringBefore(" @").trim()
-        compare = raw.substringAfter(" @", "").trim().lowercase().takeIf { it.isNotEmpty() }?.let {
+        // "song @instructions": both on Haiku with the background, A with
+        // TRANSLATION_INSTRUCTIONS and B with TRANSLATION_INSTRUCTIONS_B.
+        val suffix = raw.substringAfter(" @", "").trim().lowercase()
+        if (suffix == "instructions") instructionsB = System.getenv("TRANSLATION_INSTRUCTIONS_B").orEmpty()
+        compare = suffix.takeIf { it.isNotEmpty() && it != "instructions" }?.let {
             when (it) {
                 "sonnet" -> LyricsTranslation.CLAUDE_SONNET
                 "haiku" -> LyricsTranslation.CLAUDE_HAIKU
@@ -108,7 +113,16 @@ class TranslationProbe {
         val b: LyricsTranslation.Result
         val background: SongBackgrounds.Background?
         val other = compare
-        if (other == null) {
+        val newInstructions = instructionsB
+        if (newInstructions != null) {
+            SongBackgrounds.enabled = true
+            background = SongBackgrounds.ensure(name, "ko", lines.map { it.text })
+            a = LyricsTranslation.translate(song.videoId, lines, "ko")
+            out.append("- A (own instructions as they are): ${describe(a)}\n")
+            LyricsTranslation.listenerInstructions = newInstructions
+            b = LyricsTranslation.translate(song.videoId, lines, "ko", fresh = true)
+            out.append("- B (new instructions): ${describe(b)}\n\n")
+        } else if (other == null) {
             // A: what a short tap sends when no background is kept: the song's name only.
             SongBackgrounds.enabled = false
             a = LyricsTranslation.translate(song.videoId, lines, "ko")
@@ -178,7 +192,7 @@ class TranslationProbe {
         }.toString()
         val system = buildString {
             appendLine("You are a strict reviewer of Korean song-lyric translations, fluent in the source language and in Korean.")
-            if (compare == null) {
+            if (compare == null && instructionsB == null) {
                 appendLine("Each line has the source lyric and two Korean translations, A and B. B was written with the song's background and phrase notes in hand; A without.")
             } else {
                 appendLine("Each line has the source lyric and two Korean translations, A and B, written independently with the same background and phrase notes in hand. Judge them on their merits alone.")
@@ -186,7 +200,7 @@ class TranslationProbe {
             appendLine("Use what you know about this song, and the background given, to judge meaning, imagery, wordplay and tone.")
             appendLine("Write every comment in Korean, in 해요체.")
             appendLine("- \"score_a\", \"score_b\": 1 to 10 for the whole song (10 = a fluent Korean speaker would understand the song exactly as a native listener does).")
-            appendLine(if (compare == null) "- \"summary\": 3 to 5 sentences: how good the translations are, and whether B's background made it better or worse." else "- \"summary\": 3 to 5 sentences: how good each translation is, and which reads better and why.")
+            appendLine(if (compare == null && instructionsB == null) "- \"summary\": 3 to 5 sentences: how good the translations are, and whether B's background made it better or worse." else "- \"summary\": 3 to 5 sentences: how good each translation is, and which reads better and why.")
             appendLine("- \"title_meaning\": what the title means and whether the translations carried that sense.")
             appendLine("- \"issues\": up to 15 real problems, most serious first: mistranslations, lost wordplay or double meaning, wrong subject, wrong tone, unnatural Korean, words added that are not in the source. Skip matters of taste.")
             appendLine("  Each issue: \"line\" (the i), \"which\" (\"A\", \"B\" or \"both\"), \"kind\", \"fragment\" (at most 8 characters of the source, never a whole line), \"problem\", and \"better\" (at most 15 Korean characters).")

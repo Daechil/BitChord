@@ -84,6 +84,10 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           TRANSLATION_PROBE: ${{ inputs.translate }}
           TRANSLATION_INSTRUCTIONS: '노래에 대해 검색 후 노래의 배경에 맞게 의역할 것'
+          TRANSLATION_INSTRUCTIONS_B: |-
+            같은 발음에 두 뜻을 겹친 말장난은 두 뜻이 모두 느껴지게 옮길 것.
+            한자어나 예스러운 표현은 사전 뜻을 지키되, 노래 가사처럼 짧고 자연스러운 우리말로 옮길 것.
+            원문에 없는 감정이나 설명은 덧붙이지 말 것.
           LIVE_LYRICS_REPORT: ${{ github.workspace }}/live-lyrics.md
         run: ./gradlew :shared:jvmTest --tests 'com.music.bitchord.data.lyrics.TranslationProbe' --rerun --no-daemon
 

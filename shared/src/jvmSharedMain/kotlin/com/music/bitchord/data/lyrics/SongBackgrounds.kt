@@ -294,7 +294,7 @@ object SongBackgrounds {
             appendLine("- \"notes\": up to $MAX_NOTES hard expressions in the song, each as a short \"phrase\" of a few words and its \"meaning\". Never copy a whole lyric line.")
             appendLine("  Put first what a translator would miss: wordplay and puns, above all two words read alike (in Japanese, one reading written with two sets of kanji; in Korean or Chinese, one sound with two meanings), double meanings, a title hidden in the words; then slang, archaic or literary words, and references.")
             appendLine("  Look for them in what the song's wiki pages and fan explanations say about its words. Leave out plain words a dictionary explains, and the song's or artist's own name.")
-            appendLine("- \"title\": the song's title as $language readers write it: the official $language title if there is one, else the one $language wikis and fans use (for Korean, the name of the song's namu.wiki article). Empty when there is none; never a translation of your own.")
+            appendLine("- \"title\": the song's title as $language readers write it: the official $language title if there is one, else the one $language wikis and fans use (for Korean, the name of the song's namu.wiki article). Copy it from a source that writes it so; when no $language source names the song in $language, leave it empty. Never a translation or reading of your own.")
             appendLine("- \"confidence\": \"high\" if official or well-sourced, \"medium\" if from a reliable wiki, \"low\" otherwise.")
             appendLine("- \"sources\": the sites you used, by name.")
             appendLine("Use only what the search results say about this exact song. Never quote the lyrics. Never invent facts, credits or interviews.")

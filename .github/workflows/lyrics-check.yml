@@ -105,12 +105,20 @@ jobs:
         run: ./gradlew :shared:jvmTest --tests 'com.music.bitchord.data.lyrics.TranslationProbe' --rerun --no-daemon
 
       - name: Claude web search
-        if: inputs.claude_search != '' && inputs.claude_search != 'app' && inputs.claude_search != 'fetch' && inputs.claude_search != 'cache'
+        if: inputs.claude_search != '' && inputs.claude_search != 'app' && inputs.claude_search != 'fetch' && inputs.claude_search != 'cache' && inputs.claude_search != 'tidy'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           CLAUDE_SEARCH_CASES: ${{ inputs.claude_search }}
           LIVE_LYRICS_REPORT: ${{ github.workspace }}/live-lyrics.md
         run: python3 .github/scripts/claude_search_check.py
+
+      - name: Queue tidy (app code)
+        if: inputs.claude_search == 'tidy'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          QUEUE_TIDY_PROBE: '1'
+          LIVE_LYRICS_REPORT: ${{ github.workspace }}/live-lyrics.md
+        run: ./gradlew :shared:jvmTest --tests 'com.music.bitchord.data.lyrics.QueueTidyProbe' --rerun --no-daemon
 
       - name: Prompt cache (app code)
         if: inputs.claude_search == 'cache'

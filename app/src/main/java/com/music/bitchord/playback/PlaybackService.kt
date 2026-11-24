@@ -809,6 +809,9 @@ class PlaybackService : MediaLibraryService() {
      */
     private var partySync: PartySync? = null
 
+    /** Settings' "tidy radio songs automatically"; see [QueueAutoTidy]. */
+    private val queueAutoTidy by lazy { QueueAutoTidy(scope) { player } }
+
     /** Commands exposed as the secondary buttons on the media notification. */
     private val boundedContextCommand = SessionCommand(ACTION_START_BOUNDED_CONTEXT, Bundle.EMPTY)
     private val clearBoundedContextCommand = SessionCommand(ACTION_CLEAR_BOUNDED_CONTEXT, Bundle.EMPTY)
@@ -1189,6 +1192,7 @@ class PlaybackService : MediaLibraryService() {
                 // its old seed memoized. Detect that state at its source and
                 // make the current track eligible for a fresh load.
                 refreshAutoplayIfQueueEmpty()
+                queueAutoTidy.onQueueChanged()
             }
         }
     }

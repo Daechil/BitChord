@@ -66,6 +66,9 @@ object KoAlerts {
     /** A song being grouped with its other uploads, and the queue to pick them from. */
     val sameSong = MutableStateFlow<SameSongAsk?>(null)
 
+    /** The queue being looked through for a recording queued twice. */
+    val queueTidy = MutableStateFlow<QueueTidyAsk?>(null)
+
     /** All of the listener's groups of one song, on show. */
     val sameSongList = MutableStateFlow(false)
 
@@ -144,6 +147,7 @@ fun ClaudeAlerts(
     TranslationStatusAlerts(hazeState)
     DuplicatesAlerts()
     SameSongAlerts()
+    QueueTidyAlerts()
     SimilarSongAlert(hazeState)
     FloatingLyricsAlerts(hazeState)
     val showWatchInterval by KoAlerts.watchInterval.collectAsStateWithLifecycle()
@@ -551,6 +555,7 @@ private fun ClaudeLogWindow(onDismiss: () -> Unit) {
     )
     val inOutLabel = stringResource(R.string.ko_tokens_in_out)
     val purposeBackground = stringResource(R.string.song_background_purpose)
+    val purposeQueue = stringResource(R.string.queue_tidy_purpose)
     val searchesLabel = stringResource(R.string.song_background_searches)
     val cacheReadLabel = stringResource(R.string.claude_cache_read_log)
     // The copy keeps the raw values, for a bug report; the screen says what they mean.
@@ -581,6 +586,7 @@ private fun ClaudeLogWindow(onDismiss: () -> Unit) {
             ClaudeDiagnostics.PURPOSE_BATCH -> purposeBatch
             ClaudeDiagnostics.PURPOSE_RECOMMEND -> purposeRecommend
             ClaudeDiagnostics.PURPOSE_BACKGROUND -> purposeBackground
+            ClaudeDiagnostics.PURPOSE_QUEUE -> purposeQueue
             else -> entry.purpose
         }
         val model = when (entry.model) {

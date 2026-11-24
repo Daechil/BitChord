@@ -659,6 +659,9 @@ object AppSettings {
     /** Look up each song's background on the web, once, for its translation and explanation. Off unless chosen: it costs a search. */
     val songBackground = MutableStateFlow(false)
 
+    /** Radio and AutoPlay songs that repeat a queued recording are taken out as they arrive, by Claude. */
+    val queueTidyAuto = MutableStateFlow(false)
+
     /** The song background looked up by Sonnet rather than Haiku. */
     val songBackgroundSonnet = MutableStateFlow(false)
 
@@ -1416,6 +1419,7 @@ object AppSettings {
         com.music.bitchord.data.lyrics.SongBackgrounds.enabled = songBackground.value
         com.music.bitchord.data.lyrics.SongBackgrounds.widenWhenMissing = songBackgroundWiden.value
         songBackgroundSonnet.value = prefs.getBoolean(KEY_SONG_BACKGROUND_SONNET, false)
+        queueTidyAuto.value = prefs.getBoolean(KEY_QUEUE_TIDY_AUTO, false)
         com.music.bitchord.data.lyrics.SongBackgrounds.researchModel = researchModelFor(songBackgroundSonnet.value)
         // The listener's groups of one song, for radio and AutoPlay; kept in this file so a settings backup carries them.
         com.music.bitchord.playback.SameSongLinks.load(prefs.getString(KEY_SAME_SONG_LINKS, null))
@@ -2157,6 +2161,11 @@ object AppSettings {
         songBackground.value = value
         com.music.bitchord.data.lyrics.SongBackgrounds.enabled = value
         prefs.edit().putBoolean(KEY_SONG_BACKGROUND, value).apply()
+    }
+
+    fun setQueueTidyAuto(value: Boolean) {
+        queueTidyAuto.value = value
+        prefs.edit().putBoolean(KEY_QUEUE_TIDY_AUTO, value).apply()
     }
 
     fun setSongBackgroundSonnet(value: Boolean) {
@@ -3208,6 +3217,7 @@ object AppSettings {
     private const val KEY_SONG_BACKGROUND_WIDEN = "ko_song_background_widen"
     private const val KEY_SAME_SONG_LINKS = "ko_same_song_links"
     private const val KEY_SONG_BACKGROUND_SONNET = "ko_song_background_sonnet"
+    private const val KEY_QUEUE_TIDY_AUTO = "ko_queue_tidy_auto"
     private const val KEY_CLAUDE_INSTRUCTIONS_MEANING = "ko_claude_instructions_meaning"
     private const val KEY_KRW_RATE_MODE = "ko_krw_rate_mode"
     private const val KEY_KRW_RATE_SOURCE = "ko_krw_rate_source"

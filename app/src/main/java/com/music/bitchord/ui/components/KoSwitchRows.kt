@@ -210,3 +210,18 @@ fun SongBackgroundRows(title: String) {
         )
     }
 }
+
+/** Settings' "tidy radio songs automatically": a switch with its cost; see [com.music.bitchord.playback.QueueAutoTidy]. */
+@androidx.compose.runtime.Composable
+fun QueueTidyAutoRow(title: String) {
+    val on by com.music.bitchord.data.settings.AppSettings.queueTidyAuto.collectAsStateWithLifecycle()
+    com.music.bitchord.ui.screens.SettingsRow(
+        icon = com.music.bitchord.ui.icons.SfIcons.Radio,
+        title = title,
+        subtitle = androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.queue_tidy_auto_subtitle),
+        trailing = {
+            IosSwitch(checked = on, onCheckedChange = com.music.bitchord.data.settings.AppSettings::setQueueTidyAuto)
+        },
+        onClick = { com.music.bitchord.data.settings.AppSettings.setQueueTidyAuto(!on) },
+    )
+}

@@ -24,6 +24,7 @@
     <string name="watch_output_subtitle">워치의 스피커 또는 헤드폰에서 재생</string>
     <string name="channel_count">%1$d 채널</string>
     <string name="choose_lyrics_provider">가사 제공자 선택</string>
+    <string name="queue_tidy">겹친 곡 정리</string>
     <string name="clear">지우기</string>
     <string name="close_lyrics">가사 닫기</string>
     <string name="data_saver">데이터 절약</string>

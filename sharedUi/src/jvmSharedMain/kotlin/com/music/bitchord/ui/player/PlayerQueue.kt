@@ -284,6 +284,21 @@ internal fun InlineQueue(
                 color = Color.White,
                 modifier = Modifier.weight(1f),
             )
+            // The same recording queued twice, found and offered for removal; see [QueueTidy].
+            val tidy = com.music.bitchord.playback.QueueTidy.open
+            val latestQueue by androidx.compose.runtime.rememberUpdatedState(queue)
+            val latestRemove by androidx.compose.runtime.rememberUpdatedState(onRemove)
+            if (tidy != null && queue.size - currentIndex > 2) {
+                Text(
+                    text = stringResource(Res.string.queue_tidy),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White.copy(alpha = if (controlsLocked) 0.25f else 0.75f),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(percent = 50))
+                        .clickable(enabled = !controlsLocked) { tidy(queue, currentIndex, { latestQueue }, { latestRemove(it) }) }
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+            }
             if (tracks.user.isNotEmpty()) {
                 QueueClearButton(MaterialTheme.typography.titleMedium, controlsLocked, onClear)
             }

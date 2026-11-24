@@ -811,6 +811,16 @@ fun SettingsScreen(
         }
         if (shows(SettingsCategory.KO_FEATURES) && claudeApiKey.isNotBlank()) SearchableSettingsGroup(
             search,
+            header = stringResource(R.string.ko_group_queue),
+            headerInPage = true,
+        ) {
+            val queueTidyTitle = stringResource(R.string.queue_tidy_auto)
+            row(queueTidyTitle, "claude", "queue", "radio", "duplicate", "다음 곡", "라디오", "중복", "겹친", "정리") {
+                com.music.bitchord.ui.components.QueueTidyAutoRow(queueTidyTitle)
+            }
+        }
+        if (shows(SettingsCategory.KO_FEATURES) && claudeApiKey.isNotBlank()) SearchableSettingsGroup(
+            search,
             header = stringResource(R.string.ko_group_ahead),
             headerInPage = true,
         ) {

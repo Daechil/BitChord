@@ -66,6 +66,7 @@ object ClaudeDiagnostics {
     const val PURPOSE_RECOMMEND = "recommend"
     /** A song's background, looked up on the web; see [SongBackgrounds]. */
     const val PURPOSE_BACKGROUND = "background"
+    const val PURPOSE_QUEUE = "queue"
 
     @Serializable
     data class Entry(

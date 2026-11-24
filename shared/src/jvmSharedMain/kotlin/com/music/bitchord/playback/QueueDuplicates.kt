@@ -143,7 +143,7 @@ object QueueDuplicates {
         appendLine("These are NOT the same and must never be grouped: a version in another language (an English or Korean version of a Japanese song), a cover by another singer, a live take, a remix, an acoustic, piano, instrumental, sped-up, slowed, TV-size or extended cut, a different song by the same artist, two songs that share a title.")
         appendLine("A music video is often longer than its audio because of an intro or outro; a very different length otherwise means another cut.")
         appendLine("When you are not sure, do not group. Return no groups when nothing is queued twice.")
-        appendLine("\"reason\": a few words in Korean on why the songs are one recording.")
+        appendLine("\"reason\": one short sentence in Korean, in 해요체, on why the songs are one recording.")
     }
 
     private val SCHEMA = buildJsonObject {

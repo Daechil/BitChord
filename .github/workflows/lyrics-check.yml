@@ -117,7 +117,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           QUEUE_TIDY_PROBE: '1'
-          QUEUE_TIDY_SET: '2'
+          QUEUE_TIDY_SET: ${{ inputs.probe }}
           QUEUE_TIDY_RUNS: '2'
           LIVE_LYRICS_REPORT: ${{ github.workspace }}/live-lyrics.md
         run: ./gradlew :shared:jvmTest --tests 'com.music.bitchord.data.lyrics.QueueTidyProbe' --rerun --no-daemon

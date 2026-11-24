@@ -699,7 +699,7 @@ object LyricsTranslation {
             appendLine("Rules:")
             when (shape) {
                 AnswerShape.KEYED -> appendLine("1. \"translations\" is an object with one key per input line: the line's index \"i\" (\"0\" to \"${count - 1}\") as the key and that one line's translation as the value. All $count keys are required. Never put more than one line in a value, and never merge, split, skip or add lines.")
-                AnswerShape.INDEXED -> appendLine("1. \"translations\" is an array with exactly one item per input line, in order: {\"i\": the input line's index, \"t\": that one line's translation}, for every i from 0 to ${count - 1}. A long line stays one item, however long. Never merge, split, skip, reorder or add lines.")
+                AnswerShape.INDEXED -> appendLine("1. \"translations\" is an array with exactly one item per input line, in order: {\"i\": the input line's index, \"t\": that one line's translation}, for every i from 0 to \"line_count\" - 1 (\"line_count\" is in the input). A long line stays one item, however long. Never merge, split, skip, reorder or add lines.")
                 AnswerShape.ARRAY -> appendLine("1. Return exactly $count translations in \"translations\", one array item per input line, in the same order. Never put several lines in one item, and never merge, split, skip, reorder or add lines.")
             }
             appendLine("2. Read the whole song first. Keep one consistent narrator voice, speech level and tone across all lines.")
@@ -751,7 +751,7 @@ object LyricsTranslation {
             appendLine("Rules:")
             when (shape) {
                 AnswerShape.KEYED -> appendLine("1. \"translations\" is an object with one key per input line: the line's index \"i\" (\"0\" to \"${count - 1}\") as the key and that one line's reading as the value. All $count keys are required. Never put more than one line in a value, and never merge, split, skip or add lines.")
-                AnswerShape.INDEXED -> appendLine("1. \"translations\" is an array with exactly one item per input line, in order: {\"i\": the input line's index, \"t\": that one line's reading}, for every i from 0 to ${count - 1}. A long line stays one item, however long. Never merge, split, skip, reorder or add lines.")
+                AnswerShape.INDEXED -> appendLine("1. \"translations\" is an array with exactly one item per input line, in order: {\"i\": the input line's index, \"t\": that one line's reading}, for every i from 0 to \"line_count\" - 1 (\"line_count\" is in the input). A long line stays one item, however long. Never merge, split, skip, reorder or add lines.")
                 AnswerShape.ARRAY -> appendLine("1. Return exactly $count readings in \"translations\", one array item per input line, in the same order. Never put several lines in one item, and never merge, split, skip, reorder or add lines.")
             }
             appendLine("2. Write the sounds of the original words; never translate them. Read words the way the singer sings them, including the song's own readings of kanji.")
@@ -810,20 +810,13 @@ object LyricsTranslation {
             schema = schemaFor(shape, slots.size),
             effort = "medium",
             linesAsked = slots.size,
+            cache = true,
         ) { text -> parseTranslation(text, slots.map { it.text }, shape) }
-        // One required key per line holds the answer to the line count: the
-        // structured output cannot end until every line has its own value,
-        // which an array — any length satisfies "an array of strings" — never
-        // did. A schema that large may still be refused for a very long song;
-        // the numbered array, where a line split in two keeps its number and
-        // is joined back, is then the next best thing.
-        // Once the per-line schema has been refused for a song this long, a
-        // longer one is asked with the array straight away: the refusal costs
-        // nothing, but it is a round trip before every translation.
-        if (slots.size > MAX_KEYED_LINES || slots.size >= keyedRefusedFrom) return ask(AnswerShape.INDEXED)
-        val keyed = ask(AnswerShape.KEYED)
-        if (keyed.failure != ClaudeFailure.BAD_REQUEST) return keyed
-        keyedRefusedFrom = minOf(keyedRefusedFrom, slots.size)
+        // The numbered array, as a batch asks: the per-line schema was refused
+        // for a song of ordinary length, and a schema that changes with the
+        // song changes the prompt's front with it, so the instruction could
+        // never be read back from the prompt cache. The array's schema and the
+        // instruction are the same for every song of one style.
         return ask(AnswerShape.INDEXED)
     }
 
@@ -851,13 +844,6 @@ object LyricsTranslation {
             }
         }
     }.toString()
-
-    /** Past this many lines the per-line schema is not tried; see [requestClaudeTranslation]. */
-    private const val MAX_KEYED_LINES = 200
-
-    /** The fewest lines the per-line schema was refused for this run; asked as an array from there on. */
-    @Volatile
-    private var keyedRefusedFrom = Int.MAX_VALUE
 
     /**
      * `{"source_language": "...", "declined_reason": "", "translations": {"0": "...", …, "<count-1>": "..."}}`,
@@ -976,10 +962,14 @@ object LyricsTranslation {
         linesAsked: Int? = null,
         /** Server tools the request may use; see [claudeBody]. */
         tools: kotlinx.serialization.json.JsonArray? = null,
+        /** The instruction marked for the prompt cache; see [claudeBody]. */
+        cache: Boolean = false,
         parse: (String) -> Parsed<T>,
     ): ClaudeResult<T> {
         val key = cleanClaudeKey()
         val started = System.nanoTime()
+        // The answer's usage, once there is one: the cache figures go in the log whatever else does.
+        var answered: ResponseMeta? = null
         suspend fun done(
             failure: ClaudeFailure?,
             value: T? = null,
@@ -1006,6 +996,8 @@ object LyricsTranslation {
                     inputTokens = inputTokens,
                     outputTokens = outputTokens,
                     searches = searches,
+                    cacheRead = answered?.cacheRead,
+                    cacheWrite = answered?.cacheWrite,
                     detail = detail,
                 ),
             )
@@ -1026,7 +1018,7 @@ object LyricsTranslation {
             val seconds = (claudeCooldownUntil - now + 999) / 1000
             return done(ClaudeFailure.COOLDOWN, detail = "not sent: resting ${seconds}s after a rate limit or overload", sent = false)
         }
-        val body = claudeBody(model, system, input, schema, effort, maxTokens, tools).toString()
+        val body = claudeBody(model, system, input, schema, effort, maxTokens, tools, cache).toString()
         val request = Request.Builder()
             .url(CLAUDE_ENDPOINT)
             .header("x-api-key", key)
@@ -1046,6 +1038,7 @@ object LyricsTranslation {
         if (code in 200..299) {
             recordUsage(model, text)
             val meta = responseMeta(text)
+            answered = meta
             // Each web search is billed on its own, beside the tokens.
             meta.searches?.takeIf { it > 0 }?.let { searches -> searchSink?.invoke(searches) }
             when (meta.stopReason) {
@@ -1114,10 +1107,26 @@ object LyricsTranslation {
         maxTokens: Int = 16_000,
         /** Server tools the request may use — the web search; null for none. */
         tools: kotlinx.serialization.json.JsonArray? = null,
+        /**
+         * Marks [system] for the prompt cache: the instruction is the same for
+         * every song of one style, so a request within five minutes of the last
+         * reads it back at a tenth of the price (a twentieth on Sonnet 5.5).
+         */
+        cache: Boolean = false,
     ): JsonObject = buildJsonObject {
         put("model", model)
         put("max_tokens", maxTokens)
-        put("system", system)
+        if (cache) {
+            putJsonArray("system") {
+                add(buildJsonObject {
+                    put("type", "text")
+                    put("text", system)
+                    putJsonObject("cache_control") { put("type", "ephemeral") }
+                })
+            }
+        } else {
+            put("system", system)
+        }
         if (tools != null) put("tools", tools)
         putJsonArray("messages") {
             add(buildJsonObject {
@@ -1140,6 +1149,8 @@ object LyricsTranslation {
         val inputTokens: Long?,
         val outputTokens: Long?,
         val searches: Int? = null,
+        val cacheRead: Long? = null,
+        val cacheWrite: Long? = null,
     )
 
     /** The stop reason, refusal category and token counts of an answer, whatever else it holds. */
@@ -1158,6 +1169,8 @@ object LyricsTranslation {
             outputTokens = usage?.get("output_tokens")?.jsonPrimitive?.contentOrNull?.toLongOrNull(),
             searches = (usage?.get("server_tool_use") as? JsonObject)
                 ?.get("web_search_requests")?.jsonPrimitive?.contentOrNull?.toIntOrNull(),
+            cacheRead = usage?.get("cache_read_input_tokens")?.jsonPrimitive?.contentOrNull?.toLongOrNull(),
+            cacheWrite = usage?.get("cache_creation_input_tokens")?.jsonPrimitive?.contentOrNull?.toLongOrNull(),
         )
     }.getOrElse { ResponseMeta(null, null, null, null) }
 
@@ -1178,6 +1191,11 @@ object LyricsTranslation {
             val input = usage["input_tokens"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: 0L
             val output = usage["output_tokens"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: 0L
             if (input > 0 || output > 0) sink(model, input, output)
+            // Read back from the prompt cache, and written to it: tallied apart, at their own prices.
+            val read = usage["cache_read_input_tokens"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: 0L
+            val written = usage["cache_creation_input_tokens"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: 0L
+            if (read > 0) sink(cacheModel(model, CACHE_READ_SUFFIX), read, 0L)
+            if (written > 0) sink(cacheModel(model, CACHE_WRITE_SUFFIX), written, 0L)
         }
     }
 
@@ -1842,6 +1860,20 @@ object LyricsTranslation {
 
     /** Added to a model's name in [usageSink] for tokens billed at the batch rate, half the list price. */
     const val BATCH_MODEL_SUFFIX = ":batch"
+
+    /** Added to a model's name in [usageSink] for input read back from the prompt cache. */
+    const val CACHE_READ_SUFFIX = ":cache_read"
+
+    /** Added to a model's name in [usageSink] for input written to the prompt cache. */
+    const val CACHE_WRITE_SUFFIX = ":cache_write"
+
+    /** "claude-sonnet-5-5:cache_read", or "…:cache_read:batch" — the batch suffix stays last, where it is looked for. */
+    fun cacheModel(model: String, suffix: String): String =
+        if (model.endsWith(BATCH_MODEL_SUFFIX)) model.removeSuffix(BATCH_MODEL_SUFFIX) + suffix + BATCH_MODEL_SUFFIX else model + suffix
+
+    /** The model a usage tally's name is about, whatever is added to it. */
+    fun baseModel(model: String): String =
+        model.removeSuffix(BATCH_MODEL_SUFFIX).removeSuffix(CACHE_READ_SUFFIX).removeSuffix(CACHE_WRITE_SUFFIX)
     private const val BATCH_ENDPOINT = "https://api.anthropic.com/v1/messages/batches"
     private const val AHEAD_PREFIX = "ahead\u0000"
 
@@ -1943,6 +1975,7 @@ object LyricsTranslation {
             schema = schemaFor(shape, slots.size).let { if (lookUp != null) withBackgroundField(it) else it },
             effort = "medium",
             tools = lookUp?.let { SongBackgrounds.searchTools(SongBackgrounds.batchDomains) },
+            cache = true,
         )
         val item = AheadItem(
             customId = customId,

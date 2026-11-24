@@ -77,6 +77,10 @@ class SongBackgroundsTest {
         val lines = listOf(LyricLine(0, "無敵の笑顔で荒らすメディア"), LyricLine(1000, "知りたいその秘密ミステリアス"))
         val plain = LyricsTranslation.aheadRequest("t0", "vid2", lines, "ko", LyricsTranslation.CLAUDE_HAIKU, reading = false)
         assertEquals(null, plain.params?.get("tools"))
+        // The instruction is one cached block, and says nothing of this song's length.
+        val system = plain.params?.get("system").toString()
+        assertTrue(system.contains("cache_control"))
+        assertFalse(system.contains("from 0 to 1"))
         val asked = LyricsTranslation.aheadRequest(
             "t0", "vid2", lines, "ko", LyricsTranslation.CLAUDE_HAIKU, reading = false,
             research = SongBackgrounds.SongName("アイドル", "YOASOBI"),
@@ -129,5 +133,12 @@ class SongBackgroundsTest {
         assertEquals("발묘", value.title)
         val missing = assertNotNull(SongBackgrounds.parse(text.replace("true", "false"), "ko", lyrics))
         assertEquals("", missing.title)
+    }
+
+    @Test
+    fun cacheTalliesKeepTheirModelAndBatch() {
+        assertEquals("claude-sonnet-5-5:cache_read:batch", LyricsTranslation.cacheModel("claude-sonnet-5-5:batch", LyricsTranslation.CACHE_READ_SUFFIX))
+        assertEquals("claude-haiku-5-5:cache_write", LyricsTranslation.cacheModel("claude-haiku-5-5", LyricsTranslation.CACHE_WRITE_SUFFIX))
+        assertEquals("claude-sonnet-5-5", LyricsTranslation.baseModel("claude-sonnet-5-5:cache_read:batch"))
     }
 }

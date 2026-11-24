@@ -105,12 +105,21 @@ jobs:
         run: ./gradlew :shared:jvmTest --tests 'com.music.bitchord.data.lyrics.TranslationProbe' --rerun --no-daemon
 
       - name: Claude web search
-        if: inputs.claude_search != '' && inputs.claude_search != 'app' && inputs.claude_search != 'fetch'
+        if: inputs.claude_search != '' && inputs.claude_search != 'app' && inputs.claude_search != 'fetch' && inputs.claude_search != 'cache'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           CLAUDE_SEARCH_CASES: ${{ inputs.claude_search }}
           LIVE_LYRICS_REPORT: ${{ github.workspace }}/live-lyrics.md
         run: python3 .github/scripts/claude_search_check.py
+
+      - name: Prompt cache (app code)
+        if: inputs.claude_search == 'cache'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CACHE_PROBE: '抜錨 ナナホシ管弦楽団; アイドル YOASOBI; Lemon 米津玄師'
+          TRANSLATION_INSTRUCTIONS: '노래에 대해 검색 후 노래의 배경에 맞게 의역할 것'
+          LIVE_LYRICS_REPORT: ${{ github.workspace }}/live-lyrics.md
+        run: ./gradlew :shared:jvmTest --tests 'com.music.bitchord.data.lyrics.CacheProbe' --rerun --no-daemon
 
       - name: namu.wiki fetch (Claude)
         if: inputs.claude_search == 'fetch'

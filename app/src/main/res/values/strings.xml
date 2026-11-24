@@ -897,6 +897,9 @@ Adding: %4$s
     <string name="song_background_cost_sonnet">70–100 won</string>
     <string name="song_background_widen_subtitle">Only when the wikis have nothing · one more search</string>
     <string name="song_background_sonnet_subtitle">Closer reading, about 70–100 won a song · translate-ahead looks up with its translation model</string>
+    <string name="claude_usage_cache_read">%1$s tokens read from the cache</string>
+    <string name="claude_usage_cache_write">%1$s tokens written to the cache</string>
+    <string name="claude_cache_read_log">cache %1$s</string>
     <string name="ko_window_summary">Summary</string>
     <string name="ko_window_songs">Songs · %1$d</string>
     <string name="ko_window_space">Space used</string>

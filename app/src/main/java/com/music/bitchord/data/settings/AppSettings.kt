@@ -747,7 +747,11 @@ object AppSettings {
         /** Last month's estimated cost, for the row to show beside this month's. */
         val previousMonthUsd: Double? = null,
     ) {
-        val inputTokens: Long get() = inputByModel.values.sum()
+        /** Tokens sent at the full input price: not searches, and not what the prompt cache read or wrote. */
+        val inputTokens: Long get() = inputByModel.filterKeys { model ->
+            model.removeSuffix(com.music.bitchord.data.lyrics.LyricsTranslation.BATCH_MODEL_SUFFIX) != WEB_SEARCH_MODEL &&
+                com.music.bitchord.data.lyrics.LyricsTranslation.baseModel(model) == model.removeSuffix(com.music.bitchord.data.lyrics.LyricsTranslation.BATCH_MODEL_SUFFIX)
+        }.values.sum()
         val outputTokens: Long get() = outputByModel.values.sum()
         val isEmpty: Boolean get() = inputTokens == 0L && outputTokens == 0L
 
@@ -789,7 +793,7 @@ object AppSettings {
         fun sonnetShare(): Double {
             val total = usd()
             if (total <= 0.0 || usdOnly != null) return 0.0
-            return models.filter { it.removeSuffix(com.music.bitchord.data.lyrics.LyricsTranslation.BATCH_MODEL_SUFFIX) == com.music.bitchord.data.lyrics.LyricsTranslation.CLAUDE_SONNET }.sumOf { cost(it) } / total
+            return models.filter { com.music.bitchord.data.lyrics.LyricsTranslation.baseModel(it) == com.music.bitchord.data.lyrics.LyricsTranslation.CLAUDE_SONNET }.sumOf { cost(it) } / total
         }
     }
 
@@ -820,6 +824,16 @@ object AppSettings {
             val (input, output) = claudePricePerMillion(model.removeSuffix(suffix))
             return input / 2 to output / 2
         }
+        // Input read back from the prompt cache: a tenth of the input price, a twentieth on Sonnet 5.5.
+        val read = com.music.bitchord.data.lyrics.LyricsTranslation.CACHE_READ_SUFFIX
+        if (model.endsWith(read)) {
+            val base = model.removeSuffix(read)
+            val factor = if (base == com.music.bitchord.data.lyrics.LyricsTranslation.CLAUDE_SONNET) 0.05 else 0.1
+            return claudePricePerMillion(base).first * factor to 0.0
+        }
+        // Written to it for five minutes: a quarter more than the input price.
+        val write = com.music.bitchord.data.lyrics.LyricsTranslation.CACHE_WRITE_SUFFIX
+        if (model.endsWith(write)) return claudePricePerMillion(model.removeSuffix(write)).first * 1.25 to 0.0
         return when (model) {
             com.music.bitchord.data.lyrics.LyricsTranslation.CLAUDE_SONNET -> 2.0 to 10.0
             // $10 per 1,000 searches, tallied one per search as if a token.

@@ -858,6 +858,9 @@
     <string name="song_background_cost_sonnet">70~100원</string>
     <string name="song_background_widen_subtitle">위키에 없을 때만 한 번 더 검색해요</string>
     <string name="song_background_sonnet_subtitle">더 꼼꼼해요 · 곡당 약 70~100원 · 미리 번역은 번역 모델로 조사해요</string>
+    <string name="claude_usage_cache_read">캐시에서 읽음 %1$s 토큰</string>
+    <string name="claude_usage_cache_write">캐시에 저장 %1$s 토큰</string>
+    <string name="claude_cache_read_log">캐시 %1$s</string>
     <string name="ko_window_summary">요약</string>
     <string name="ko_window_songs">곡 · %1$d곡</string>
     <string name="ko_window_space">사용 공간</string>

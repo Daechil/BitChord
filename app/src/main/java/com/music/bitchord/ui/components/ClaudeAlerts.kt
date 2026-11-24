@@ -431,6 +431,8 @@ private fun ClaudeUsageWindow(hazeState: HazeState, onDismiss: () -> Unit) {
     val sonnetLabel = stringResource(R.string.claude_model_sonnet)
     val webSearchLabel = stringResource(R.string.song_background_usage_label)
     val webSearchCount = stringResource(R.string.song_background_usage_count)
+    val cacheReadCount = stringResource(R.string.claude_usage_cache_read)
+    val cacheWriteCount = stringResource(R.string.claude_usage_cache_write)
     val noteLine = stringResource(R.string.claude_usage_note)
     val monthsTitle = stringResource(R.string.claude_usage_months)
     val monthDetail = stringResource(R.string.claude_usage_month_detail)
@@ -444,8 +446,16 @@ private fun ClaudeUsageWindow(hazeState: HazeState, onDismiss: () -> Unit) {
             // Searches are counted, not tokens.
             return@map webSearchLabel to webSearchCount.format(usage.inputByModel[model] ?: 0L)
         }
-        val label = (if (plain == com.music.bitchord.data.lyrics.LyricsTranslation.CLAUDE_SONNET) sonnetLabel else haikuLabel) +
+        val base = com.music.bitchord.data.lyrics.LyricsTranslation.baseModel(model)
+        val label = (if (base == com.music.bitchord.data.lyrics.LyricsTranslation.CLAUDE_SONNET) sonnetLabel else haikuLabel) +
             if (batch) " (Batch)" else ""
+        // Input read back from the prompt cache, or written to it: a count of tokens, at their own price.
+        when {
+            plain.endsWith(com.music.bitchord.data.lyrics.LyricsTranslation.CACHE_READ_SUFFIX) ->
+                return@map label to cacheReadCount.format(format.tokens(usage.inputByModel[model] ?: 0L))
+            plain.endsWith(com.music.bitchord.data.lyrics.LyricsTranslation.CACHE_WRITE_SUFFIX) ->
+                return@map label to cacheWriteCount.format(format.tokens(usage.inputByModel[model] ?: 0L))
+        }
         label to format.inOut(usage.inputByModel[model] ?: 0L, usage.outputByModel[model] ?: 0L)
     }
     // This month and up to eleven before it, newest first: the month and its total, then how it splits.
@@ -542,6 +552,7 @@ private fun ClaudeLogWindow(onDismiss: () -> Unit) {
     val inOutLabel = stringResource(R.string.ko_tokens_in_out)
     val purposeBackground = stringResource(R.string.song_background_purpose)
     val searchesLabel = stringResource(R.string.song_background_searches)
+    val cacheReadLabel = stringResource(R.string.claude_cache_read_log)
     // The copy keeps the raw values, for a bug report; the screen says what they mean.
     val raw = remember { SimpleDateFormat("MM-dd HH:mm:ss", Locale.US) }
     val copyLines = entries.map { entry ->
@@ -556,6 +567,8 @@ private fun ClaudeLogWindow(onDismiss: () -> Unit) {
                 append(" · in ").append(entry.inputTokens ?: 0).append("/out ").append(entry.outputTokens ?: 0)
             }
             entry.searches?.takeIf { it > 0 }?.let { append(" · searches ").append(it) }
+            entry.cacheRead?.takeIf { it > 0 }?.let { append(" · cache read ").append(it) }
+            entry.cacheWrite?.takeIf { it > 0 }?.let { append(" · cache write ").append(it) }
             entry.detail?.let { append('\n').append("  ").append(it) }
         }
     }
@@ -592,6 +605,7 @@ private fun ClaudeLogWindow(onDismiss: () -> Unit) {
                 append(" · ").append(inOutLabel.format(format.tokens(entry.inputTokens ?: 0L), format.tokens(entry.outputTokens ?: 0L)))
             }
             entry.searches?.takeIf { it > 0 }?.let { append(" · ").append(searchesLabel.format(it)) }
+            entry.cacheRead?.takeIf { it > 0 }?.let { append(" · ").append(cacheReadLabel.format(format.tokens(it))) }
             entry.detail?.let { append('\n').append(it) }
         }
         head to body

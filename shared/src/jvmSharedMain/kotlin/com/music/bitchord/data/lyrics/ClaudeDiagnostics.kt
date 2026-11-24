@@ -87,6 +87,9 @@ object ClaudeDiagnostics {
         val outputTokens: Long? = null,
         /** Web searches the request made, each billed apart from the tokens. */
         val searches: Int? = null,
+        /** Input read back from the prompt cache, and written to it. */
+        val cacheRead: Long? = null,
+        val cacheWrite: Long? = null,
         /** The API's error message, an exception, or what was wrong with the answer — cut short. */
         val detail: String? = null,
     ) {

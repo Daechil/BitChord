@@ -117,6 +117,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           CACHE_PROBE: '抜錨 ナナホシ管弦楽団; アイドル YOASOBI; Lemon 米津玄師'
+          CACHE_MODELS: 'haiku'
           TRANSLATION_INSTRUCTIONS: '노래에 대해 검색 후 노래의 배경에 맞게 의역할 것'
           LIVE_LYRICS_REPORT: ${{ github.workspace }}/live-lyrics.md
         run: ./gradlew :shared:jvmTest --tests 'com.music.bitchord.data.lyrics.CacheProbe' --rerun --no-daemon

@@ -38,7 +38,10 @@ class CacheProbe {
                 Triple(query, song.videoId, lines)
             }
             out.append("songs with lyrics: ${found.size} of ${songs.size}\n\n")
-            for (model in listOf(LyricsTranslation.CLAUDE_SONNET, LyricsTranslation.CLAUDE_HAIKU)) {
+            val models = System.getenv("CACHE_MODELS")?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }
+                ?.map { if (it == "haiku") LyricsTranslation.CLAUDE_HAIKU else LyricsTranslation.CLAUDE_SONNET }
+                ?: listOf(LyricsTranslation.CLAUDE_SONNET, LyricsTranslation.CLAUDE_HAIKU)
+            for (model in models) {
                 LyricsTranslation.claudeModel = model
                 // A store of its own per model, so nothing is read back from the last one.
                 val dir = Files.createTempDirectory("cache").toFile()
@@ -47,7 +50,7 @@ class CacheProbe {
                 out.append("## $model\n\n| song | lines | result | in | cache read | cache write | out | s |\n|---|---|---|---|---|---|---|---|\n")
                 found.forEach { (query, id, lines) ->
                     val before = ClaudeDiagnostics.entries.value.size
-                    val result = LyricsTranslation.translate("$id-${model.takeLast(3)}", lines, "ko")
+                    val result = LyricsTranslation.translate("$id-$model", lines, "ko")
                     val entry = ClaudeDiagnostics.entries.value.firstOrNull()?.takeIf { ClaudeDiagnostics.entries.value.size > before }
                     val got = (result as? LyricsTranslation.Result.Translated)?.let { "${it.engine} ${it.lines.size}" } ?: result.javaClass.simpleName
                     out.append("| ${query.take(30)} | ${entry?.linesAsked}→${entry?.linesGot} | ${entry?.failure ?: "ok"} · $got | ${entry?.inputTokens} | ${entry?.cacheRead} | ${entry?.cacheWrite} | ${entry?.outputTokens} | ${(entry?.elapsedMs ?: 0) / 1000.0} |\n")

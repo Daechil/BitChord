@@ -26,6 +26,12 @@ internal class QueueAutoTidy(private val scope: CoroutineScope, private val play
     private val asked = LinkedHashSet<String>()
     private var job: Job? = null
 
+    // Claude is being asked: a request already sent is paid for whether or
+    // not its answer is waited for, so it is never cancelled, and a change
+    // meanwhile is looked at once it is back. All on the main thread.
+    private var asking = false
+    private var changedMeanwhile = false
+
     private fun keyOf(item: MediaItem): String = item.mediaId + "#" + (mediaItemEntryIds[item] ?: "")
 
     /** Added by the station rather than chosen: what this may take out. */
@@ -36,24 +42,43 @@ internal class QueueAutoTidy(private val scope: CoroutineScope, private val play
         if (!LyricsTranslation.claudeEnabled || !LyricsTranslation.claudeKeyUsable) return
         // A shared queue is the room's, not this phone's to edit.
         if (ListenTogether.state.value.inParty) return
+        if (asking) {
+            changedMeanwhile = true
+            return
+        }
         job?.cancel()
         job = scope.launch {
             // A station lands in more than one change: wait for it to settle.
             delay(SETTLE_MS)
-            val exo = player() ?: return@launch
+            asking = true
+            try {
+                tidy()
+            } finally {
+                asking = false
+                if (changedMeanwhile) {
+                    changedMeanwhile = false
+                    onQueueChanged()
+                }
+            }
+        }
+    }
+
+    private suspend fun tidy() {
+        run {
+            val exo = player() ?: return@run
             val start = exo.currentMediaItemIndex.coerceAtLeast(0)
             val end = minOf(exo.mediaItemCount, start + QueueDuplicates.MAX_SONGS)
-            if (end - start < 2) return@launch
+            if (end - start < 2) return@run
             val items = (start until end).map { exo.getMediaItemAt(it) }
             val fresh = items.drop(1).filter { fromStation(it) && keyOf(it) !in asked }
-            if (fresh.isEmpty()) return@launch
+            if (fresh.isEmpty()) return@run
             val songs = items.map { it.toSong() }
             val groups = withContext(Dispatchers.IO) {
                 runCatching { QueueDuplicates.find(songs, protectedCount = 1, useClaude = true) }.getOrNull()
-            } ?: return@launch
+            } ?: return@run
             items.forEach { asked += keyOf(it) }
             while (asked.size > MAX_REMEMBERED) asked.remove(asked.first())
-            val now = player() ?: return@launch
+            val now = player() ?: return@run
             val taken = mutableListOf<Pair<Int, Int>>()
             groups.forEach { group ->
                 group.remove.filter { fromStation(items[it]) }.forEach { position -> taken += group.keep to position }

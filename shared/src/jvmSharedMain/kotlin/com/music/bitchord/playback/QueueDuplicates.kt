@@ -65,8 +65,11 @@ object QueueDuplicates {
         val claudePairs = HashSet<Int>()
         val reasons = HashMap<Int, String>()
         // The rules first: free, and what the station already holds to be one.
-        for (i in list.indices) for (j in i + 1 until list.size) {
-            if (QueueBuilder.isSameRecording(list[i], list[j])) join(i, j)
+        // Two hundred songs are twenty thousand comparisons: off the main thread.
+        withContext(Dispatchers.Default) {
+            for (i in list.indices) for (j in i + 1 until list.size) {
+                if (QueueBuilder.isSameRecording(list[i], list[j])) join(i, j)
+            }
         }
         if (useClaude && LyricsTranslation.claudeKeyUsable) {
             ask(list)?.forEach { group ->

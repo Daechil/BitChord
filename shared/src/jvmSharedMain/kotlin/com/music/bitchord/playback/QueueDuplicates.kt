@@ -40,7 +40,7 @@ object QueueDuplicates {
     private data class Answer(val groups: List<AnswerGroup> = emptyList())
 
     @Serializable
-    internal data class AnswerGroup(val items: List<Int> = emptyList(), val reason: String = "")
+    internal data class AnswerGroup(val items: List<Int> = emptyList(), val titles: String = "", val reason: String = "")
 
     /**
      * The groups in [songs], positions in that list. [protectedCount] songs at
@@ -127,6 +127,9 @@ object QueueDuplicates {
     internal fun checked(groups: List<AnswerGroup>, size: Int): List<AnswerGroup> {
         val seen = HashSet<Int>()
         return groups.mapNotNull { group ->
+            // Titles translated into other words could be another language's version:
+            // never taken on a name, whatever the rest of the answer says.
+            if (group.titles !in SAME_WORDS) return@mapNotNull null
             val items = group.items.distinct().filter { it in 0 until size }
             // A position in two groups is an answer that cannot be trusted for either.
             if (items.size < 2 || items.any { it in seen }) return@mapNotNull null
@@ -136,8 +139,15 @@ object QueueDuplicates {
     }
 
     /** For tests: what [checked] makes of positions given as lists. */
-    fun checkedPositions(groups: List<List<Int>>, size: Int): List<List<Int>> =
-        checked(groups.map { AnswerGroup(it) }, size).map { it.items }
+    fun checkedPositions(groups: List<List<Int>>, size: Int, titles: String = TITLES_SAME): List<List<Int>> =
+        checked(groups.map { AnswerGroup(it, titles) }, size).map { it.items }
+
+    /** How a group's titles relate, as Claude labels them; only the first two are taken. */
+    const val TITLES_SAME = "same words"
+    const val TITLES_SCRIPT = "same words in another script"
+    const val TITLES_TRANSLATED = "translated words"
+    const val TITLES_OTHER = "other"
+    private val SAME_WORDS = setOf(TITLES_SAME, TITLES_SCRIPT)
 
     private val INSTRUCTION = buildString {
         appendLine("You find the same recording queued more than once in a music player's queue.")
@@ -147,6 +157,7 @@ object QueueDuplicates {
         appendLine("These are NOT the same and must never be grouped: a version in another language (an English or Korean version of a Japanese song), a cover by another singer, a live take, a remix, an acoustic, piano, instrumental, sped-up, slowed, TV-size or extended cut, a different song by the same artist, two songs that share a title.")
         appendLine("A music video is often longer than its audio because of an intro or outro; a very different length otherwise means another cut.")
         appendLine("When you are not sure, do not group. Return no groups when nothing is queued twice.")
+        appendLine("For each group, \"titles\" says how its titles relate: \"$TITLES_SAME\" (the same title, perhaps with the artist, \"MV\" or brackets around it), \"$TITLES_SCRIPT\" (the same words spelled in another script — romanized, or written in Hangul or katakana — and read aloud the same), \"$TITLES_TRANSLATED\" (the meaning put into another language's words), or \"$TITLES_OTHER\". Read the titles aloud before you choose.")
         appendLine("\"reason\": one short sentence in Korean, in 해요체, on why the songs are one recording.")
     }
 
@@ -162,9 +173,13 @@ object QueueDuplicates {
                             put("type", "array")
                             putJsonObject("items") { put("type", "integer") }
                         }
+                        putJsonObject("titles") {
+                            put("type", "string")
+                            putJsonArray("enum") { add(TITLES_SAME); add(TITLES_SCRIPT); add(TITLES_TRANSLATED); add(TITLES_OTHER) }
+                        }
                         putJsonObject("reason") { put("type", "string") }
                     }
-                    put("required", buildJsonArray { add("items"); add("reason") })
+                    put("required", buildJsonArray { add("items"); add("titles"); add("reason") })
                     put("additionalProperties", false)
                 }
             }

@@ -55,5 +55,8 @@ class QueueDuplicatesTest {
         val checked = QueueDuplicates.checkedPositions(listOf(listOf(0, 1), listOf(1, 2), listOf(3), listOf(4, 9), listOf(5, 5, 6)), size = 7)
         assertEquals(listOf(listOf(0, 1), listOf(5, 6)), checked)
         assertTrue(QueueDuplicates.checkedPositions(emptyList(), 3).isEmpty())
+        // Titles translated into other words are another language's version as far as a name can tell.
+        assertTrue(QueueDuplicates.checkedPositions(listOf(listOf(0, 1)), 3, QueueDuplicates.TITLES_TRANSLATED).isEmpty())
+        assertEquals(listOf(listOf(0, 1)), QueueDuplicates.checkedPositions(listOf(listOf(0, 1)), 3, QueueDuplicates.TITLES_SCRIPT))
     }
 }

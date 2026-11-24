@@ -82,13 +82,16 @@ class QueueTidyProbe {
             song("sd3", "Shut Down (Live at Coachella)", "BLACKPINK", "3:30", video = true),
         )
         val secondRight = setOf(setOf("ss1", "ss2"), setOf("bb1", "bb2"), setOf("kb1", "kb2"), setOf("ad1", "ad2"), setOf("dy1", "dy2"))
-        val useSecond = System.getenv("QUEUE_TIDY_SET") == "2"
-        val queue = if (useSecond) second else first
-        val right = if (useSecond) secondRight else firstRight
+        val sets = when (System.getenv("QUEUE_TIDY_SET")) {
+            "2" -> listOf(second to secondRight)
+            "all" -> listOf(first to firstRight, second to secondRight)
+            else -> listOf(first to firstRight)
+        }
         val runs = System.getenv("QUEUE_TIDY_RUNS")?.toIntOrNull()?.coerceIn(1, 3) ?: 1
         val out = StringBuilder("# Queue tidy check\n\n")
+        sets.forEachIndexed { setIndex, (queue, right) ->
         repeat(runs) { run ->
-        out.append("## run ${run + 1}\n\n")
+        out.append("## queue ${setIndex + 1} · run ${run + 1}\n\n")
         val started = System.currentTimeMillis()
         val groups = runBlocking { QueueDuplicates.find(queue, protectedCount = 1, useClaude = true) }
         out.append("- ${(System.currentTimeMillis() - started) / 1000.0}s · ${groups.size} groups\n\n")
@@ -105,6 +108,7 @@ class QueueTidyProbe {
         val missed = right.filter { want -> found.none { it.containsAll(want) } }
         out.append("\nmissed: ${missed.ifEmpty { listOf("none") }}\n")
         out.append("wrong: ${found.count { ids -> right.none { it.containsAll(ids) } }}\n\n")
+        }
         }
         ClaudeDiagnostics.entries.value.forEach { e ->
             out.append("- ${e.purpose} · ${e.model} · ${e.failure ?: "ok"} · in ${e.inputTokens}/out ${e.outputTokens} · ${e.elapsedMs}ms\n")

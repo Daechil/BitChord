@@ -17,20 +17,24 @@ import com.music.bitchord.data.model.Song
 import com.music.bitchord.playback.QueueDuplicates
 import com.music.bitchord.playback.QueueTidy
 import com.music.bitchord.playback.SameSongLinks
+import kotlinx.coroutines.launch
 
 /** The queue as the tidy button saw it, and the panel's ways to read it again and to take a song out. */
 class QueueTidyAsk(
     val queue: List<Song>,
     val currentIndex: Int,
     val latest: () -> List<Song>,
-    val remove: (Int) -> Unit,
+    val removeEntries: suspend (List<com.music.bitchord.data.model.QueueEntryIdentity>) -> Unit,
 )
+
+/** Outlives the window: the removal is still running when the window has closed. */
+private val tidyScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main)
 
 /** Hosts the queue's tidy window and hands the shared queue panel its button. */
 @Composable
 internal fun QueueTidyAlerts() {
     DisposableEffect(Unit) {
-        QueueTidy.open = { queue, current, latest, remove -> KoAlerts.queueTidy.value = QueueTidyAsk(queue, current, latest, remove) }
+        QueueTidy.open = { queue, current, latest, removeEntries -> KoAlerts.queueTidy.value = QueueTidyAsk(queue, current, latest, removeEntries) }
         onDispose { QueueTidy.open = null }
     }
     val ask by KoAlerts.queueTidy.collectAsStateWithLifecycle()
@@ -137,8 +141,9 @@ private fun QueueTidyWindow(ask: QueueTidyAsk, onDismiss: () -> Unit) {
 
 /**
  * Takes the marked songs out of the queue as it is now: each found again by
- * its entry where the queue has moved since the window opened, the last first
- * so the positions before it hold. A song no longer in the queue is skipped.
+ * its entry where the queue has moved since the window opened, then all
+ * removed together by identity — one edit, so the queue's own undo brings
+ * them all back. A song no longer in the queue is skipped.
  */
 private fun removeFromQueue(ask: QueueTidyAsk, songs: List<Song>, marked: Set<Int>): Int {
     val now = ask.latest()
@@ -151,7 +156,12 @@ private fun removeFromQueue(ask: QueueTidyAsk, songs: List<Song>, marked: Set<In
         } else {
             now.indices.firstOrNull { it > ask.currentIndex && same(song, now[it]) }
         }
-    }.distinct().sortedDescending()
-    positions.forEach(ask.remove)
-    return positions.size
+    }.distinct().sorted()
+    val identities = positions.map { index ->
+        val song = now[index]
+        val occurrence = (0 until index).count { now[it].videoId == song.videoId && now[it].queueEntryId == song.queueEntryId }
+        com.music.bitchord.data.model.QueueEntryIdentity(song.videoId, song.queueEntryId, occurrence)
+    }
+    if (identities.isNotEmpty()) tidyScope.launch { ask.removeEntries(identities) }
+    return identities.size
 }

@@ -65,15 +65,17 @@ import java.util.Locale
 @UnstableApi
 class TrackAnalyzer(private val context: Context, private val cache: AudioCache) {
 
+    // The weights are downloaded rather than shipped; see [AutomixModels]. Until
+    // they arrive, these throw, and the trackers answer with no evidence.
     private val tracker = BeatTracker(
         modelPath = {
             java.io.File(context.filesDir, BeatTracker.RETIRED_MODEL_ASSET).delete()
-            unpackedAsset(BeatTracker.MODEL_ASSET)
+            AutomixModels.path(AutomixModels.BEAT)
         },
         inferenceThreads = { AppSettings.automixPerformanceMode.value.inferenceThreads },
     )
     private val vocals = VocalTracker(
-        modelPath = { unpackedAsset(VocalTracker.MODEL_ASSET) },
+        modelPath = { AutomixModels.path(AutomixModels.VOCALS) },
         inferenceThreads = { AppSettings.automixPerformanceMode.value.inferenceThreads },
     )
 
@@ -82,33 +84,7 @@ class TrackAnalyzer(private val context: Context, private val cache: AudioCache)
         // this; with no sink they went nowhere on the phone, which is how a
         // beat model that found nothing went unnoticed.
         AnalysisLog.install { message, error -> Log.w(TAG, message, error) }
-    }
-
-    /**
-     * A model's weights on disk, unpacked from assets the first time they are
-     * asked for.
-     *
-     * ONNX Runtime wants a file it can memory-map, and an asset inside the APK
-     * is not one. This used to live inside each tracker; it moved out when they
-     * became shared with the desktop build, which unpacks from the jar instead.
-     */
-    private fun unpackedAsset(name: String): String {
-        // Out of the files that Auto Backup carries (32 MB of weights would
-        // put the whole backup over its limit), and copies left there by
-        // earlier builds go.
-        java.io.File(context.filesDir, name).delete()
-        val updated = runCatching {
-            context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime
-        }.getOrDefault(0L)
-        // Known only where the asset is stored uncompressed; the size check is skipped otherwise.
-        val expected = runCatching { context.assets.openFd(name).use { it.length } }.getOrNull()
-        return ModelUnpack.ensure(
-            dir = java.io.File(context.noBackupFilesDir, "models"),
-            name = name,
-            open = { context.assets.open(name) },
-            expected = expected,
-            notOlderThan = updated,
-        ).absolutePath
+        AutomixModels.install(context)
     }
 
     /**

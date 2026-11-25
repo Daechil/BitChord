@@ -128,6 +128,18 @@ object BiniLyrics {
     }
 
     /**
+     * The search by name can put a different recording first. So a hit is taken only if it
+     * passes the checks in [LrcRed.best].
+     */
+    fun best(results: List<Hit>, title: String, artist: String, durationMs: Long): Hit? {
+        val asLrcRed = results.map {
+            LrcRed.Hit(isrc = it.isrc, title = it.trackName, artist = it.artistName, duration = it.duration?.toDouble())
+        }
+        val match = LrcRed.best(asLrcRed, title, artist, durationMs) ?: return null
+        return results.firstOrNull { it.isrc == match.isrc }
+    }
+
+    /**
      * The document a search already found, fetched and parsed. These are
      * [LrcRed]'s own files now, so [LyricsRepository] passes a [get] that
      * shares the one download between the two.

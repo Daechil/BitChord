@@ -46,6 +46,7 @@ object AndroidStreamHooks {
             ) + com.music.bitchord.data.CrashRecord.headerLines()
         }
         StreamResolver.maxKbps = { AppSettings.effectiveAudioQuality.maxKbps }
+        StreamResolver.premiumAudio = { AppSettings.youtubePremiumAudio.value }
         InnerTubeXResolver.debugLogging = BuildConfig.DEBUG
     }
 

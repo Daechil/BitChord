@@ -139,7 +139,9 @@ fun UpdateAvailableDialog(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    text = stringResource(R.string.software_update),
+                    // A beta says so up front: it is offered only because Settings asked for betas.
+                    text = stringResource(R.string.software_update) +
+                        if (version.endsWith("-beta")) " · " + stringResource(R.string.update_beta_badge) else "",
                     style = MaterialTheme.typography.bodyLarge.copy(
                         fontSize = 17.sp,
                         fontWeight = FontWeight.W600,

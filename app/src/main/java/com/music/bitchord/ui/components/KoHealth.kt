@@ -61,7 +61,8 @@ fun UpdateCheckRow(title: String) {
         subtitle = when {
             checking -> stringResource(R.string.update_checking)
             status != null -> status!!
-            else -> stringResource(R.string.update_check_current, current)
+            else -> stringResource(R.string.update_check_current, current) +
+                if (BuildConfig.KO_BETA) " · " + stringResource(R.string.update_beta_badge) else ""
         },
         onClick = {
             if (checking) return@SettingsRow
@@ -85,6 +86,34 @@ fun UpdateCheckRow(title: String) {
                 }
             }
         },
+    )
+}
+
+/**
+ * Settings' "Get beta versions", under "Check for updates": a beta build
+ * running now, with the switch turned off, is said to stay until a stable
+ * build passes it — Android will not install an older version over it.
+ */
+@Composable
+fun BetaUpdatesRow(title: String) {
+    val on by com.music.bitchord.data.settings.AppSettings.betaUpdates.collectAsStateWithLifecycle()
+    val runningBeta = BuildConfig.KO_BETA
+    com.music.bitchord.ui.screens.SettingsRow(
+        icon = com.music.bitchord.ui.icons.SfIcons.Upgrade,
+        title = title,
+        subtitle = stringResource(
+            when {
+                !on && runningBeta -> R.string.beta_updates_off_on_beta
+                else -> R.string.beta_updates_subtitle
+            },
+        ),
+        trailing = {
+            com.music.bitchord.ui.components.IosSwitch(
+                checked = on,
+                onCheckedChange = com.music.bitchord.data.settings.AppSettings::setBetaUpdates,
+            )
+        },
+        onClick = { com.music.bitchord.data.settings.AppSettings.setBetaUpdates(!on) },
     )
 }
 

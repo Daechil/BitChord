@@ -90,8 +90,14 @@ val arm64Only = providers.gradleProperty("bitchord.arm64Only").orNull == "true"
  *
  * `-Pbitchord.updateRepo=owner/name` points the in-app update check at that
  * repository's releases, where the fork's own APKs are; see AppUpdateChecker.
+ *
+ * `-Pbitchord.koChannel=beta` marks a build off the `beta` branch: its version
+ * ends in "-beta" (1.9.1-ko.70-beta) and its release is a pre-release, which
+ * only the listeners who asked for betas are offered. The build number is
+ * shared with the stable builds, so a later stable build installs over a beta.
  */
 val koBuild = providers.gradleProperty("bitchord.koBuild").orNull?.toIntOrNull()
+val koBeta = providers.gradleProperty("bitchord.koChannel").orNull == "beta"
 val updateRepo = providers.gradleProperty("bitchord.updateRepo").orNull?.takeIf { it.isNotBlank() }
     ?: "kushagrasinghx/BitChord"
 
@@ -111,7 +117,7 @@ android {
         val baseVersionCode = rootProject.extra["bitchordVersionCode"] as Int
         val baseVersionName = rootProject.extra["bitchordVersionName"] as String
         versionCode = if (koBuild != null) baseVersionCode * 1000 + koBuild else baseVersionCode
-        versionName = if (koBuild != null) "$baseVersionName-ko.$koBuild" else baseVersionName
+        versionName = if (koBuild != null) "$baseVersionName-ko.$koBuild" + (if (koBeta) "-beta" else "") else baseVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -139,6 +145,7 @@ android {
         // Whose releases the update check reads: upstream's, or this fork's
         // own once its builds carry their ko number (see [koBuild]).
         buildConfigField("String", "UPDATE_REPO", "\"$updateRepo\"")
+        buildConfigField("boolean", "KO_BETA", koBeta.toString())
     }
 
     splits {

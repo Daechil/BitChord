@@ -659,6 +659,9 @@ object AppSettings {
     /** Look up each song's background on the web, once, for its translation and explanation. Off unless chosen: it costs a search. */
     val songBackground = MutableStateFlow(false)
 
+    /** Beta builds are offered as updates too, not only the stable releases; see AppUpdateChecker. */
+    val betaUpdates = MutableStateFlow(false)
+
     /** Radio and AutoPlay songs that repeat a queued recording are taken out as they arrive, by Claude. */
     val queueTidyAuto = MutableStateFlow(false)
 
@@ -1420,6 +1423,8 @@ object AppSettings {
         com.music.bitchord.data.lyrics.SongBackgrounds.widenWhenMissing = songBackgroundWiden.value
         songBackgroundSonnet.value = prefs.getBoolean(KEY_SONG_BACKGROUND_SONNET, false)
         queueTidyAuto.value = prefs.getBoolean(KEY_QUEUE_TIDY_AUTO, false)
+        // A beta build asks for betas until told otherwise: it came from that channel.
+        betaUpdates.value = prefs.getBoolean(KEY_BETA_UPDATES, com.music.bitchord.BuildConfig.KO_BETA)
         com.music.bitchord.data.lyrics.SongBackgrounds.researchModel = researchModelFor(songBackgroundSonnet.value)
         // The listener's groups of one song, for radio and AutoPlay; kept in this file so a settings backup carries them.
         com.music.bitchord.playback.SameSongLinks.load(prefs.getString(KEY_SAME_SONG_LINKS, null))
@@ -2161,6 +2166,11 @@ object AppSettings {
         songBackground.value = value
         com.music.bitchord.data.lyrics.SongBackgrounds.enabled = value
         prefs.edit().putBoolean(KEY_SONG_BACKGROUND, value).apply()
+    }
+
+    fun setBetaUpdates(value: Boolean) {
+        betaUpdates.value = value
+        prefs.edit().putBoolean(KEY_BETA_UPDATES, value).apply()
     }
 
     fun setQueueTidyAuto(value: Boolean) {
@@ -3218,6 +3228,7 @@ object AppSettings {
     private const val KEY_SAME_SONG_LINKS = "ko_same_song_links"
     private const val KEY_SONG_BACKGROUND_SONNET = "ko_song_background_sonnet"
     private const val KEY_QUEUE_TIDY_AUTO = "ko_queue_tidy_auto"
+    private const val KEY_BETA_UPDATES = "ko_beta_updates"
     private const val KEY_CLAUDE_INSTRUCTIONS_MEANING = "ko_claude_instructions_meaning"
     private const val KEY_KRW_RATE_MODE = "ko_krw_rate_mode"
     private const val KEY_KRW_RATE_SOURCE = "ko_krw_rate_source"

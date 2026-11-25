@@ -918,6 +918,10 @@ Adding: %4$s
     <string name="queue_tidy_auto_subtitle">When radio or AutoPlay adds songs, Claude takes out a recording already queued under another upload · about 1 won a time (Haiku)</string>
     <string name="queue_tidy_purpose">Queue tidy</string>
     <string name="ko_group_queue">Queue</string>
+    <string name="beta_updates">Get beta versions</string>
+    <string name="beta_updates_subtitle">New features arrive first, before the stable release. They may have problems.</string>
+    <string name="beta_updates_off_on_beta">This is a beta build. Android won\'t install an older version over it, so updates resume once a stable release passes this one.</string>
+    <string name="update_beta_badge">Beta</string>
     <string name="ko_window_summary">Summary</string>
     <string name="ko_window_songs">Songs · %1$d</string>
     <string name="ko_window_space">Space used</string>

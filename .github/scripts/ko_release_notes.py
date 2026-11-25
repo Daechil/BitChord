@@ -37,10 +37,13 @@ def sections(path=CHANGELOG):
 
 def body(tag, notes, commit, apk):
     version = tag[1:] if tag.startswith("v") else tag
-    build = re.search(r"ko[.-](\d+)$", tag)
+    build = re.search(r"ko[.-](\d+)(?:-beta)?$", tag)
     facts = ["버전 " + version]
     if build:
         facts.append("빌드 " + build.group(1))
+    if tag.endswith("-beta"):
+        # Said first, above the notes too: a beta is offered only to those who asked.
+        facts.append("베타(시험판)")
     if commit and re.fullmatch(r"[0-9a-f]{7,40}", commit):
         facts.append("커밋 " + commit[:7])
     install = (
@@ -48,7 +51,12 @@ def body(tag, notes, commit, apk):
         if apk
         else "설치: 휴대폰에서 아래 **Assets**의 APK를 받아서 열어 주세요."
     )
-    return "## 바뀐 내용\n\n%s\n\n---\n\n%s\n\n%s\n" % (notes.strip(), " · ".join(facts), install)
+    beta = (
+        "> 🧪 **베타 버전이에요.** 앱 설정 › 기타 › **베타 버전 받기**를 켠 사람에게만 업데이트로 떠요. 문제가 있을 수 있어요.\n\n"
+        if tag.endswith("-beta")
+        else ""
+    )
+    return "%s## 바뀐 내용\n\n%s\n\n---\n\n%s\n\n%s\n" % (beta, notes.strip(), " · ".join(facts), install)
 
 
 def gh(*args):

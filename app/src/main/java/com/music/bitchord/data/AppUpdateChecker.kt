@@ -47,6 +47,12 @@ object AppUpdateChecker {
     private val LATEST_RELEASE_URL =
         "https://api.github.com/repos/${BuildConfig.UPDATE_REPO}/releases/latest"
 
+    // With "Get beta versions" on: the newest releases, pre-releases among them —
+    // "latest" never points at a pre-release.
+    private val RECENT_RELEASES_URL =
+        "https://api.github.com/repos/${BuildConfig.UPDATE_REPO}/releases?per_page=$RECENT_RELEASES"
+    private const val RECENT_RELEASES = 15
+
     private val json = Json { ignoreUnknownKeys = true }
 
     private val _available = MutableStateFlow<UpdateInfo?>(null)
@@ -84,8 +90,9 @@ object AppUpdateChecker {
     }
 
     suspend fun check(): CheckResult = withContext(Dispatchers.IO) {
+        val beta = com.music.bitchord.data.settings.AppSettings.betaUpdates.value
         try {
-            val request = Request.Builder().url(LATEST_RELEASE_URL).build()
+            val request = Request.Builder().url(if (beta) RECENT_RELEASES_URL else LATEST_RELEASE_URL).build()
             Http.client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     return@withContext CheckResult.Failed(
@@ -95,8 +102,15 @@ object AppUpdateChecker {
                 }
                 val body = response.body?.string()
                     ?: return@withContext CheckResult.Failed(FailReason.UNREADABLE)
-                val release = runCatching { json.parseToJsonElement(body) as? JsonObject }.getOrNull()
+                val parsed = runCatching { json.parseToJsonElement(body) }.getOrNull()
                     ?: return@withContext CheckResult.Failed(FailReason.UNREADABLE)
+                val release = if (beta) {
+                    val list = parsed as? kotlinx.serialization.json.JsonArray
+                        ?: return@withContext CheckResult.Failed(FailReason.UNREADABLE)
+                    newestOf(list) ?: return@withContext CheckResult.Failed(FailReason.NO_RELEASE)
+                } else {
+                    parsed as? JsonObject ?: return@withContext CheckResult.Failed(FailReason.UNREADABLE)
+                }
                 val tag = release["tag_name"]?.jsonPrimitive?.contentOrNull
                     ?: return@withContext CheckResult.Failed(FailReason.UNREADABLE)
                 val url = release["html_url"]?.jsonPrimitive?.contentOrNull
@@ -120,6 +134,24 @@ object AppUpdateChecker {
             CheckResult.Failed(FailReason.UNREADABLE)
         }
     }
+
+    /**
+     * The highest version among [releases], stable or beta: drafts and
+     * releases without a tag left out. Null when none is left.
+     */
+    internal fun newestOf(releases: kotlinx.serialization.json.JsonArray): JsonObject? =
+        releases.mapNotNull { it as? JsonObject }
+            .filter { it["draft"]?.jsonPrimitive?.contentOrNull != "true" }
+            .mapNotNull { release ->
+                release["tag_name"]?.jsonPrimitive?.contentOrNull?.removePrefix("v")?.let { tag -> tag to release }
+            }
+            .fold(null as Pair<String, JsonObject>?) { best, candidate ->
+                if (best == null || isNewer(candidate.first, best.first)) candidate else best
+            }
+            ?.second
+
+    /** For tests: [isNewer] on two version names. */
+    internal fun newer(latest: String, current: String): Boolean = isNewer(latest, current)
 
     /**
      * Wipes any APK left over from a previous run. Called once at cold start

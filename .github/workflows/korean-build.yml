@@ -2,7 +2,10 @@ name: Korean build (arm64)
 
 on:
   push:
-    branches: [main]
+    # main builds the stable release; beta builds a pre-release, offered only to
+    # those who turned on "Get beta versions". One run number for both, so a
+    # later stable build always installs over an earlier beta.
+    branches: [main, beta]
     # A change to the README or other docs is not a new app version.
     paths-ignore:
       - '**.md'
@@ -12,7 +15,8 @@ permissions:
   contents: write
 
 concurrency:
-  group: korean-build
+  # A beta build never cancels a stable one, nor the other way round.
+  group: korean-build-${{ github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -60,7 +64,11 @@ jobs:
           # run's number: 1.9.1-ko.7. See koBuild in app/build.gradle.kts.
           BASE=$(sed -n 's/^extra\["bitchordVersionName"\] = "\(.*\)"$/\1/p' build.gradle.kts)
           if [ -z "$BASE" ]; then echo "::error::bitchordVersionName not found in build.gradle.kts"; exit 1; fi
-          VERSION="$BASE-ko.${{ github.run_number }}"
+          SUFFIX=""
+          CHANNEL="stable"
+          if [ "${{ github.ref_name }}" = "beta" ]; then SUFFIX="-beta"; CHANNEL="beta"; fi
+          VERSION="$BASE-ko.${{ github.run_number }}$SUFFIX"
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "apk=BitChord-KO-$VERSION-arm64.apk" >> "$GITHUB_OUTPUT"
           echo "Building $VERSION"
@@ -70,6 +78,7 @@ jobs:
           chmod +x gradlew
           ./gradlew :app:assembleProdRelease -Pbitchord.arm64Only=true \
             -Pbitchord.koBuild=${{ github.run_number }} \
+            -Pbitchord.koChannel=${{ steps.version.outputs.channel }} \
             -Pbitchord.updateRepo=${{ github.repository }} \
             --stacktrace
 
@@ -96,8 +105,18 @@ jobs:
             --commit "${{ github.sha }}" \
             --apk "${{ steps.version.outputs.apk }}" \
             --out "$RUNNER_TEMP/release-notes.md"
+          # A beta is a pre-release: GitHub's "latest release", which the
+          # stable builds ask for, never points at one.
+          if [ "${{ steps.version.outputs.channel }}" = "beta" ]; then
+            CHANNEL_FLAGS="--prerelease --latest=false"
+            TITLE="BitChord KO ${{ steps.version.outputs.version }} (베타)"
+          else
+            CHANNEL_FLAGS="--latest"
+            TITLE="BitChord KO ${{ steps.version.outputs.version }}"
+          fi
           gh release create "v${{ steps.version.outputs.version }}" "out/${{ steps.version.outputs.apk }}" \
             --repo "${{ github.repository }}" \
             --target "${{ github.sha }}" \
-            --title "BitChord KO ${{ steps.version.outputs.version }}" \
-            --notes-file "$RUNNER_TEMP/release-notes.md"
+            --title "$TITLE" \
+            --notes-file "$RUNNER_TEMP/release-notes.md" \
+            $CHANNEL_FLAGS

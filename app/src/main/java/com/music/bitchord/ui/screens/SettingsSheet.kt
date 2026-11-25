@@ -2139,6 +2139,10 @@ fun SettingsScreen(
             row(updateCheckTitle, "update", "version", "업데이트", "버전") {
                 com.music.bitchord.ui.components.UpdateCheckRow(updateCheckTitle)
             }
+            val betaUpdatesTitle = stringResource(R.string.beta_updates)
+            row(betaUpdatesTitle, "beta", "update", "version", "베타", "업데이트", "시험판") {
+                com.music.bitchord.ui.components.BetaUpdatesRow(betaUpdatesTitle)
+            }
             val playNextOnSwipeTitle = stringResource(R.string.play_next_on_swipe)
             row(playNextOnSwipeTitle, "swipe", "queue") {
                 SettingsRow(

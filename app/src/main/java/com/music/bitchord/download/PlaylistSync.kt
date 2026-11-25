@@ -335,6 +335,8 @@ object PlaylistSync {
         val fetch = missing.map { song ->
             if (song.thumbnailUrl.isNullOrBlank() && cover != null) song.copy(thumbnailUrl = cover) else song
         }
+        // Downloaded on the app's own: their translations go in a day's batch; see DownloadTranslations.
+        DownloadTranslations.markAutomatic(fetch.map { it.videoId })
         val handled = onDevice.mapTo(HashSet()) { it.videoId } + Downloads.downloadNow(context, fetch, record.title)
 
         // Read again: the listener may have deleted this download meanwhile, and

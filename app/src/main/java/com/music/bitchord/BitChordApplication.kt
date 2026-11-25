@@ -202,6 +202,17 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory, Configu
         // Before anything could run a scheduled backup: its worker reads the
         // account and the schedule this loads.
         com.music.bitchord.data.backup.DriveBackup.init(this)
+        // Automix's models came out of the APK into no_backup/models (ko.58); 1.10
+        // fetches them into files/ instead, which Auto Backup leaves them out of
+        // by name. The copies already here move over rather than downloading 31 MB again.
+        runCatching {
+            val old = java.io.File(noBackupFilesDir, "models")
+            old.listFiles()?.forEach { file ->
+                val moved = java.io.File(filesDir, file.name)
+                if (moved.exists() || !file.renameTo(moved)) file.delete()
+            }
+            old.delete()
+        }
         // The device's own listening record. Opened here rather than in
         // PlaybackService because the Replay page reads it from the UI side and
         // both live in this process — one owner, one directory.

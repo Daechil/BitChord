@@ -67,13 +67,26 @@ object DownloadTranslations {
         }
     }
 
+    /**
+     * Songs the app is downloading on its own — Liked Music kept downloaded, a
+     * downloaded playlist kept in sync — rather than one the listener asked
+     * for. A first fill can be hundreds of songs, so theirs are translated
+     * only in a batch, at half price, and at most [AUTOMATIC_PER_DAY] a day.
+     */
+    private val automatic = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    fun markAutomatic(videoIds: Collection<String>) {
+        automatic += videoIds
+    }
+
     /** Called once a download is recorded; does nothing while the setting is off. */
     fun downloaded(song: Song, uri: Uri) {
         val app = context ?: return
+        val auto = automatic.remove(song.videoId)
         if (!AppSettings.keepDownloadTranslations.value) return
         // At half price, a while later: gathered and sent ahead as one batch.
-        if (AppSettings.downloadTranslationsBatch.value && TranslateAhead.available()) {
-            gather(app, song)
+        if ((auto || AppSettings.downloadTranslationsBatch.value) && TranslateAhead.available()) {
+            gather(app, song, auto)
             return
         }
         queue.trySend(Job(song, uri.toString()))
@@ -89,7 +102,12 @@ object DownloadTranslations {
         val artist: String,
         val album: String? = null,
         val durationText: String? = null,
+        /** Downloaded by the app on its own; see [automatic]. */
+        val automatic: Boolean = false,
     )
+
+    /** Songs the app downloaded on its own, translated a day at most; see [automatic]. */
+    private const val AUTOMATIC_PER_DAY = 30
 
     /** A batch goes up this long after the last download, or once a batch's worth (Settings' batch size) are waiting. */
     private const val GATHER_QUIET_MS = 3L * 60L * 1000L
@@ -118,13 +136,13 @@ object DownloadTranslations {
     }
 
     /** Kept on disk as they come, so songs downloaded just before the app closed still go. */
-    private fun gather(app: Context, song: Song) {
+    private fun gather(app: Context, song: Song, auto: Boolean = false) {
         TranslationStatus.remember(song.videoId, song.title, song.artist)
         // One timer at a time: each download restarts it, under the same lock
         // as the list, so two finishing together cannot leave two behind.
         synchronized(gatherLock) {
             val list = readWaiting(app).filter { it.videoId != song.videoId } +
-                Waiting(song.videoId, song.title, song.artist, song.albumName, song.durationText)
+                Waiting(song.videoId, song.title, song.artist, song.albumName, song.durationText, automatic = auto)
             writeWaiting(app, list)
             flushJob?.cancel()
             val full = list.size >= AppSettings.translateAheadChunk.value.coerceAtLeast(1)
@@ -149,7 +167,18 @@ object DownloadTranslations {
         }
         // Songs found to have no lyrics have nothing to send: dropped here, or a
         // list of only them could never start a job and would be put back for good.
-        val songs = taken.filterNot { PlayedLyrics.isMissing(it.videoId) }
+        val withLyrics = taken.filterNot { PlayedLyrics.isMissing(it.videoId) }
+        // The app's own downloads go a day's worth at a time; the rest wait for tomorrow.
+        val (auto, asked) = withLyrics.partition { it.automatic }
+        val room = automaticRoomToday(app)
+        val songs = asked + auto.take(room)
+        val later = auto.drop(room)
+        if (later.isNotEmpty()) {
+            synchronized(gatherLock) {
+                val now = readWaiting(app)
+                writeWaiting(app, now + later.filter { old -> now.none { it.videoId == old.videoId } })
+            }
+        }
         if (songs.isEmpty()) return@withLock
         // Already on their way in a job: nothing to put back.
         if (TranslateAhead.isDuplicate(songs.map { it.videoId }, LyricsTranslation.claudeModel, AppSettings.translateAheadReading.value)) {
@@ -179,7 +208,27 @@ object DownloadTranslations {
                 val now = readWaiting(app)
                 writeWaiting(app, songs.filter { old -> now.none { it.videoId == old.videoId } } + now)
             }
+        } else {
+            countAutomatic(app, songs.count { it.automatic })
         }
+    }
+
+    private fun automaticPrefs(app: Context) = app.getSharedPreferences("ko_automatic_translations", Context.MODE_PRIVATE)
+
+    /** How many more of the app's own downloads may go up today. */
+    private fun automaticRoomToday(app: Context): Int {
+        val prefs = automaticPrefs(app)
+        val today = java.time.LocalDate.now().toString()
+        val used = if (prefs.getString("day", null) == today) prefs.getInt("count", 0) else 0
+        return (AUTOMATIC_PER_DAY - used).coerceAtLeast(0)
+    }
+
+    private fun countAutomatic(app: Context, sent: Int) {
+        if (sent <= 0) return
+        val prefs = automaticPrefs(app)
+        val today = java.time.LocalDate.now().toString()
+        val used = if (prefs.getString("day", null) == today) prefs.getInt("count", 0) else 0
+        prefs.edit().putString("day", today).putInt("count", used + sent).apply()
     }
 
     private suspend fun translate(context: Context, job: Job) {

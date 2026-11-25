@@ -44,6 +44,11 @@ object BackupBudget {
         "sharedpref" to "innertubex_player_config.xml",
         "sharedpref" to "audio_cache_state.xml",
         "sharedpref" to "bitchord_addon_auth.xml",
+        // Upstream 1.10's Drive backup: the account grant is this phone's, and the
+        // other devices' listening is fetched from Drive again.
+        "sharedpref" to "bitchord_drive_backup.xml",
+        "file" to "listening-peers/",
+        "file" to "listening-synced/",
     )
 
     /** Folders Auto Backup never takes, whatever the rules say. */

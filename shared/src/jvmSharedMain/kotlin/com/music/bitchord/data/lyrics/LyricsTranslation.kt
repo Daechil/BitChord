@@ -1903,7 +1903,6 @@ object LyricsTranslation {
             return shown(ahead.texts, fromCache = true)
         }
         if (storedOnly) return null
-        // Only the lines with kanji: the rest would come back exactly as sent, paid for line by line.
         val asked = furiganaLinesOf(slots)
         if (asked.isEmpty()) return null
         val askedSlots = asked.map { slots[it] }
@@ -1933,9 +1932,13 @@ object LyricsTranslation {
     private fun checkedFurigana(sources: List<String>, answers: List<String>, script: Furigana.Script): List<String> =
         sources.mapIndexed { index, source -> answers.getOrNull(index)?.let { Furigana.checked(source, it, script) } ?: source }
 
-    /** Which of [slots] furigana is asked for: lines with a kanji, section labels aside. */
-    private fun furiganaLinesOf(slots: List<TextSlot>): List<Int> =
-        slots.indices.filter { !slots[it].sectionHeader && Furigana.hasKanji(slots[it].text) }
+    /**
+     * Which of [slots] furigana is asked for: every line. Sending only the
+     * lines with kanji was tried on ten songs and saved nothing — Haiku's
+     * answer is mostly its own thinking, not the lines copied back — while the
+     * readings lost the lines around them, so the whole song goes.
+     */
+    private fun furiganaLinesOf(slots: List<TextSlot>): List<Int> = slots.indices.toList()
 
     /**
      * The answers for the lines asked ([asked], by place in [sources]) put
@@ -2112,7 +2115,7 @@ object LyricsTranslation {
         // succeeds: the numbered array, where a line split in two is joined back.
         val shape = AnswerShape.INDEXED
         val lookUp = research?.takeIf { !reading && furigana == null }
-        // KO: furigana is asked for the lines with kanji only; see [claudeFurigana].
+        // KO: the lines furigana is asked for; see [furiganaLinesOf].
         val furiganaLines = if (furigana != null) furiganaLinesOf(slots) else emptyList()
         if (furigana != null && furiganaLines.isEmpty()) return AheadRequest(null, null, AheadSkip.SAME_LANGUAGE)
         val sentSlots = if (furigana != null) furiganaLines.map { slots[it] } else slots

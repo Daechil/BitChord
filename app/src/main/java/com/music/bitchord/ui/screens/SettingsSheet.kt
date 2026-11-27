@@ -92,6 +92,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import com.music.bitchord.ui.components.FoldedText
 import com.music.bitchord.ui.components.IosSwitch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -3320,10 +3321,12 @@ internal fun SettingsGroup(
         content()
     }
     if (footer != null) {
-        Text(
+        FoldedText(
             text = footer,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 3,
+            title = header,
             modifier = Modifier.padding(
                 start = GROUP_INSET + 4.dp,
                 end = GROUP_INSET + 4.dp,
@@ -3437,11 +3440,11 @@ internal fun SettingsRow(
             if (subtitleContent != null) {
                 subtitleContent()
             } else if (subtitle != null) {
-                Text(
+                FoldedText(
                     text = subtitle,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 5,
+                    title = title,
                 )
             }
         }
@@ -3524,12 +3527,12 @@ internal fun SettingsSubRow(
                 }
             }
             if (subtitle != null) {
-                Text(
+                FoldedText(
                     text = subtitle,
                     modifier = Modifier.padding(end = subtitleEndPadding),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 5,
+                    title = title,
                 )
             }
         }

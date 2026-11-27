@@ -329,4 +329,7 @@
     <string name="lyrics_furigana_loading">후리가나 받는 중…</string>
     <string name="lyrics_furigana_show">후리가나 보기</string>
     <string name="lyrics_furigana_hide">후리가나 숨기기</string>
+    <string name="best_part">하이라이트</string>
+    <string name="best_part_description">하이라이트로 건너뛰기</string>
+    <string name="automix_overview_unavailable">다가오는 AutoMix 전환이 없어요</string>
 </resources>

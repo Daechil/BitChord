@@ -975,6 +975,9 @@ Adding: %4$s
     <string name="spotify_claude_match">Find Spotify songs with Claude</string>
     <string name="spotify_claude_match_subtitle">When the rules pick another singer’s cover or no song, Claude chooses the same recording on YouTube Music. About 0.1–0.3 won a song, once.</string>
     <string name="spotify_claude_match_purpose">Spotify song search</string>
+    <string name="folded_more">More</string>
+    <string name="folded_close">Close</string>
+    <string name="folded_title">Details</string>
     <string name="ko_window_summary">Summary</string>
     <string name="ko_window_songs">Songs · %1$d</string>
     <string name="ko_window_space">Space used</string>

@@ -221,10 +221,12 @@ internal fun <T> LazyListScope.windowCard(
     }
     if (footer != null) {
         item(contentType = "footer") {
-            Text(
+            FoldedText(
                 text = footer,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 3,
+                title = header,
                 modifier = Modifier.padding(start = GROUP_INSET + 4.dp, end = GROUP_INSET + 4.dp, top = 8.dp),
             )
         }
@@ -418,10 +420,11 @@ internal fun WindowChoice(
                 color = MaterialTheme.colorScheme.onBackground,
             )
             if (!detail.isNullOrEmpty()) {
-                Text(
+                FoldedText(
                     text = detail,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    title = label,
                 )
             }
         }
@@ -491,10 +494,11 @@ internal fun WindowSwitch(label: String, detail: String? = null, checked: Boolea
                 color = MaterialTheme.colorScheme.onBackground,
             )
             if (!detail.isNullOrEmpty()) {
-                Text(
+                FoldedText(
                     text = detail,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    title = label,
                 )
             }
         }
@@ -528,10 +532,11 @@ internal fun WindowStepper(
                 color = MaterialTheme.colorScheme.onBackground,
             )
             if (!detail.isNullOrEmpty()) {
-                Text(
+                FoldedText(
                     text = detail,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    title = label,
                 )
             }
         }

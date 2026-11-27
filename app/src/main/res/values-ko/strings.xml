@@ -271,16 +271,16 @@
     <string name="skip_silence">무음 건너뛰기</string>
     <string name="skip_silence_subtitle">1초보다 긴 공백 자르기</string>
     <string name="skip_silence_float_subtitle">32비트 부동소수점 출력에서는 이용 불가</string>
-    <string name="content_preferences">Content Preferences</string>
+    <string name="content_preferences">콘텐츠 표시</string>
     <string name="hide_recents">Hide Recents</string>
-    <string name="hide_home_videos">Hide videos from Home</string>
-    <string name="hide_home_videos_subtitle">Shelves of only videos go too. Search, artists and playlists still show them</string>
-    <string name="hide_top_picks">Hide Top Picks for You</string>
-    <string name="hide_home_moods">Hide Find Your Mood</string>
-    <string name="square_video_thumbnails">Square video thumbnails</string>
-    <string name="square_video_thumbnails_subtitle">Show music videos as squares everywhere, including the player</string>
-    <string name="prefer_music_only">Prefer music-only version</string>
-    <string name="prefer_music_only_subtitle">Music videos play as their audio version, and the next track in the queue is converted ahead of time so Automix and crossfade work</string>
+    <string name="hide_home_videos">홈에서 동영상 숨기기</string>
+    <string name="hide_home_videos_subtitle">동영상만 있는 칸도 숨겨요. 검색·아티스트·재생목록에는 그대로 나와요</string>
+    <string name="hide_top_picks">홈의 \'추천 음악\' 숨기기</string>
+    <string name="hide_home_moods">홈의 \'분위기 찾기\' 숨기기</string>
+    <string name="square_video_thumbnails">동영상 썸네일 정사각형으로</string>
+    <string name="square_video_thumbnails_subtitle">뮤직비디오 썸네일을 플레이어를 포함한 모든 곳에서 정사각형으로 보여줘요</string>
+    <string name="prefer_music_only">음원 버전 우선</string>
+    <string name="prefer_music_only_subtitle">뮤직비디오는 음원 버전으로 재생해요. 다음 곡도 미리 바꿔 둬서 AutoMix와 크로스페이드가 잘 동작해요</string>
     <string name="smart_version_alignment">스마트 오디오 정렬</string>
     <string name="smart_version_alignment_subtitle">오디오 파형을 분석해 정확히 일치하는 재생 시점을 맞춥니다</string>
     <string name="equalizer">이퀄라이저</string>
@@ -293,8 +293,8 @@
     <string name="equalizer_contour">컨투어</string>
     <string name="equalizer_broad">넓게</string>
     <string name="equalizer_focused">집중</string>
-    <string name="equalizer_broad_footer">왼쪽으로 밀어서 부드럽게, 오른쪽으로 밀어서 선명하게 조정합니다. 아래로 밀면 중음역대를 누르고, 위로 밀면 강조합니다. \'넓게\' 설정에서는 스펙트럼의 넓은 구간을 한 번에 움직입니다.</string>
-    <string name="equalizer_focused_footer">왼쪽으로 밀어서 부드럽게, 오른쪽으로 밀어서 선명하게 조정합니다. 아래로 밀면 중음역대를 누르고, 위로 밀면 강조합니다. \'집중\' 설정에서는 좁은 구간 내에서 동작하므로, 움직일 때 변화가 작습니다.</string>
+    <string name="equalizer_broad_footer">좌우로 밀면 부드럽게·선명하게, 위아래로 밀면 중음역을 강조하거나 줄여요. \'넓게\'는 넓은 음역을 한 번에 움직여요.</string>
+    <string name="equalizer_focused_footer">좌우로 밀면 부드럽게·선명하게, 위아래로 밀면 중음역을 강조하거나 줄여요. \'집중\'은 좁은 구간만 움직여서 변화가 작아요.</string>
     <string name="equalizer_preset">프리셋</string>
     <string name="equalizer_bands">음역대</string>
     <string name="equalizer_bands_footer">음역대를 조정하면 프리셋은 그대로 남겨 두고 맞춤 설정을 시작합니다.</string>
@@ -305,7 +305,7 @@
     <string name="equalizer_balance_footer">한쪽의 소리를 줄여 다른 쪽 귀로 소리를 보냅니다.</string>
     <string name="equalizer_bitstream_title">지금은 동작하지 않음</string>
     <string name="equalizer_bitstream_subtitle">이 곡은 디코딩되지 않은 채 출력으로 전송됩니다</string>
-    <string name="equalizer_bitstream_footer">이퀄라이저는 디코딩된 음원에만 적용됩니다. 이 곡은 비트스트림 형태로 기기에 곧바로 전달된 뒤에 디코딩되므로, 필터링할 수 있는 샘플이 없습니다.</string>
+    <string name="equalizer_bitstream_footer">이 곡에는 이퀄라이저가 적용되지 않아요. 비트스트림 그대로 기기에 보내고 기기에서 디코딩하기 때문에, 앱이 바꿀 수 있는 소리 데이터가 없어요.</string>
     <string name="system_equalizer">시스템 이퀄라이저</string>
     <string name="system_equalizer_subtitle">기기 자체 설정</string>
     <string name="system_equalizer_footer">BitChord 설정 이후, 전체 오디오 세션에 적용됩니다. 두 설정 모두 쓰면 동시에 적용됩니다.</string>
@@ -613,7 +613,7 @@
     <string name="cap_warn_needs_cap">월 한도를 정하면 쓸 수 있어요.</string>
     <string name="daily_cap">하루 한도</string>
     <string name="daily_cap_none">없음</string>
-    <string name="daily_cap_footer">그날 실시간 번역에 쓴 금액이 이 한도에 닿으면 자정까지 Google 번역을 써요. 미리 번역(Batch)은 하루 한도에 넣지 않아요.</string>
+    <string name="daily_cap_footer">한도에 닿으면 자정까지 Google 번역을 써요. 그날 실시간 번역에 쓴 금액만 세고, 미리 번역(Batch)은 넣지 않아요.</string>
     <string name="claude_usage_today">오늘 실시간 %1$s</string>
     <string name="claude_usage_today_cap">오늘 실시간 %1$s / 한도 %2$s</string>
     <string name="claude_monthly_cap_share">이번 달 한도의 %1$d%% 사용</string>
@@ -676,7 +676,7 @@
     <string name="floating_offset_detail">플레이어의 가사 오프셋(지금 %1$s)에 더해져요. +는 가사를 늦게 보여줘요.</string>
     <string name="floating_position">위치</string>
     <string name="floating_pin">위치만 고정</string>
-    <string name="floating_pin_detail">끌어서 옮길 수 없게 해요. 누르면 앱이 열리고 꾹 누르면 숨겨지는 건 그대로예요. 터치를 통과시키는 \'플로팅 가사 고정\'과는 달라요.</string>
+    <string name="floating_pin_detail">막대를 옮길 수 없게 해요. 누르면 앱 열기, 꾹 누르면 숨기기는 그대로예요. 터치가 아래 앱으로 통과하는 \'플로팅 가사 고정\'과는 달라요.</string>
     <string name="floating_reset_position">위치 초기화 (화면 위쪽으로)</string>
     <string name="floating_reset_position_done">플로팅 가사를 화면 위쪽으로 옮겼어요</string>
     <string name="translate_ahead_track_lyrics_error">가사를 못 가져옴 (시간 초과·연결 오류)</string>
@@ -711,7 +711,7 @@
     <string name="krw_rate_fetch_failed">환율을 못 가져왔어요. 마지막 값을 계속 써요.</string>
     <string name="exim_key">수출입은행 인증키</string>
     <string name="exim_key_hint">인증키 붙여넣기</string>
-    <string name="exim_key_footer">한국수출입은행 홈페이지의 Open API 메뉴에서 무료로 발급받을 수 있어요. 키는 이 기기에만 저장되고, 설정 내보내기와 백업에는 들어가지 않아요. 키가 없거나 수출입은행에 연결이 안 되면 유럽중앙은행 환율을 써요.</string>
+    <string name="exim_key_footer">수출입은행 홈페이지 › Open API에서 무료로 받아요. 키는 이 기기에만 저장되고, 설정 내보내기와 백업에는 들어가지 않아요. 키가 없거나 연결이 안 되면 유럽중앙은행 환율을 써요.</string>
     <string name="exim_key_saved">인증키를 저장했어요</string>
     <string name="exim_key_save">인증키 저장</string>
     <string name="exim_key_remove">인증키 지우기</string>
@@ -719,7 +719,7 @@
     <string name="card_fee">카드 해외결제 수수료</string>
     <string name="card_fee_none">더하지 않음</string>
     <string name="card_fee_option">+%1$s%%</string>
-    <string name="card_fee_footer">Anthropic은 달러로 카드 결제를 해서, 실제로 빠져나가는 원화는 기준환율보다 보통 1~2% 많아요. 쓰는 카드의 해외 이용 수수료를 고르면 원화 금액에 더해서 보여줘요.</string>
+    <string name="card_fee_footer">원화 금액에 카드 해외 수수료를 더해 보여줘요. Anthropic은 달러로 결제돼서, 실제로 빠져나가는 원화가 기준환율보다 보통 1~2% 많아요.</string>
     <string name="krw_rate_applied">적용 환율: 1달러 = %1$s원</string>
     <string name="krw_rate_applied_fee">적용 환율: 1달러 = %1$s원 (기준 %2$s원 + 카드 수수료 %3$s%%)</string>
     <string name="translation_status_no_lyrics">가사 없음</string>
@@ -743,7 +743,7 @@
     <string name="pronounce_romaji">로마자 그대로</string>
     <string name="pronounce_romaji_detail">Google 로마자를 그대로 보여줘요: aishiteru. 요금 없음.</string>
     <string name="instructions_header">Claude에게 주는 번역 지시문</string>
-    <string name="instructions_footer">Claude 번역·발음·미리 번역에 함께 보내요. 이미 받은 번역은 그대로 남아요. 새 지시문으로 받으려면 번역 버튼을 길게 누르세요.</string>
+    <string name="instructions_footer">Claude 번역·발음·미리 번역에 함께 보내요. 이미 받은 번역은 그대로라서, 새 지시문으로 받으려면 번역 버튼을 길게 누르세요.</string>
     <string name="instructions_hint">예: 아티스트 이름은 번역하지 말 것</string>
     <string name="instructions_counter">%1$d / %2$d</string>
     <string name="instructions_examples">예시 넣기</string>
@@ -769,9 +769,9 @@
     <string name="ko_unsaved_stay">계속 쓰기</string>
     <string name="claude_purpose_recommend">곡 추천</string>
     <string name="waveform_seek_bar">음파 모양 재생 막대</string>
-    <string name="waveform_seek_bar_subtitle">재생 막대를 곡의 음파 모양으로 보여줘요. 다운로드한 곡(백그라운드에서 한 번 분석)과 Automix가 분석한 곡에 나오고, 나머지 곡은 지금처럼 얇은 막대예요.</string>
+    <string name="waveform_seek_bar_subtitle">재생 막대를 음파 모양으로 보여줘요. 다운로드한 곡과 AutoMix가 분석한 곡에만 나오고, 나머지는 지금처럼 얇은 막대예요.</string>
     <string name="waveform_played">들은 곡도 음파 보기</string>
-    <string name="waveform_played_subtitle">다운로드하지 않은 곡도, 재생하면서 곡 전체가 캐시에 받아지면(보통 시작 후 1분 안) 음파를 만들어요. 데이터를 더 쓰지 않아요. 최근 3,000곡까지 이 기기에 보관해요.</string>
+    <string name="waveform_played_subtitle">다운로드 안 한 곡도 음파를 만들어요. 재생하면서 곡 전체가 캐시에 받아지면(보통 1분 안) 만들고, 데이터를 더 쓰지 않아요. 최근 3,000곡까지 보관해요.</string>
     <string name="ahead_live_updates">미리 번역 실시간 알림</string>
     <string name="ahead_live_updates_subtitle">진행 상황을 상태바 칩과 잠금화면 위쪽에 보여줘요(Android 16). 실제로 보일지는 시스템이 정해요.</string>
     <string name="ahead_live_updates_blocked">시스템 설정에서 BitChord의 실시간 정보가 꺼져 있어요. 눌러서 켤 수 있어요.</string>
@@ -791,7 +791,7 @@
     <string name="duplicates_keep">남기기</string>
     <string name="duplicates_remove_mark">지우기</string>
     <string name="duplicates_remove_button">표시한 %1$d곡 지우기</string>
-    <string name="duplicates_footer">같은 곡 기준: 제목이 같고, 버전(라이브·리믹스 등)이 같고, 아티스트가 같고, 길이 차이가 3초 이내. 확인하기 전에는 아무것도 지우지 않아요.</string>
+    <string name="duplicates_footer">확인하기 전에는 아무것도 지우지 않아요. 같은 곡 기준: 제목·버전(라이브·리믹스 등)·아티스트가 같고 길이 차이가 3초 이내예요.</string>
     <string name="duplicates_confirm_title">%1$d곡을 지울까요?</string>
     <string name="duplicates_confirm_description">YouTube Music의 ‘%1$s’에서 지워져요. 곡마다 남기기로 한 것은 그대로 있어요.</string>
     <string name="duplicates_removed">%1$d곡을 지웠어요</string>
@@ -904,7 +904,7 @@
     </plurals>
     <string name="translation_kind_furigana">후리가나</string>
     <string name="furigana_header">후리가나 (일본어)</string>
-    <string name="furigana_footer">발음 버튼 옆 ふ 버튼을 누르면 한자 위에 읽는 법을 달아요. 처음 누를 때 Claude가 써요(Haiku로 곡당 약 3~6원). 한 번 받은 곡은 저장되고, 켜 두면 받아 둔 곡에서는 저절로 나와요.</string>
+    <string name="furigana_footer">ふ 버튼을 누르면 한자 위에 읽는 법을 달아요. 처음 누를 때 Claude가 써요(Haiku로 곡당 약 3~6원). 한 번 받은 곡은 저장되고, 켜 두면 받아 둔 곡에서는 저절로 나와요.</string>
     <string name="furigana_hiragana">히라가나</string>
     <string name="furigana_hiragana_detail">抜錨 → ばつびょう, 일본 책에 쓰는 방식</string>
     <string name="furigana_hangul">한글</string>
@@ -921,8 +921,11 @@
     <string name="whats_new_row_subtitle">업데이트 후 처음 열 때 한 번, 바뀐 내용을 페이지로 보여 줘요</string>
     <string name="whats_new_ok">확인</string>
     <string name="spotify_claude_match">Spotify 곡 찾기에 Claude 쓰기</string>
-    <string name="spotify_claude_match_subtitle">규칙이 다른 가수의 커버를 고르거나 곡을 못 찾으면, Claude가 YouTube Music에서 같은 녹음을 골라요. 곡당 약 0.1~0.3원, 한 번만 들어요.</string>
+    <string name="spotify_claude_match_subtitle">커버나 엉뚱한 곡 대신 같은 녹음을 Claude가 골라요. 규칙이 못 고를 때만 쓰고, 곡당 약 0.1~0.3원이 한 번만 들어요.</string>
     <string name="spotify_claude_match_purpose">Spotify 곡 찾기</string>
+    <string name="folded_more">자세히</string>
+    <string name="folded_close">닫기</string>
+    <string name="folded_title">자세히 보기</string>
     <string name="ko_window_summary">요약</string>
     <string name="ko_window_songs">곡 · %1$d곡</string>
     <string name="ko_window_space">사용 공간</string>
@@ -1021,7 +1024,7 @@
     <string name="discord">Discord</string>
     <string name="discord_account">Discord 계정</string>
     <string name="discord_button_variables">{song_name}, {artist_name}, {album_name}은 현재 곡의 정보로 교체됩니다.</string>
-    <string name="discord_buttons_footer">{song_name}, {artist_name}, {album_name}은 현재 곡의 정보로 교체됩니다. 첫 번째 버튼은 YouTube Music에서 곡을 열고, 두 번째 버튼은 이 프로젝트를 엽니다.</string>
+    <string name="discord_buttons_footer">{song_name}, {artist_name}, {album_name}은 지금 곡 정보로 바뀌어요. 첫 버튼은 YouTube Music에서 곡을, 둘째 버튼은 이 프로젝트를 열어요.</string>
     <string name="discord_presence_footer">카드는 음악, 위치, 재생 상태가 바뀔 때 업데이트됩니다. 재생이 중지되면 카드를 지웁니다.</string>
     <string name="discord_show_audio_quality">오디오 품질 표시</string>
     <string name="discord_show_audio_quality_subtitle">활동 카드에 고품질, 무손실, Dolby 사양 표시</string>
@@ -1233,7 +1236,7 @@
     <string name="scrobble_tracks">음악 스크로블</string>
     <string name="scrobble_tracks_subtitle">Last.fm 타임라인에 재생한 음악을 기록합니다</string>
     <string name="scrobbling_footer">Last.fm 및 ListenBrainz에 재생 기록을 스크로블합니다.</string>
-    <string name="scrobbling_paused_footer">이 버전에서는 Last.fm 및 ListenBrainz 연동이 잠시 중단되며 나중에 다시 지원할 예정입니다. 기존 연결은 유지됩니다.</string>
+    <string name="scrobbling_paused_footer">Last.fm·ListenBrainz 기록이 이 버전에서는 잠시 멈춰요. 연결은 그대로 남아 있고, 나중에 다시 지원할 예정이에요.</string>
     <string name="search_this_folder">이 폴더 검색</string>
     <string name="search_this_list">이 목록 검색</string>
     <string name="second_button">두 번째 버튼</string>
@@ -1245,7 +1248,7 @@
     <string name="signing_in">로그인하는 중…</string>
     <string name="sleep_timer">수면 타이머</string>
     <string name="sources_no_lossless">켜진 소스 중 무손실 오디오를 지원하는 소스가 없습니다. 트랜스코딩 없이 무손실 파일을 재생하려면 애드온을 추가하세요.</string>
-    <string name="sources_order_footer">해당 소스에 음악이 없거나 연결할 수 없으면, BitChord에서 다음 소스 연결을 시도합니다. YouTube보다 상위에 있는 소스에서 더 나은 버전을 제공하는 경우 기존 음원을 교체할 수 있습니다.</string>
+    <string name="sources_order_footer">위에 있는 소스부터 찾아요. 곡이 없거나 연결이 안 되면 다음 소스로 넘어가고, YouTube보다 위에 있는 소스에 더 좋은 버전이 있으면 그걸로 바꿀 수 있어요.</string>
     <string name="sources_order_header">소스, 이 순서로 연결 시도</string>
     <string name="sources_quality_capped">이 연결 환경에서는 고품질 이하로 설정되었기 때문에, 스트림을 제한에 맞추어 트랜스코딩합니다. 다운로드에는 영향을 주지 않습니다.</string>
     <string name="jiosaavn_mismatch_warning">틀린 버전의 음악을 찾을 수도 있습니다. 위험을 감수할 수 있는 경우에만 켜세요.</string>
@@ -1519,7 +1522,7 @@
     <string name="listen_together_custom_server_saved">맞춤 서버 저장함</string>
     <string name="listen_together_create">파티 생성</string>
     <string name="listen_together_create_subtitle">친구들과 공유할 수 있는 코드를 받습니다</string>
-    <string name="listen_together_create_footer">6자리 코드를 받습니다. 코드가 있는 사람은 누구나 참여할 수 있고, 자신을 포함해 최대 %1$d개 기기를 연결할 수 있습니다.</string>
+    <string name="listen_together_create_footer">6자리 코드를 받아요. 코드가 있으면 누구나 참여할 수 있고, 나를 포함해 최대 %1$d대까지 연결돼요.</string>
     <string name="listen_together_profile">내 파티 프로필</string>
     <string name="listen_together_nickname_hint">이 파티를 위한 별명</string>
     <string name="listen_together_party_size">파티 크기</string>
@@ -1870,17 +1873,17 @@
     <string name="font_legacy_subtitle">SF Pro Display · 기존의 굵은 굵기</string>
     <string name="font_footer">이전 글꼴은 앱이 Apple Music에 맞춰지기 전에 쓰던 더 굵고 촘촘한 글꼴을 되돌립니다.</string>
     <string name="bit_perfect_output">비트 퍼펙트 출력</string>
-    <string name="bit_perfect_bypassed_footer">비트 퍼펙트 출력이 준비되어 흐리게 표시된 설정은 우회되고 Dolby Atmos 버전은 요청되지 않습니다. DAC를 분리하거나 모드를 끄면 다시 작동합니다.</string>
+    <string name="bit_perfect_bypassed_footer">비트 퍼펙트 출력 중이라 흐린 설정은 적용되지 않아요. Dolby Atmos 버전도 받지 않아요. DAC를 빼거나 모드를 끄면 다시 적용돼요.</string>
     <string name="bit_perfect_sheet_warning">트랙을 변경 없이 DAC로 보냅니다. 이퀄라이저, 체감 음량 평준화, 크로스페이드, 자동 믹스, 재생 속도, BitChord 음량은 우회됩니다.</string>
     <string name="bit_perfect_mode_off_subtitle">오디오가 Android 믹서와 BitChord 효과를 거칩니다.</string>
     <string name="bit_perfect_mode_usb_android">USB DAC</string>
     <string name="bit_perfect_mode_usb_android_subtitle">Android 14가 믹싱이나 리샘플링 없이 각 트랙의 샘플레이트와 비트 심도로 DAC를 엽니다.</string>
     <string name="bit_perfect_requires_android_14">Android 14 이상 필요</string>
     <string name="bit_perfect_mode_dap_exclusive">내장 DAC(AAudio 독점)</string>
-    <string name="bit_perfect_mode_dap_exclusive_subtitle">자체 DAC가 있는 음악 플레이어용입니다. 헤드폰 또는 라인 출력을 각 트랙의 샘플레이트로 독점해서 엽니다. 모든 기기가 독점 모드를 허용하는 것은 아닙니다.</string>
+    <string name="bit_perfect_mode_dap_exclusive_subtitle">자체 DAC가 있는 음악 플레이어용이에요. 헤드폰·라인 출력을 곡마다 원래 샘플레이트로 독점해서 열어요. 독점 모드를 막는 기기도 있어요.</string>
     <string name="bit_perfect_requires_android_8_1">Android 8.1 이상 필요</string>
     <string name="bit_perfect_mode_usb_direct">USB DAC(직접 드라이버)</string>
-    <string name="bit_perfect_mode_usb_direct_subtitle">어떤 Android 버전에서든 BitChord가 DAC를 직접 구동하고 음량을 DAC에서 설정합니다. USB 권한을 요청합니다. 일반 출력보다 훨씬 크게 들릴 수 있습니다.</string>
+    <string name="bit_perfect_mode_usb_direct_subtitle">앱이 USB DAC를 직접 구동하고 음량도 DAC에서 정해요. USB 권한을 요청하고, 보통 출력보다 훨씬 크게 들릴 수 있어요.</string>
     <string name="dac_volume">DAC 음량</string>
     <string name="dac_volume_subtitle">DAC 자체에서 설정되며 음악 데이터는 조정되지 않습니다</string>
     <string name="usb_allow_fixed_volume">음량 조절이 없는 DAC 허용</string>
@@ -1888,7 +1891,7 @@
     <string name="usb_allow_fixed_volume_confirm_title">최대 레벨로 재생할까요?</string>
     <string name="usb_allow_fixed_volume_confirm_message">BitChord에서 이 유형의 DAC 음량을 설정할 수 없어 최대 레벨로 재생되며, DAC 자체의 노브가 있는 경우에만 음량을 조절할 수 있습니다. 민감한 헤드폰에서는 위험할 정도로 크게 들릴 수 있습니다.</string>
     <string name="convert_for_limited_dac">저사양 DAC에 맞게 변환</string>
-    <string name="convert_for_limited_dac_subtitle">DAC 한도를 넘는 트랙을 DAC의 최고 포맷으로 변환합니다. 트랙 시작이 더 오래 걸릴 수 있으며 원본 대비 비트 퍼펙트가 아닙니다.</string>
+    <string name="convert_for_limited_dac_subtitle">DAC가 못 받는 곡을 DAC의 최고 포맷으로 바꿔서 보내요. 곡 시작이 조금 늦어질 수 있고, 원본 그대로(비트 퍼펙트)는 아니에요.</string>
     <string name="bit_perfect_confirm_title">비트 퍼펙트 출력을 켤까요?</string>
     <string name="bit_perfect_confirm_message">DAC에 음악이 최대 레벨로 전달되며 휴대전화의 음량 버튼이 작동하지 않을 수 있습니다. 재생하기 전에 DAC나 앰프의 음량을 낮추세요.</string>
     <string name="bit_perfect_status_active">%1$s · %2$s kHz · %3$d비트</string>
@@ -1927,7 +1930,7 @@
     <string name="drive_sign_in_again_subtitle">Google 드라이브 액세스 권한이 삭제되었습니다. 계속 백업하려면 다시 로그인하세요.</string>
     <string name="drive_sign_in_again">로그인</string>
     <string name="drive_restore_header">복원</string>
-    <string name="drive_backup_footer">백업은 Google 드라이브의 숨겨진 앱 폴더에 보관되며 드라이브 저장용량에 포함됩니다. 비밀번호와 로그인 정보는 포함되지 않습니다. 삭제하려면 드라이브 → 설정 → 앱 관리를 여세요.</string>
+    <string name="drive_backup_footer">Google 드라이브의 숨은 앱 폴더에 저장돼요(드라이브 용량 사용). 비밀번호와 로그인 정보는 들어가지 않아요. 지우려면 드라이브 › 설정 › 앱 관리를 여세요.</string>
     <string name="drive_restore_connect_first">먼저 Google 계정을 연결하세요</string>
     <string name="drive_restore_action">복원</string>
     <string name="drive_disconnect_confirm_title">Google 드라이브 연결을 해제할까요?</string>
@@ -1937,7 +1940,7 @@
     <string name="drive_frequency_monthly">매월</string>
     <!-- Google Drive sync across devices (DriveBackupScreen, DriveDevicesScreen) -->
     <string name="drive_auto_sync_header">자동 동기화</string>
-    <string name="drive_auto_sync_footer">배터리가 부족하지 않을 때 이 휴대전화가 백그라운드에서 감상 기록을 업로드하고 다른 기기의 기록을 다운로드합니다. 직접 실행한 동기화도 일정에 포함됩니다.</string>
+    <string name="drive_auto_sync_footer">배터리가 넉넉할 때 백그라운드에서 감상 기록을 올리고 다른 기기의 기록을 받아요. 직접 실행한 동기화도 이 일정에 들어가요.</string>
     <string name="drive_choose_device">이 휴대전화의 기기 선택</string>
     <string name="drive_choose_device_subtitle">새 기기로 백업하거나 드라이브에 있는 기기로 복원하세요</string>
     <string name="drive_device_not_set">기기 선택</string>

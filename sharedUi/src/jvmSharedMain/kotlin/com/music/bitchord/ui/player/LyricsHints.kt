@@ -1,5 +1,8 @@
 package com.music.bitchord.ui.player
 
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -147,6 +150,8 @@ internal fun HintBubble(text: String, onClick: () -> Unit, modifier: Modifier = 
     ) {
         Text(
             text = text,
+            // Read out by TalkBack as it appears: the hint is the same news to a listener.
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
             style = TextStyle(fontSize = 13.sp, lineHeight = 18.sp),
             color = Color(0xFF16161A),
             textAlign = TextAlign.Center,

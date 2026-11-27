@@ -934,6 +934,7 @@
     <string name="spotify_row_still_missing">YouTube Music에서 여전히 찾지 못했어요.</string>
     <string name="spotify_nothing_playable">아직 YouTube Music에서 찾은 곡이 없어요. 회색 곡을 누르면 다시 찾아요.</string>
     <string name="spotify_row_found">YouTube Music에서 찾았어요. 누르면 재생해요.</string>
+    <string name="spotify_missing_summary">%1$d곡은 YouTube Music에서 찾지 못했어요. 회색 곡을 누르면 다시 찾아요.</string>
     <string name="ko_window_summary">요약</string>
     <string name="ko_window_songs">곡 · %1$d곡</string>
     <string name="ko_window_space">사용 공간</string>

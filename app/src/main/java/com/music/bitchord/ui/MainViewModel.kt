@@ -3158,6 +3158,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 delay(SPOTIFY_RETRY_DELAY_MS)
                 pass(again, SPOTIFY_RETRY_PARALLELISM)
             }
+            // KO: once every row has its answer, say how many stayed grey and what a tap does —
+            // a long playlist's last rows are far below the fold, and a silent grey reads as broken.
+            if (!open()) return@launch
+            val missing = _detailStack.value.firstOrNull { it.browseId == browseId }
+                ?.let { (it.songs as? UiState.Success<List<Song>>)?.data }
+                ?.count { it.videoId.startsWith(SPOTIFY_MISSING_PREFIX) } ?: 0
+            if (missing > 0) {
+                val app = getApplication<Application>()
+                android.widget.Toast.makeText(app, app.getString(R.string.spotify_missing_summary, missing), android.widget.Toast.LENGTH_LONG).show()
+            }
         }
     }
 

@@ -1,5 +1,6 @@
 package com.music.bitchord.ui.components
 
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -66,8 +67,9 @@ internal fun FoldedText(
                 style = style.copy(fontWeight = FontWeight.W600),
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
-                    .clickable { open = true }
-                    .padding(top = 2.dp, bottom = 2.dp, end = 12.dp),
+                    // A button to TalkBack, which says what it opens; a little taller to hit.
+                    .clickable(role = Role.Button, onClickLabel = title ?: stringResource(R.string.folded_title)) { open = true }
+                    .padding(top = 6.dp, bottom = 6.dp, end = 16.dp),
             )
         }
     }

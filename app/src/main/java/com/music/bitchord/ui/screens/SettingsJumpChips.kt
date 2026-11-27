@@ -1,5 +1,9 @@
 package com.music.bitchord.ui.screens
 
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -165,6 +169,8 @@ private fun JumpChipRow(
                     .height(32.dp)
                     .clip(RoundedCornerShape(16.dp))
                     .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                    // TalkBack: a row of tabs, the group being read the selected one.
+                    .semantics { this.selected = selected; role = Role.Tab }
                     .clickable {
                         scope.launch {
                             val header = targets.top(name) ?: return@launch

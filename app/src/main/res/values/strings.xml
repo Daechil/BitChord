@@ -986,6 +986,7 @@ Adding: %4$s
     <string name="spotify_row_still_missing">Still not found on YouTube Music.</string>
     <string name="spotify_nothing_playable">No songs found on YouTube Music yet. Tap a grey song to look again.</string>
     <string name="spotify_row_found">Found it on YouTube Music. Tap it to play.</string>
+    <string name="spotify_missing_summary">%1$d songs weren’t found on YouTube Music. Tap a grey song to look again.</string>
     <string name="ko_window_summary">Summary</string>
     <string name="ko_window_songs">Songs · %1$d</string>
     <string name="ko_window_space">Space used</string>

@@ -70,7 +70,8 @@ fun HistoryScreen(
                 itemsIndexed(songs) { index, song ->
                     SongRow(
                         song = song,
-                        onClick = { onSongClick(songs, index) },
+                        // KO: the row lit as playing opens the player instead of starting it again.
+                        onClick = { if (!(isCurrentRow(song) && com.music.bitchord.playback.PlayingRowTap.open())) onSongClick(songs, index) },
                         onLongPress = { onSongLongPress(song) },
                         onSwipeToQueue = { onSongSwipe(song) },
                         isCurrent = isCurrentRow(song),

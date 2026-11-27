@@ -315,7 +315,12 @@ internal fun LazyListScope.localFolderItems(
     // Downloads redefines the hold as "select", so the ⋮ has to carry the
     // actions sheet itself or the page loses it.
     val songClick: (Int) -> Unit = { index ->
-        if (state.selecting) state.toggle(songs[index]) else onSongClick(songs, index)
+        when {
+            state.selecting -> state.toggle(songs[index])
+            // KO: the row lit as playing opens the player instead of starting it again.
+            playingRowMatcher(songs, currentSong)(songs[index]) && com.music.bitchord.playback.PlayingRowTap.open() -> Unit
+            else -> onSongClick(songs, index)
+        }
     }
     val songHold: (Song) -> Unit = { song ->
         if (folder.selectable) state.select(song) else onSongLongPress(song)

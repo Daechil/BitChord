@@ -52,4 +52,9 @@ object PlayerDeepLink {
     fun handled() {
         _pending.value = false
     }
+
+    /** KO: the player asked for from inside the app, without an intent; see [PlayingRowTap]. */
+    fun request() {
+        _pending.value = true
+    }
 }

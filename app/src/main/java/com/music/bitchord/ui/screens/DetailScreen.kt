@@ -749,7 +749,12 @@ fun DetailScreen(
                                             CompactSongRow(
                                                 song = song,
                                                 palette = palette,
-                                                onClick = { onSongClick(top, top.indexOf(song)) },
+                                                // KO: the row lit as playing opens the player instead of starting it again.
+                                                onClick = {
+                                                    if (!(isCurrentRow(song) && com.music.bitchord.playback.PlayingRowTap.open())) {
+                                                        onSongClick(top, top.indexOf(song))
+                                                    }
+                                                },
                                                 onLongPress = { onSongLongPress(song) },
                                                 downloadedTint = downloadedTint,
                                                 isCurrent = isCurrentRow(song),
@@ -785,7 +790,8 @@ fun DetailScreen(
                                 song.copy(thumbnailUrl = song.thumbnailUrl ?: page.thumbnailUrl)
                             },
                             onClick = {
-                                onSongClick(queue, position)
+                                // KO: the row lit as playing opens the player instead of starting it again.
+                                if (!(isCurrent && com.music.bitchord.playback.PlayingRowTap.open())) onSongClick(queue, position)
                             },
                             onLongPress = { onSongLongPress(song) },
                             onSwipeToQueue = { onSongSwipe(song) },

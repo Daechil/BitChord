@@ -122,12 +122,14 @@ fun rememberMediaController(): MediaController? {
                     listener.ready = true
                 }
                 controller = connected
+                PlayingRowTap.controller = connected
             },
             ContextCompat.getMainExecutor(context),
         )
         onDispose {
             MediaController.releaseFuture(future)
             controller = null
+            PlayingRowTap.controller = null
         }
     }
     return controller

@@ -148,6 +148,13 @@ interface PlayerHost {
      * or null where there is none — not Japanese with kanji, Claude off, or the
      * request failed. [storedOnly] never asks. None where a platform has no Claude.
      */
+    /**
+     * KO: a list row lit as the song playing now was tapped — open the player
+     * on what is playing (playing on if it was paused) rather than starting the
+     * row again. False where nothing is loaded; the list then starts the row.
+     */
+    fun openPlayingNow(): Boolean = false
+
     suspend fun furiganaLyrics(trackId: String, lines: List<LyricLine>, storedOnly: Boolean = false): List<String?>? = null
 
     suspend fun romanizeLyrics(

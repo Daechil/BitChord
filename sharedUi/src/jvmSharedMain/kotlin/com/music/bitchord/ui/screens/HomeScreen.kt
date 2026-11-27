@@ -330,7 +330,7 @@ private fun RecentShelf(
                         column.forEach { item ->
                             RecentTrackRow(
                                 item = item,
-                                onClick = { onItemClick(item) },
+                                onClick = { if (!(isCurrentItem(item) && com.music.bitchord.ui.player.PlayerPlatform.host.openPlayingNow())) onItemClick(item) },
                                 onLongPress = onItemLongPress?.let { { it(item) } },
                                 isCurrent = isCurrentItem(item),
                                 isPlaying = isCurrentItem(item) && isPlaying,
@@ -748,7 +748,7 @@ internal fun Shelf(
                 if (shelf.layout == ShelfLayout.VIDEO) {
                     VideoShelfCard(
                         item = item,
-                        onClick = { onItemClick(item) },
+                        onClick = { if (!(isCurrentItem(item) && com.music.bitchord.ui.player.PlayerPlatform.host.openPlayingNow())) onItemClick(item) },
                         onLongPress = onItemLongPress?.let { { it(item) } },
                         isCurrent = isCurrentItem(item),
                         isPlaying = isCurrentItem(item) && isPlaying,
@@ -756,7 +756,7 @@ internal fun Shelf(
                 } else {
                     ShelfCard(
                         item = item,
-                        onClick = { onItemClick(item) },
+                        onClick = { if (!(isCurrentItem(item) && com.music.bitchord.ui.player.PlayerPlatform.host.openPlayingNow())) onItemClick(item) },
                         onLongPress = onItemLongPress?.let { { it(item) } },
                         isCurrent = isCurrentItem(item),
                         isPlaying = isCurrentItem(item) && isPlaying,

@@ -281,6 +281,8 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
         )
     }
 
+    override fun openPlayingNow(): Boolean = com.music.bitchord.playback.PlayingRowTap.open()
+
     override suspend fun furiganaLyrics(trackId: String, lines: List<LyricLine>, storedOnly: Boolean): List<String?>? {
         val script = if (AppSettings.furiganaHangul.value) {
             com.music.bitchord.data.lyrics.Furigana.Script.HANGUL

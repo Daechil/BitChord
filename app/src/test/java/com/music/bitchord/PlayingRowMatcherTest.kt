@@ -53,4 +53,23 @@ class PlayingRowMatcherTest {
     fun `nothing lights with nothing playing`() {
         assertEquals(emptyList<String>(), lit(listOf(song("a")), null))
     }
+
+    /**
+     * KO: a single playing over its artist's page, where the album cut is
+     * listed: the album row lights by name, and a tap on it opens the player
+     * (PlayingRowTap) rather than starting the album cut over.
+     */
+    @Test
+    fun `another upload of the song playing lights by name`() {
+        val single = song("single", title = "唱 - Show", artist = "Ado")
+        val albumCut = song("album", title = "唱 - Show", artist = "Ado")
+        val other = song("other", title = "うっせぇわ - Usseewa", artist = "Ado")
+        assertEquals(listOf("album"), lit(listOf(other, albumCut), single))
+    }
+
+    @Test
+    fun `a list without the player opens nothing`() {
+        // Where no player is connected, the row starts as before.
+        assertEquals(false, com.music.bitchord.playback.PlayingRowTap.open())
+    }
 }

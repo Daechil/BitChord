@@ -2990,6 +2990,13 @@ class CrossfadeController(
      * while it waits, then the planned mix and why a pair isn't beatmatched.
      */
     private fun publishAutomixDetail() {
+        // KO: at most four times a second. The tick runs every 20–40 ms while mixing, and the
+        // line — several String.format calls and a regex — only ever shows whole seconds;
+        // building it fifty times a second was work beside the audio for nothing on screen.
+        val nowMs = android.os.SystemClock.elapsedRealtime()
+        if (nowMs - lastAutomixPublishMs < AUTOMIX_PUBLISH_MS && phase == lastAutomixPublishPhase) return
+        lastAutomixPublishMs = nowMs
+        lastAutomixPublishPhase = phase
         val player = active()
         val item = player.currentMediaItem
         val off = !AppSettings.smartFadeEnabled.value || item == null || ListenTogether.state.value.inParty
@@ -3010,6 +3017,9 @@ class CrossfadeController(
             lastLoggedAutomix = null
         }
     }
+
+    private var lastAutomixPublishMs = 0L
+    private var lastAutomixPublishPhase: Phase? = null
 
     /** KO: set by [describeAutomix] alongside the line it returns; null when the line is only the analysis. */
     private var automixSummaryOut: AutomixSummary? = null
@@ -4022,6 +4032,9 @@ class CrossfadeController(
         const val MIX_PREVIEW_STALE_MS = 1_500L
 
         const val TAG = "BitChordCrossfade"
+
+        /** How often the Automix stats line is rebuilt, at most. */
+        private const val AUTOMIX_PUBLISH_MS = 250L
 
         /** The figures in an Automix line that move by themselves: countdowns, the handover error. */
         private val AUTOMIX_FIGURES = Regex("[+-]?\\d+(\\.\\d+)?")

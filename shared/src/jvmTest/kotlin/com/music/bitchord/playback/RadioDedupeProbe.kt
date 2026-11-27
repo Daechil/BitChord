@@ -86,6 +86,7 @@ class RadioDedupeProbe {
             }
         }
         out.append("---\n$stations stations, $songs songs, $newJoins pairs joined only by the new rules\n")
+        out.append("\n").append(freshReport(seeds))
         val file = File(System.getenv("LIVE_LYRICS_REPORT") ?: "build/radio.md")
         file.parentFile?.mkdirs()
         file.writeText(out.toString())
@@ -98,10 +99,7 @@ class RadioDedupeProbe {
      * first ten songs queued from the seed's station; "today" is radio started
      * again from the seed and from a song in it. Counts only, no names.
      */
-    @Test
-    fun freshProbe() {
-        val seeds = System.getenv("LIVE_RADIO")?.split(';')?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
-        if (seeds.isEmpty()) return
+    private fun freshReport(seeds: List<String>): String {
         val report = StringBuilder("# Fresh radio check\n\n| seed | again from | heard in plain 10 | heard, moved back | heard, left out |\n|---|---|---|---|---|\n")
         var plainTotal = 0
         var deferTotal = 0
@@ -131,6 +129,6 @@ class RadioDedupeProbe {
             }
         }
         report.append("\n$rows stations: heard songs in the first 10 — plain $plainTotal, moved back $deferTotal, left out $dropTotal\n")
-        println(report)
+        return report.toString()
     }
 }

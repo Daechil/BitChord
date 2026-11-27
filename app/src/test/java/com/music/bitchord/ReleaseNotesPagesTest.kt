@@ -44,4 +44,41 @@ class ReleaseNotesPagesTest {
         assertEquals(0, ReleaseNotesPages.split(null).pages.size)
         assertEquals(0, ReleaseNotesPages.split("   ").pages.size)
     }
+
+    @Test
+    fun `the release footer is left out`() {
+        val body = "## 바뀐 내용\n\n### 기능\n- 하나\n\n---\n\n버전 1.10-ko.79-beta · 빌드 79 · 베타(시험판)\n\n설치: 휴대폰에서 아래 **Assets**의 `a.apk`를 받아서 열어 주세요.\n"
+        val notes = ReleaseNotesPages.split(body)
+        assertEquals("- 하나", notes.pages.single().markdown)
+    }
+
+    @Test
+    fun `several releases are labelled and only the first keeps its banner`() {
+        val combined = """
+            ## v1.10-ko.79-beta
+
+            > 🧪 **베타 버전이에요.**
+
+            ## 바뀐 내용
+
+            ### 새 것
+            - 가
+
+            ## v1.10-ko.78-beta
+
+            > 🧪 **베타 버전이에요.**
+
+            ## 바뀐 내용
+
+            > 베타예요.
+
+            ### 고친 것
+            - 나
+        """.trimIndent()
+        val notes = ReleaseNotesPages.split(combined)
+        assertEquals(listOf("ko.79 베타", "ko.78 베타"), notes.pages.map { it.version })
+        assertEquals(listOf("- 가", "- 나"), notes.pages.map { it.markdown })
+        assertTrue(notes.intro.contains("베타 버전이에요"))
+        assertEquals(1, Regex("베타 버전이에요").findAll(notes.intro).count())
+    }
 }

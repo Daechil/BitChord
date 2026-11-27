@@ -116,8 +116,11 @@ object AppUpdateChecker {
                 val url = release["html_url"]?.jsonPrimitive?.contentOrNull
                     ?: return@withContext CheckResult.Failed(FailReason.UNREADABLE)
                 val apkUrl = apkAssetUrl(release)
-                val notes = release["body"]?.jsonPrimitive?.contentOrNull
                 val latest = tag.removePrefix("v")
+                // KO: on the beta channel, every release since this build — not only the newest.
+                val notes = (parsed as? kotlinx.serialization.json.JsonArray)
+                    ?.let { notesBetween(it, BuildConfig.VERSION_NAME, latest, includeBeta = true) }
+                    ?: release["body"]?.jsonPrimitive?.contentOrNull
                 if (isNewer(latest, BuildConfig.VERSION_NAME)) {
                     val info = UpdateInfo(latest, url, apkUrl, notes)
                     _available.value = info
@@ -151,6 +154,55 @@ object AppUpdateChecker {
             }
         }.getOrNull()
     }
+
+    /**
+     * KO: the notes of every release after [seen] up to [current], newest first,
+     * for the what's-new window — a beta skipped, or several updates at once,
+     * are not lost. Just [current]'s when [seen] is unknown; null when GitHub
+     * cannot be reached, and asked again next launch.
+     */
+    suspend fun notesSince(seen: String?, current: String, includeBeta: Boolean): String? = withContext(Dispatchers.IO) {
+        if (seen.isNullOrBlank()) return@withContext notesFor(current)
+        runCatching {
+            Http.client.newCall(Request.Builder().url(RECENT_RELEASES_URL).build()).execute().use { response ->
+                if (!response.isSuccessful) return@use null
+                val list = json.parseToJsonElement(response.body?.string() ?: return@use null)
+                    as? kotlinx.serialization.json.JsonArray ?: return@use null
+                notesBetween(list, seen, current, includeBeta)
+            }
+        }.getOrNull() ?: notesFor(current)
+    }
+
+    /**
+     * The bodies of [releases] newer than [after] and up to [upTo], newest first,
+     * each under a "## v<version>" line (see ReleaseNotesPages); betas only when
+     * [includeBeta]. At most [MAX_COMBINED] releases. Null when none qualifies.
+     */
+    internal fun notesBetween(
+        releases: kotlinx.serialization.json.JsonArray,
+        after: String,
+        upTo: String,
+        includeBeta: Boolean,
+    ): String? {
+        val picked = releases.mapNotNull { it as? JsonObject }
+            .filter { it["draft"]?.jsonPrimitive?.contentOrNull != "true" }
+            .mapNotNull { release ->
+                val version = release["tag_name"]?.jsonPrimitive?.contentOrNull?.removePrefix("v") ?: return@mapNotNull null
+                val body = release["body"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                (version to body).takeIf {
+                    isNewer(version, after) && !isNewer(version, upTo) &&
+                        (includeBeta || !version.endsWith("-beta") || version == upTo)
+                }
+            }
+            .sortedWith { a, b -> if (isNewer(a.first, b.first)) -1 else if (isNewer(b.first, a.first)) 1 else 0 }
+            .take(MAX_COMBINED)
+        if (picked.isEmpty()) return null
+        if (picked.size == 1) return picked.single().second
+        // Each body's own footer goes; ReleaseNotesPages would only find the last one.
+        return picked.joinToString("\n\n") { (version, body) -> "## v$version\n\n${ReleaseNotesPages.withoutFooter(body).trim()}" }
+    }
+
+    private const val MAX_COMBINED = 6
 
     /**
      * The highest version among [releases], stable or beta: drafts and

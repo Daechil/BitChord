@@ -50,6 +50,7 @@ internal fun ReleaseNotesPager(notes: String?, modifier: Modifier = Modifier, pa
     val split = remember(notes) { ReleaseNotesPages.split(notes) }
     if (split.pages.isEmpty()) return
     val pagerState = rememberPagerState { split.pages.size }
+    val labelled = remember(split) { split.pages.mapNotNull { it.version }.distinct().size > 1 }
     val scope = rememberCoroutineScope()
     val ink = MaterialTheme.colorScheme.onSurface
     // RichText leans on LocalContentColor, which a plain Column background does not provide.
@@ -69,6 +70,15 @@ internal fun ReleaseNotesPager(notes: String?, modifier: Modifier = Modifier, pa
             HorizontalPager(state = pagerState, modifier = pagerModifier, verticalAlignment = Alignment.Top) { index ->
                 val page = split.pages[index]
                 Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+                    // Notes of several releases at once: which one this page is from.
+                    if (labelled) page.version?.let { version ->
+                        Text(
+                            text = version,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(bottom = 2.dp),
+                        )
+                    }
                     page.title?.let { title ->
                         Text(
                             text = title,

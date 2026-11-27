@@ -35,6 +35,37 @@ def sections(path=CHANGELOG):
     return found
 
 
+def released(tag, repo=()):
+    return gh("release", "view", tag, *repo, "--json", "tagName").returncode == 0
+
+
+def sections_only(notes):
+    """An entry from its first "### " on: its banner and one-line lead left out."""
+    lines = notes.splitlines()
+    start = next((i for i, line in enumerate(lines) if line.startswith("### ")), None)
+    return "\n".join(lines[start:]).strip() if start is not None else notes.strip()
+
+
+def with_unreleased(tag, notes, repo=()):
+    """[notes] and, after them, the entries just below [tag] that never became a
+    release (a build cancelled by the next one): their changes ship in this one,
+    so its notes say so, each section headed with its own version."""
+    tags = list(sections().keys())  # newest first, as the changelog is written
+    if tag not in tags:
+        return notes
+    folded = []
+    for older in tags[tags.index(tag) + 1:]:
+        if released(older, repo):
+            break
+        entry = sections_only(sections()[older])
+        short = re.sub(r"^v[\d.]+-", "", older)
+        entry = re.sub(r"^### ", "### (%s) " % short, entry, flags=re.M)
+        folded.append(entry)
+    if not folded:
+        return notes
+    return notes.strip() + "\n\n" + "\n\n".join(folded)
+
+
 def body(tag, notes, commit, apk):
     version = tag[1:] if tag.startswith("v") else tag
     build = re.search(r"ko[.-](\d+)(?:-beta)?$", tag)
@@ -73,6 +104,8 @@ def build(args):
         ).stdout.strip()
         notes = "- %s\n\n이 빌드의 설명은 아직 정리되지 않았어요. 위는 커밋 제목이에요." % (subject or "변경 사항")
         print("::warning::KO_CHANGELOG.md has no entry for %s" % args.tag)
+    else:
+        notes = with_unreleased(args.tag, notes)
     with open(args.out, "w", encoding="utf-8") as out:
         out.write(body(args.tag, notes, args.commit, args.apk))
     print("wrote notes for %s to %s" % (args.tag, args.out))
@@ -88,7 +121,7 @@ def sync(args):
             continue
         release = json.loads(seen.stdout)
         apk = next((a["name"] for a in release.get("assets", []) if a["name"].endswith(".apk")), None)
-        wanted = body(tag, notes, release.get("targetCommitish"), apk)
+        wanted = body(tag, with_unreleased(tag, notes, repo), release.get("targetCommitish"), apk)
         if (release.get("body") or "").strip() == wanted.strip():
             print("%s: already up to date" % tag)
             continue

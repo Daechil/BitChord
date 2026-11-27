@@ -15,7 +15,7 @@
 [![Based on](https://img.shields.io/badge/based%20on-BitChord%201.10-6e40c9?style=for-the-badge&labelColor=0d1117)](https://github.com/kushagrasinghx/BitChord)
 [![License](https://img.shields.io/badge/license-GPLv3-blue?style=for-the-badge&labelColor=0d1117)](LICENSE)
 
-[**설치**](#설치) · [**기능 한눈에**](#기능-한눈에) · [**자세한 기능**](#자세한-기능) · [**Claude 설정과 요금**](#claude-설정과-요금) · [**직접 빌드**](#직접-빌드하기) · [**English**](#english)
+[**설치**](#설치) · [**최근 업데이트**](#최근-업데이트) · [**기능 한눈에**](#기능-한눈에) · [**자세한 기능**](#자세한-기능) · [**Claude 설정과 요금**](#claude-설정과-요금) · [**직접 빌드**](#직접-빌드하기) · [**English**](#english)
 
 </div>
 
@@ -55,6 +55,22 @@
 
 ---
 
+## 최근 업데이트
+
+> [!TIP]
+> 자세한 내용은 [Releases](https://github.com/Daechil/BitChord/releases)와 [KO_CHANGELOG.md](KO_CHANGELOG.md)에 있어요. 🧪 표시는 아직 베타에만 있는 기능이에요.
+
+| | 새로 생긴 것 |
+|---|---|
+| 🎵 **Spotify 곡 찾기** 🧪 | Spotify 재생목록 곡을 YouTube Music에서 찾을 때, 다른 가수의 커버나 다른 버전 대신 **같은 녹음을 Claude가 골라요.** 공개 곡 25개 시험에서 엉뚱한 곡이 5곡 → 0곡. 못 찾은 곡은 눌러서 다시 찾아요. |
+| ふ **일본어 후리가나** 🧪 | 일본어 곡에서 ふ 버튼을 누르면 한자 위에 읽는 법을 작게 달아요. 한글로 달 수도 있어요. |
+| 📻 **새 곡 위주 라디오** 🧪 | 라디오·자동 재생에서 최근 7·30·90일 안에 들은 곡을 뒤로 미루거나 빼요. |
+| 🚗 **블루투스 가사** 🧪 | 차량·스피커 화면의 곡 제목 자리에 지금 부르는 가사 줄을 띄워요. |
+| 📰 **업데이트 내역** 🧪 | 업데이트 창의 바뀐 내용을 한 항목씩 페이지로 넘겨 봐요. 업데이트한 뒤 처음 열면 무엇이 바뀌었는지 한 번 더 보여 줘요. |
+| ✨ **쓰기 편하게** 🧪 | 가사 버튼 첫 사용 안내, KO 설정 그룹 바로가기, 긴 설명은 "자세히"로 접기, 재생 중인 곡을 누르면 처음부터 다시 틀지 않고 플레이어 열기. |
+
+---
+
 ## 기능 한눈에
 
 이 포크에서 추가한 설정은 **설정 › BitChord KO 기능**에 모여 있어요.
@@ -62,15 +78,15 @@
 | 분야 | 기능 |
 |---|---|
 | 🌐 **가사 번역** | Claude 번역(Haiku / Sonnet), 말투·방식 선택, 번역 지시문, 번역 보기 유지 |
-| 🔤 **발음 표기** | 무료 한글 발음, Claude 발음, 발음과 번역 함께 보기 |
+| 🔤 **발음 표기** | 무료 한글 발음, Claude 발음, 발음과 번역 함께 보기, 일본어 후리가나 |
 | 📖 **노래 이해** | 노래 해석, 곡 배경 웹 검색(나무위키·위키백과·VocaDB), 한국 제목 그대로 옮기기 |
 | 📦 **미리 번역** | 재생목록·앨범을 반값(Batch)으로 한 번에 번역, 새 곡 자동 번역, 다운로드 곡 번역 보관 |
 | 💰 **비용 관리** | 사용량, 월·하루 한도, 원화 표시, 경고 알림, 프롬프트 캐싱, 진단 기록 |
 | 🗂 **번역 저장** | 영구 보관함, 번역 상태 보기, 번역 저장소, 백업·복원(zip) |
-| 🎵 **다음 곡 목록** | 겹친 곡 정리(수동·자동), 같은 곡으로 묶기, 라디오 중복 거르기 |
+| 🎵 **다음 곡 목록** | 겹친 곡 정리(수동·자동), 같은 곡으로 묶기, 라디오 중복 거르기, 새 곡 위주 라디오, Spotify 곡 Claude로 찾기 |
 | 🔎 **가사 찾기** | 원제 찾기, 엉뚱한 가사 막기, 업로드마다 다른 길이 맞추기 |
-| 📱 **화면** | 플로팅 가사, 잠금화면 가사, 음파 모양 재생 막대 |
-| 🛠 **그 밖에** | 이어폰 연결 시 이어서 재생, 업데이트 확인, 베타 받기, 재생 멈춤 안내, 비정상 종료 기록 |
+| 📱 **화면** | 플로팅 가사, 잠금화면 가사, 블루투스(차량) 가사, 음파 모양 재생 막대 |
+| 🛠 **그 밖에** | 이어폰 연결 시 이어서 재생, 업데이트 확인·내역 페이지, 베타 받기, 재생 멈춤 안내, 비정상 종료 기록 |
 
 원본 BitChord 1.10의 기능도 모두 그대로 있어요. AutoMix, Google Drive 백업, YouTube Music 싱크 가사, 다음 곡 목록 되돌리기와 여러 곡 선택, 하이라이트(Best Part), 연말 결산(Replay) 등이에요.
 
@@ -121,6 +137,10 @@
 - **발음 버튼을 길게 누르면** 어떤 방식을 골랐든 그 곡만 Claude 발음을 받아요.
 - Claude 발음은 한 번 받으면 저장돼요. 같은 곡을 다시 볼 때는 요금이 들지 않아요.
 - 설정 › 모양 › **번역·발음 글자 크기**에서 크기를 작게 / 보통 / 크게 중에서 골라요.
+
+- **일본어 후리가나** 🧪: 가나와 한자가 있는 일본어 곡에서는 발음 버튼 옆에 **ふ 버튼**이 생겨요. 누르면 한자 위에 작은 글씨로 읽는 법이 나와요.
+  - 처음 누를 때 Claude(Haiku)에게 받아요. 곡당 약 3~6원이고, 한 번 받은 곡은 저장돼요.
+  - 히라가나 대신 **한글로** 달 수도 있어요.
 
 </details>
 
@@ -227,6 +247,25 @@
 </details>
 
 <details>
+<summary><b>📻 라디오 · Spotify 곡 찾기 🧪</b></summary>
+
+<br/>
+
+- **새 곡 위주 라디오** (기본 꺼짐): 라디오와 자동 재생에서 최근 7·30·90일 안에 들은 곡을 뒤로 미뤄요. 아예 빼도록 할 수도 있어요. 새 곡이 너무 적으면 들은 곡도 섞어요.
+- **Spotify 곡을 Claude로 찾기** (기본 켜짐, Claude 키가 있을 때): Spotify 재생목록을 열면 곡마다 YouTube Music 버전을 찾아요.
+  - 규칙으로 확실히 같은 곡(같은 가수, 같은 버전)이 나오면 그대로 써요. 비용이 없어요.
+  - 다른 가수의 커버나 다른 버전만 나오면 Claude(Haiku)가 검색 결과 중에서 **같은 녹음**을 골라요. 곡당 약 0.1~0.3원이에요.
+  - 길이가 12초 넘게 다르면 받아들이지 않아요. 고른 결과는 기억해서 다시 열 때는 묻지 않아요.
+  - 못 찾은 곡은 회색으로 보여요. **누르면 다시 찾아요.** YouTube가 검색을 거절한 곡은 잠시 뒤 자동으로 한 번 더 찾아요.
+
+| 공개 곡 25개 시험 | 맞음 | 엉뚱한 곡 | 못 찾음 |
+|---|---|---|---|
+| 규칙만 | 20 | 5 | 0 |
+| Claude 사용 | 23 | **0** | 2 |
+
+</details>
+
+<details>
 <summary><b>📱 플로팅 가사 · 잠금화면 가사 · 재생 막대</b></summary>
 
 <br/>
@@ -238,6 +277,7 @@
 - **잠금화면 가사** (기본 꺼짐): 화면을 켜면 잠금화면 위에 큰 실시간 가사와 재생 버튼이 떠요. 위로 밀면 원래 잠금 해제 화면으로 넘어가요.
 - 두 기능 모두 **'다른 앱 위에 표시' 권한**이 필요해요. 그리고 플레이어에서 이미 번역해 둔 곡의 번역만 보여 줘요. 따로 번역을 요청하지는 않아요.
 - **음파 모양 재생 막대** (기본 꺼짐): 재생 막대를 곡의 음파 모양으로 보여 줘요.
+- **블루투스 가사** 🧪 (기본 꺼짐): 차량이나 스피커처럼 곡 제목을 보여 주는 블루투스 기기에서, 제목 자리에 지금 부르는 가사 줄을 띄워요. 이어폰·헤드폰에는 따로 켜야 나와요.
 
 > [!NOTE]
 > 일부 제조사 휴대폰은 잠금화면 위에 앱을 띄우는 것을 따로 막아요. 이런 기기에서는 잠금화면 가사가 뜨지 않을 수 있어요.
@@ -253,6 +293,8 @@
 - **업데이트 확인**: 설정 › 기타에서 새 버전이 있는지 바로 확인해요. 바로 아래에 **베타 버전 받기**가 있어요.
 - **재생 멈춤 안내**: 곡이 5번 연달아 시작되지 않아서 재생이 멈추면 이유를 알려 줘요. 그 자리에서 로그를 복사할 수 있어요.
 - **비정상 종료 기록**: 앱이 오류로 꺼지면 다음에 열 때 알려 줘요. 기록에는 가사와 API 키가 들어가지 않아요.
+- **업데이트 내역 페이지** 🧪: 바뀐 내용을 한 항목씩 넘겨 봐요. 업데이트한 뒤 처음 열면 그동안 바뀐 내용을 한 번 더 보여 줘요(베타를 건너뛰었어도 함께). **다시는 안 보기**로 끌 수 있어요.
+- **쓰기 편하게** 🧪: 재생 중인 곡을 누르면 처음부터 다시 틀지 않고 플레이어를 열어요. 가사 버튼은 처음 쓸 때 한 번 설명해 줘요. KO 설정 페이지는 위쪽 칩으로 그룹을 바로 찾아가고, 긴 설명은 "자세히"로 펼쳐요.
 
 </details>
 
@@ -381,5 +423,6 @@ Additions, all under **Settings › BitChord KO features**:
   - An optional auto mode cleans radio additions, and you can link songs as "same song" by hand.
 - **Lyrics lookup**: original-title lookup for songs written in Hangul, and stricter matching against wrong lyrics.
 - **Floating lyrics**, **lock-screen lyrics**, a waveform seek bar, resume when headphones connect, an update check, a beta channel and crash and stall notices.
+- New in beta: **Spotify tracks matched by Claude** to the same recording on YouTube Music (no more covers by others), **Japanese furigana**, **fresh-first radio**, **lyrics on Bluetooth car displays**, and paged release notes shown once after each update.
 
 The API key is stored encrypted on the device only. It is never included in exports, translation backups, Android backup or Google Drive backup. Claude charges go to your own Anthropic account. Licensed under GPLv3, like upstream.

@@ -9,10 +9,16 @@ package com.music.bitchord.data
  * one-line summary) stays above the pages as [intro]; the "## " heading the
  * notes workflow puts over every entry says nothing and is left out. Notes
  * without sections are cut at blank lines into pages of about [PAGE_CHARS].
+ *
+ * The release footer (after the last "---": version, commit, "install the
+ * APK under Assets") is for the GitHub page and left out. Notes covering
+ * several releases (see AppUpdateChecker.notesBetween) carry a "## v<version>"
+ * line before each; the pages after it are labelled with that [Page.version],
+ * and what that release says before its first section is left out.
  */
 object ReleaseNotesPages {
 
-    data class Page(val title: String?, val markdown: String)
+    data class Page(val title: String?, val markdown: String, val version: String? = null)
 
     data class Notes(val intro: String, val pages: List<Page>)
 
@@ -20,15 +26,17 @@ object ReleaseNotesPages {
     private const val PAGE_CHARS = 900
 
     fun split(body: String?): Notes {
-        val text = body.orEmpty().replace("\r\n", "\n").trim()
+        val text = withoutFooter(body.orEmpty().replace("\r\n", "\n")).trim()
         if (text.isEmpty()) return Notes("", emptyList())
         val intro = StringBuilder()
         val pages = mutableListOf<Page>()
         var title: String? = null
         var current: StringBuilder? = null
+        var version: String? = null
+        var skippingLead = false
         fun close() {
             val content = current?.toString()?.trim() ?: return
-            if (content.isNotEmpty() || title != null) pages += Page(title, content)
+            if (content.isNotEmpty() || title != null) pages += Page(title, content, version)
         }
         for (line in text.lines()) {
             when {
@@ -36,7 +44,16 @@ object ReleaseNotesPages {
                     close()
                     title = line.removePrefix("### ").trim()
                     current = StringBuilder()
+                    skippingLead = false
                 }
+                VERSION_HEADING.matches(line) -> {
+                    close()
+                    current = null
+                    version = label(line.removePrefix("## ").trim().removePrefix("v"))
+                    // The first release's banner stays above the pages; a later one's says it again.
+                    skippingLead = pages.isNotEmpty()
+                }
+                skippingLead -> Unit
                 // The workflow's "## 바뀐 내용" over every entry: a heading with nothing to say.
                 line.startsWith("## ") && current == null -> Unit
                 current != null -> current!!.appendLine(line)
@@ -47,6 +64,25 @@ object ReleaseNotesPages {
         if (pages.isEmpty()) return Notes("", byLength(intro.toString().trim()))
         return Notes(intro.toString().trim(), pages)
     }
+
+    private val VERSION_HEADING = Regex("^## v?\\d+\\.\\d+\\S*ko\\.\\d+\\S*\\s*$")
+
+    /** "1.10-ko.78-beta" → "ko.78 베타", for a page's version label. */
+    fun label(version: String): String {
+        val build = Regex("ko\\.(\\d+)").find(version)?.groupValues?.get(1) ?: return version
+        return if (version.endsWith("-beta")) "ko.$build 베타" else "ko.$build"
+    }
+
+    /** [text] up to its last "---" line, when what follows is the release footer. */
+    internal fun withoutFooter(text: String): String {
+        val lines = text.lines()
+        val rule = lines.indexOfLast { it.trim() == "---" }
+        if (rule < 0) return text
+        val after = lines.drop(rule + 1).joinToString("\n")
+        return if (FOOTER.containsMatchIn(after)) lines.take(rule).joinToString("\n") else text
+    }
+
+    private val FOOTER = Regex("버전 \\S+.*빌드|설치:|Assets")
 
     /** [text] cut at blank lines into pages of about [PAGE_CHARS]; a paragraph is never split. */
     private fun byLength(text: String): List<Page> {

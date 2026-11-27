@@ -47,8 +47,10 @@ object WhatsNew {
             AppSettings.setWhatsNewSeen(version)
             return null
         }
+        // Every release since the one last shown here, so a skipped beta is not lost.
         // Unreachable now: tried again on the next launch.
-        return AppUpdateChecker.notesFor(version)
+        val includeBeta = AppSettings.betaUpdates.value || version.endsWith("-beta")
+        return AppUpdateChecker.notesSince(AppSettings.whatsNewSeen.value, version, includeBeta)
     }
 
     private fun freshInstall(context: Context): Boolean = runCatching {

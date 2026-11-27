@@ -91,6 +91,10 @@ kotlin {
         jvmTest.dependencies {
             implementation(kotlin("test"))
             implementation("junit:junit:4.13.2")
+            // KO: the native half of Skia, for FuriganaRenderTest to draw a line off screen on Linux.
+            if (System.getProperty("os.name").contains("Linux", ignoreCase = true)) {
+                implementation("org.jetbrains.skiko:skiko-awt-runtime-linux-x64:0.150.1")
+            }
         }
         androidMain.dependencies {
             // The phone's own versions, so nothing here moves them.

@@ -855,7 +855,8 @@ object LyricsTranslation {
             },
             input = input,
             schema = schemaFor(shape, slots.size),
-            effort = "medium",
+            // Furigana is copying with readings added, not writing: little to think over.
+            effort = if (furigana != null) furiganaEffort else "medium",
             linesAsked = slots.size,
             cache = true,
         ) { text -> parseTranslation(text, slots.map { it.text }, shape) }
@@ -2100,7 +2101,7 @@ object LyricsTranslation {
             },
             input = translationInput(slots, target, trackId),
             schema = schemaFor(shape, slots.size).let { if (lookUp != null) withBackgroundField(it) else it },
-            effort = "medium",
+            effort = if (furigana != null) furiganaEffort else "medium",
             tools = lookUp?.let { SongBackgrounds.searchTools(SongBackgrounds.batchDomains) },
             cache = true,
         )
@@ -2558,6 +2559,10 @@ object LyricsTranslation {
     const val KIND_READING = "reading"
     /** KO: readings over the kanji; see [claudeFurigana]. */
     const val KIND_FURIGANA = "furigana"
+
+    /** KO: how hard Claude thinks over furigana; see [claudeFurigana]. "low" since a live test: as accurate as "medium", and quicker. */
+    @Volatile
+    var furiganaEffort: String = "low"
     const val KIND_MEANING = "meaning"
     const val VIA_PLAYER = "player"
     const val VIA_AHEAD = "ahead"

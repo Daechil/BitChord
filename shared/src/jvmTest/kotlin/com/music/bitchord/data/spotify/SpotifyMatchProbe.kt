@@ -26,13 +26,19 @@ class SpotifyMatchProbe {
 
     @Test
     fun probe() {
-        val raw = System.getenv("LIVE_SPOTIFY")?.split(';')?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
+        val all = System.getenv("LIVE_SPOTIFY")?.split(';')?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
+        // "@ko-KR" among the entries: search as a phone set to that language does (hl, gl).
+        all.firstOrNull { it.startsWith("@") }?.removePrefix("@")?.let { tag ->
+            com.music.bitchord.data.innertube.Innertube.appLanguage = { tag }
+        }
+        val raw = all.filterNot { it.startsWith("@") }
         if (raw.isEmpty()) return
         val key = System.getenv("ANTHROPIC_API_KEY").orEmpty()
         LyricsTranslation.claudeApiKey = key
         LyricsTranslation.claudeEnabled = key.isNotBlank()
         val out = StringBuilder("# Spotify → YouTube Music match check\n\n")
-        out.append("| # | Spotify track | now (rules, else first row) | with Claude | how |\n|---|---|---|---|---|\n")
+        out.append("locale: ${com.music.bitchord.data.innertube.Innertube.currentLocaleTag}\n\n")
+        out.append("| # | Spotify track | search (tracks/top/other or error) | now (rules, else first row) | with Claude | how |\n|---|---|---|---|---|---|\n")
         var nowRight = 0; var claudeRight = 0; var nowWrong = 0; var claudeWrong = 0; var nowNone = 0; var claudeNone = 0
         runBlocking(Dispatchers.IO) {
             raw.forEachIndexed { n, line ->
@@ -53,6 +59,12 @@ class SpotifyMatchProbe {
                             ?.filterIsInstance<SearchResult.Track>()?.map { it.song }.orEmpty()
                     }
                 }
+                // What the anonymous songs search itself gives back, as the app's matching asks it.
+                val rawResult = YtMusicRepository.search("${track.title} ${track.artist}".trim(), SearchFilter.SONGS)
+                val searchCell = rawResult.fold(
+                    { rows -> "${rows.count { it is SearchResult.Track }}/${rows.count { it is SearchResult.TopTrack }}/${rows.count { it !is SearchResult.Track && it !is SearchResult.TopTrack }}" },
+                    { error -> "error: ${cell(error.message)}" },
+                )
                 val first = search("${track.title} ${track.artist}".trim())
                 val target = TrackMatcher.Target(track.title, track.artist, track.durationMs.takeIf { it > 0 }?.div(1000), track.album)
                 val now = TrackMatcher.best(first, target) ?: first.firstOrNull()
@@ -71,7 +83,7 @@ class SpotifyMatchProbe {
                 val a = judge(now); val b = judge(outcome?.song)
                 if (a.startsWith("✓")) nowRight++ else if (now == null) nowNone++ else nowWrong++
                 if (b.startsWith("✓")) claudeRight++ else if (outcome?.song == null) claudeNone++ else claudeWrong++
-                out.append("| ${n + 1} | ${cell(track.title)} — ${cell(track.artist)} (${track.durationMs / 1000}s) → `${cell(expected)}` | $a ${show(now)} | $b ${show(outcome?.song)} | ${outcome?.how} · calls ${outcome?.claudeCalls} |\n")
+                out.append("| ${n + 1} | ${cell(track.title)} — ${cell(track.artist)} (${track.durationMs / 1000}s) → `${cell(expected)}` | $searchCell | $a ${show(now)} | $b ${show(outcome?.song)} | ${outcome?.how} · calls ${outcome?.claudeCalls} |\n")
             }
         }
         out.append("\n**now:** right $nowRight · wrong $nowWrong · none $nowNone   **with Claude:** right $claudeRight · wrong $claudeWrong · none $claudeNone\n")

@@ -75,12 +75,14 @@ object SpotifyClaudeMatch {
         )
         val first = runCatching { search(listOf(track.title, track.artist).filter { it.isNotBlank() }.joinToString(" ")) }
             .getOrDefault(emptyList())
-        TrackMatcher.best(first, target)?.let { return Outcome(it, How.RULES, 0, first.size) }
-        if (!useClaude) return Outcome(first.firstOrNull(), How.NONE, 0, first.size)
+        val ruled = TrackMatcher.best(first, target)
+        // The rules' pick stands only when it is plainly the track: its performer, its version.
+        // A cover by someone else or the original of a "Twin Ver." got past them on a title alone.
+        if (ruled != null && plainlySame(track, ruled)) return Outcome(ruled, How.RULES, 0, first.size)
+        if (!useClaude) return Outcome(ruled ?: first.firstOrNull(), How.NONE, 0, first.size)
 
         val titleOnly = runCatching { search(plainTitle(track.title)) }.getOrDefault(emptyList())
         var candidates = merged(first, titleOnly)
-        TrackMatcher.best(candidates, target)?.let { return Outcome(it, How.RULES, 0, candidates.size) }
 
         val answer = ask(track, candidates) ?: return Outcome(null, How.NONE, 1, candidates.size)
         accepted(answer, candidates, track)?.let { return Outcome(it, How.CLAUDE, 1, candidates.size) }
@@ -89,7 +91,6 @@ object SpotifyClaudeMatch {
         val more = answer.searches.take(2).flatMap { query -> runCatching { search(query) }.getOrDefault(emptyList()) }
         if (more.isEmpty()) return Outcome(null, How.NONE, 1, candidates.size)
         candidates = merged(candidates, more)
-        TrackMatcher.best(candidates, target)?.let { return Outcome(it, How.RULES, 1, candidates.size) }
         val second = ask(track, candidates, askForSearches = false) ?: return Outcome(null, How.NONE, 2, candidates.size)
         val chosen = accepted(second, candidates, track)
         return Outcome(chosen, if (chosen != null) How.CLAUDE_SECOND_SEARCH else How.NONE, 2, candidates.size)
@@ -100,6 +101,26 @@ object SpotifyClaudeMatch {
             ?.filterIsInstance<SearchResult.Track>()
             ?.map { it.song }
             .orEmpty()
+
+    /** Words a version is named by; a title with one the candidate lacks is another version. */
+    private val VERSION_WORDS = Regex(
+        "\\b(remix|mix|live|acoustic|instrumental|inst|karaoke|sped|slowed|tv|edit|demo|english|japanese|korean|chinese|twin|orchestra|piano|cover)\\b",
+        RegexOption.IGNORE_CASE,
+    )
+
+    /** Spotify credits "A, B"; YouTube Music "A & B" or "A, B": a shared name is enough. */
+    private fun names(artist: String): List<String> = artist.split(",", "&", " x ", " X ", " feat", " with ")
+        .map { it.lowercase().filter(Char::isLetterOrDigit) }
+        .filter { it.length >= 2 }
+
+    /** Same performer (a shared name, however spaced or cased) and no version word the candidate lacks. */
+    internal fun plainlySame(track: SpotifyTrack, song: Song): Boolean {
+        val wanted = names(track.artist)
+        val got = names(song.artist)
+        if (wanted.none { w -> got.any { g -> g.contains(w) || w.contains(g) } }) return false
+        return VERSION_WORDS.findAll(track.title).map { it.value.lowercase() }
+            .none { word -> !song.title.lowercase().contains(word) }
+    }
 
     /** The title without what Spotify adds to it: " - Remastered 2011", "(feat. …)". */
     internal fun plainTitle(title: String): String =

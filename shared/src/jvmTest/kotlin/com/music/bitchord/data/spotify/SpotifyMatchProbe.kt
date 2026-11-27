@@ -43,6 +43,8 @@ class SpotifyMatchProbe {
                     durationMs = (parts.getOrNull(3)?.toIntOrNull() ?: 0) * 1000, imageUrl = null,
                 )
                 val expected = parts.getOrNull(4).orEmpty()
+                // The right performer too: a cover by someone else has the right title.
+                val expectedArtist = parts.getOrNull(5).orEmpty()
                 // The same searches for both, so the comparison is of the choosing alone.
                 val cache = HashMap<String, List<Song>>()
                 val search: suspend (String) -> List<Song> = { q ->
@@ -60,6 +62,8 @@ class SpotifyMatchProbe {
                     song == null -> "✗ none"
                     expected.isEmpty() -> "✗ wrong"
                     // "/" separates titles any of which is right: 봄날/Spring Day.
+                    expectedArtist.isNotEmpty() &&
+                        expectedArtist.split('/').none { song.artist.lowercase(Locale.ROOT).contains(it.trim().lowercase(Locale.ROOT)) } -> "✗ other artist"
                     expected.split('/').any { song.title.lowercase(Locale.ROOT).contains(it.trim().lowercase(Locale.ROOT)) } -> "✓"
                     else -> "✗ wrong"
                 }

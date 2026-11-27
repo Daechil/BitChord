@@ -128,6 +128,13 @@ class LocaleStringsTest(private val tag: String) {
         }
     }
 
+    /** A name left on [UPSTREAM_UNTRANSLATED] after upstream dropped the string: take it off. */
+    @Test
+    fun upstreamUntranslated_namesStillExist() {
+        val stale = UPSTREAM_UNTRANSLATED - baseKeys
+        assertTrue("no longer in values/strings.xml, remove from UPSTREAM_UNTRANSLATED: $stale", stale.isEmpty())
+    }
+
     @Test
     fun strings_containsAllBaseKeys() {
         val qualifier = tagToQualifier(tag)

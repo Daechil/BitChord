@@ -1,0 +1,127 @@
+package com.music.bitchord.ui.components
+
+import android.content.Context
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.music.bitchord.BuildConfig
+import com.music.bitchord.R
+import com.music.bitchord.data.AppUpdateChecker
+import com.music.bitchord.data.settings.AppSettings
+import dev.chrisbanes.haze.HazeState
+
+/**
+ * KO: what this build brought, shown once after updating to it — the same
+ * release notes the update window showed, a page per section — with "don't
+ * show again". A fresh install is not an update and shows nothing.
+ */
+object WhatsNew {
+
+    /** The notes to show for this build, or null: shown already, switched off, a fresh install, or unreachable. */
+    suspend fun pending(context: Context): String? {
+        val version = BuildConfig.VERSION_NAME
+        if (AppSettings.whatsNewNever.value || AppSettings.whatsNewSeen.value == version) return null
+        if (AppSettings.whatsNewSeen.value.isEmpty() && freshInstall(context)) {
+            AppSettings.setWhatsNewSeen(version)
+            return null
+        }
+        // Unreachable now: tried again on the next launch.
+        return AppUpdateChecker.notesFor(version)
+    }
+
+    private fun freshInstall(context: Context): Boolean = runCatching {
+        val info = context.packageManager.getPackageInfo(context.packageName, 0)
+        info.firstInstallTime == info.lastUpdateTime
+    }.getOrDefault(false)
+}
+
+/** Hosted from [KoHealthAlerts]: once onboarding is done, the window if this build has one to show. */
+@Composable
+internal fun WhatsNewAlerts(hazeState: HazeState) {
+    val context = LocalContext.current
+    val onboarded by AppSettings.onboardingComplete.collectAsStateWithLifecycle()
+    var notes by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(onboarded) {
+        if (onboarded) notes = WhatsNew.pending(context)
+    }
+    val shown = notes ?: return
+    var never by remember { mutableStateOf(false) }
+    val close = {
+        AppSettings.setWhatsNewSeen(BuildConfig.VERSION_NAME)
+        if (never) AppSettings.setWhatsNewNever(true)
+        notes = null
+    }
+    Dialog(
+        onDismissRequest = close,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        val window = (LocalView.current.parent as? DialogWindowProvider)?.window
+        SideEffect { window?.setDimAmount(0f) }
+        AlertScaffold(hazeState = hazeState, onDismiss = close, frosted = false) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 19.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = stringResource(R.string.whats_new_title),
+                    style = MaterialTheme.typography.bodyLarge.copy(fontSize = 17.sp, fontWeight = FontWeight.W600),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    text = stringResource(R.string.whats_new_updated_to, BuildConfig.VERSION_NAME),
+                    modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    textAlign = TextAlign.Center,
+                )
+                ReleaseNotesPager(notes = shown, pageHeight = 320.dp)
+            }
+            AlertRule()
+            AheadOptionRow(
+                label = stringResource(R.string.whats_new_never),
+                detail = stringResource(R.string.whats_new_never_detail),
+                checked = never,
+                checkbox = true,
+                onClick = { never = !never },
+            )
+            AlertRule()
+            AlertAction(label = stringResource(R.string.whats_new_ok), emphasised = true, onClick = close)
+        }
+    }
+}
+
+/** Settings' "what's new after an update" switch: on unless "don't show again" was ticked. */
+@Composable
+fun WhatsNewRow(title: String) {
+    val never by AppSettings.whatsNewNever.collectAsStateWithLifecycle()
+    com.music.bitchord.ui.screens.SettingsRow(
+        icon = com.music.bitchord.ui.icons.SfIcons.Upgrade,
+        title = title,
+        subtitle = stringResource(R.string.whats_new_row_subtitle),
+        trailing = { IosSwitch(checked = !never, onCheckedChange = { on -> AppSettings.setWhatsNewNever(!on) }) },
+        onClick = { AppSettings.setWhatsNewNever(!never) },
+    )
+}

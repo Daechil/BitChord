@@ -221,23 +221,8 @@ fun UpdateAvailableDialog(
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         textAlign = TextAlign.Start,
                     )
-                    Box(
-                        modifier = Modifier
-                            .padding(top = 4.dp)
-                            .heightIn(max = NOTES_MAX_HEIGHT)
-                            .verticalScroll(rememberScrollState()),
-                    ) {
-                        // RichText's Material3 Text leans on LocalContentColor,
-                        // which nothing here provides — this card is a plain
-                        // Column.background(...), not a Surface, so without
-                        // this the notes render at LocalContentColor's black
-                        // default regardless of theme.
-                        CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
-                            RichText(style = RichTextStyle.Default) {
-                                Markdown(notes)
-                            }
-                        }
-                    }
+                    // KO: a page per section, rather than the whole changelog in one scrolling box.
+                    ReleaseNotesPager(notes = notes, modifier = Modifier.padding(top = 4.dp))
                 }
             }
 

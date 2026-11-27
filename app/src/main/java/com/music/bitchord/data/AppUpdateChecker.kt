@@ -136,6 +136,23 @@ object AppUpdateChecker {
     }
 
     /**
+     * KO: the notes of the release this build came from (its tag is "v" and
+     * the version name), for the what's-new window after an update. Null when
+     * there is none to read or GitHub cannot be reached; asked again next launch.
+     */
+    suspend fun notesFor(version: String): String? = withContext(Dispatchers.IO) {
+        runCatching {
+            val url = "https://api.github.com/repos/${BuildConfig.UPDATE_REPO}/releases/tags/v$version"
+            Http.client.newCall(Request.Builder().url(url).build()).execute().use { response ->
+                if (!response.isSuccessful) return@use null
+                val body = response.body?.string() ?: return@use null
+                (json.parseToJsonElement(body) as? JsonObject)?.get("body")?.jsonPrimitive?.contentOrNull
+                    ?.takeIf { it.isNotBlank() }
+            }
+        }.getOrNull()
+    }
+
+    /**
      * The highest version among [releases], stable or beta: drafts and
      * releases without a tag left out. Null when none is left.
      */

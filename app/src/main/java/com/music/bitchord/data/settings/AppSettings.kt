@@ -708,6 +708,15 @@ object AppSettings {
     /** Radio and AutoPlay songs that repeat a queued recording are taken out as they arrive, by Claude. */
     val queueTidyAuto = MutableStateFlow(false)
 
+    /** KO: Spotify tracks the rules cannot place are chosen by Claude; see SpotifyClaudeMatch. */
+    val spotifyClaudeMatch = MutableStateFlow(true)
+
+    /** KO: the version whose what's-new window was last shown (or skipped, on a fresh install). */
+    val whatsNewSeen = MutableStateFlow("")
+
+    /** KO: the what's-new window is never shown after an update. */
+    val whatsNewNever = MutableStateFlow(false)
+
     /** Furigana written in Hangul rather than hiragana; see LyricsTranslation.claudeFurigana. */
     val furiganaHangul = MutableStateFlow(false)
 
@@ -1543,6 +1552,9 @@ object AppSettings {
         songBackgroundSonnet.value = prefs.getBoolean(KEY_SONG_BACKGROUND_SONNET, false)
         queueTidyAuto.value = prefs.getBoolean(KEY_QUEUE_TIDY_AUTO, false)
         furiganaHangul.value = prefs.getBoolean(KEY_FURIGANA_HANGUL, false)
+        whatsNewSeen.value = prefs.getString(KEY_WHATS_NEW_SEEN, null).orEmpty()
+        spotifyClaudeMatch.value = prefs.getBoolean(KEY_SPOTIFY_CLAUDE_MATCH, true)
+        whatsNewNever.value = prefs.getBoolean(KEY_WHATS_NEW_NEVER, false)
         radioFreshDays.value = prefs.getInt(KEY_RADIO_FRESH_DAYS, 0).takeIf { it in RADIO_FRESH_DAY_CHOICES } ?: 0
         radioFreshDrop.value = prefs.getBoolean(KEY_RADIO_FRESH_DROP, false)
         bluetoothLyrics.value = prefs.getBoolean(KEY_BLUETOOTH_LYRICS, false)
@@ -2360,6 +2372,21 @@ object AppSettings {
     fun setQueueTidyAuto(value: Boolean) {
         queueTidyAuto.value = value
         prefs.edit().putBoolean(KEY_QUEUE_TIDY_AUTO, value).apply()
+    }
+
+    fun setSpotifyClaudeMatch(value: Boolean) {
+        spotifyClaudeMatch.value = value
+        prefs.edit().putBoolean(KEY_SPOTIFY_CLAUDE_MATCH, value).apply()
+    }
+
+    fun setWhatsNewSeen(version: String) {
+        whatsNewSeen.value = version
+        prefs.edit().putString(KEY_WHATS_NEW_SEEN, version).apply()
+    }
+
+    fun setWhatsNewNever(value: Boolean) {
+        whatsNewNever.value = value
+        prefs.edit().putBoolean(KEY_WHATS_NEW_NEVER, value).apply()
     }
 
     fun setFuriganaHangul(value: Boolean) {
@@ -3354,6 +3381,8 @@ object AppSettings {
         KEY_LOCAL_MUSIC_FOLDER_URI,
         KEY_LAST_VERSION_CODE,
         KEY_ONBOARDING_COMPLETE,
+        // KO: which version's what's-new this device has shown is this device's own.
+        KEY_WHATS_NEW_SEEN,
         // What this device has spent on Claude and the rate it last fetched: an
         // older settings file brought in must not roll the month's spending back
         // and let the limits through again.
@@ -3476,6 +3505,9 @@ object AppSettings {
     private const val KEY_QUEUE_TIDY_AUTO = "ko_queue_tidy_auto"
     private const val KEY_RADIO_FRESH_DAYS = "ko_radio_fresh_days"
     private const val KEY_FURIGANA_HANGUL = "ko_furigana_hangul"
+    private const val KEY_WHATS_NEW_SEEN = "ko_whats_new_seen"
+    private const val KEY_SPOTIFY_CLAUDE_MATCH = "ko_spotify_claude_match"
+    private const val KEY_WHATS_NEW_NEVER = "ko_whats_new_never"
     private const val KEY_TRANSLATE_AHEAD_FURIGANA = "ko_ahead_furigana"
     private const val KEY_RADIO_FRESH_DROP = "ko_radio_fresh_drop"
     private const val KEY_BLUETOOTH_LYRICS = "ko_bluetooth_lyrics"

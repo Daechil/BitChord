@@ -831,6 +831,10 @@ fun SettingsScreen(
                 com.music.bitchord.ui.components.RadioFreshRows(radioFreshTitle)
             }
             if (claudeApiKey.isNotBlank()) {
+                val spotifyMatchTitle = stringResource(R.string.spotify_claude_match)
+                row(spotifyMatchTitle, "claude", "spotify", "match", "스포티파이", "찾기", "매칭") {
+                    com.music.bitchord.ui.components.SpotifyClaudeMatchRow(spotifyMatchTitle)
+                }
                 val queueTidyTitle = stringResource(R.string.queue_tidy_auto)
                 row(queueTidyTitle, "claude", "queue", "radio", "duplicate", "다음 곡", "라디오", "중복", "겹친", "정리") {
                     com.music.bitchord.ui.components.QueueTidyAutoRow(queueTidyTitle)
@@ -2296,6 +2300,10 @@ fun SettingsScreen(
             val betaUpdatesTitle = stringResource(R.string.beta_updates)
             row(betaUpdatesTitle, "beta", "update", "version", "베타", "업데이트", "시험판") {
                 com.music.bitchord.ui.components.BetaUpdatesRow(betaUpdatesTitle)
+            }
+            val whatsNewTitle = stringResource(R.string.whats_new_row)
+            row(whatsNewTitle, "update", "what's new", "changelog", "업데이트", "새 기능", "변경 내역") {
+                com.music.bitchord.ui.components.WhatsNewRow(whatsNewTitle)
             }
             val playNextOnSwipeTitle = stringResource(R.string.play_next_on_swipe)
             row(playNextOnSwipeTitle, "swipe", "queue") {

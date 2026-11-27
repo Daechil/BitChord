@@ -96,11 +96,22 @@ object SpotifyClaudeMatch {
         return Outcome(chosen, if (chosen != null) How.CLAUDE_SECOND_SEARCH else How.NONE, 2, candidates.size)
     }
 
-    private suspend fun searchSongs(query: String): List<Song> =
-        YtMusicRepository.search(query, SearchFilter.SONGS).getOrNull()
-            ?.filterIsInstance<SearchResult.Track>()
-            ?.map { it.song }
-            .orEmpty()
+    /**
+     * YouTube Music's songs for [query]. A search that fails — a playlist's
+     * songs are searched several at a time, and YouTube turns some away — is
+     * tried once more after a pause: a failed search used to leave the song
+     * marked as not on YouTube Music, and unplayable.
+     */
+    private suspend fun searchSongs(query: String): List<Song> {
+        repeat(2) { attempt ->
+            val result = YtMusicRepository.search(query, SearchFilter.SONGS)
+            result.getOrNull()?.let { found -> return found.filterIsInstance<SearchResult.Track>().map { it.song } }
+            if (attempt == 0) kotlinx.coroutines.delay(SEARCH_RETRY_MS)
+        }
+        return emptyList()
+    }
+
+    private const val SEARCH_RETRY_MS = 1_500L
 
     /** Words a version is named by; a title with one the candidate lacks is another version. */
     private val VERSION_WORDS = Regex(

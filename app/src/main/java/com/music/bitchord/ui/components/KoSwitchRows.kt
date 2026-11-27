@@ -323,3 +323,18 @@ fun BluetoothLyricsRows(title: String) {
         )
     }
 }
+
+/** Settings' "find Spotify songs with Claude"; see [com.music.bitchord.data.spotify.SpotifyClaudeMatch]. */
+@androidx.compose.runtime.Composable
+fun SpotifyClaudeMatchRow(title: String) {
+    val on by com.music.bitchord.data.settings.AppSettings.spotifyClaudeMatch.collectAsStateWithLifecycle()
+    com.music.bitchord.ui.screens.SettingsRow(
+        icon = com.music.bitchord.ui.icons.SfIcons.PlaylistPlay,
+        title = title,
+        subtitle = androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.spotify_claude_match_subtitle),
+        trailing = {
+            IosSwitch(checked = on, onCheckedChange = com.music.bitchord.data.settings.AppSettings::setSpotifyClaudeMatch)
+        },
+        onClick = { com.music.bitchord.data.settings.AppSettings.setSpotifyClaudeMatch(!on) },
+    )
+}

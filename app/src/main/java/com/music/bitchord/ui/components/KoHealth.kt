@@ -160,6 +160,9 @@ fun KoHealthAlerts(hazeState: HazeState) {
         )
     }
 
+    // KO: what this build brought, once after updating to it.
+    WhatsNewAlerts(hazeState)
+
     val stopped by PlaybackTrouble.stopped.collectAsStateWithLifecycle()
     stopped?.let { trouble ->
         var checkLine by remember(trouble) { mutableStateOf<String?>(null) }

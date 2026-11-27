@@ -389,7 +389,7 @@ private fun TranslateAheadAskAlert(hazeState: HazeState, ask: AheadAsk, onDismis
 
 /** A row that is one of a few choices (a tick at the end when chosen) or a setting of its own (a checkbox in front). */
 @Composable
-private fun AheadOptionRow(label: String, detail: String?, checked: Boolean, checkbox: Boolean, onClick: () -> Unit) {
+internal fun AheadOptionRow(label: String, detail: String?, checked: Boolean, checkbox: Boolean, onClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     Row(

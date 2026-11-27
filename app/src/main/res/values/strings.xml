@@ -965,6 +965,16 @@ Adding: %4$s
     <string name="translate_ahead_furigana_detail">Japanese songs only: readings over the kanji, at half price (about 2–3 won a song)</string>
     <string name="bluetooth_lyrics_earphones">Earbuds and headphones too</string>
     <string name="bluetooth_lyrics_earphones_subtitle">Off: only a car, a speaker or a device that names neither</string>
+    <string name="whats_new_title">What’s new</string>
+    <string name="whats_new_updated_to">Updated to %1$s</string>
+    <string name="whats_new_never">Don’t show this again</string>
+    <string name="whats_new_never_detail">Settings › Other › What’s new after an update turns it back on</string>
+    <string name="whats_new_row">What’s new after an update</string>
+    <string name="whats_new_row_subtitle">Once, on the first launch after updating: the release notes, a page per section</string>
+    <string name="whats_new_ok">OK</string>
+    <string name="spotify_claude_match">Find Spotify songs with Claude</string>
+    <string name="spotify_claude_match_subtitle">When the rules pick another singer’s cover or no song, Claude chooses the same recording on YouTube Music. About 0.1–0.3 won a song, once.</string>
+    <string name="spotify_claude_match_purpose">Spotify song search</string>
     <string name="ko_window_summary">Summary</string>
     <string name="ko_window_songs">Songs · %1$d</string>
     <string name="ko_window_space">Space used</string>

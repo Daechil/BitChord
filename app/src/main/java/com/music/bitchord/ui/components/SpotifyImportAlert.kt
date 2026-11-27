@@ -105,7 +105,9 @@ fun SpotifyImportAlert(
         scope.launch {
             try {
                 val (name, tracks) = SpotifyImporter.fetchPlaylistTracks(id)
-                val (songs, missed) = SpotifyImporter.resolveToSongs(tracks, effectiveLanguage) { done, total ->
+                val claude = com.music.bitchord.data.settings.AppSettings.spotifyClaudeMatch.value &&
+                    com.music.bitchord.data.lyrics.LyricsTranslation.claudeKeyUsable
+                val (songs, missed) = SpotifyImporter.resolveToSongs(tracks, effectiveLanguage, useClaude = claude) { done, total ->
                     status = context.getString(R.string.spotify_import_matching, done, total)
                 }
                 if (songs.isEmpty()) error(context.getString(R.string.spotify_import_none))

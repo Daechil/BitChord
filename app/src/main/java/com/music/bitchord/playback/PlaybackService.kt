@@ -138,6 +138,8 @@ import com.music.bitchord.data.innertube.StreamResolver
 import com.music.bitchord.data.model.LikeStatus
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.model.isUnresolvedSpotify
+import com.music.bitchord.data.model.SPOTIFY_PENDING_PREFIX
+import com.music.bitchord.data.model.SPOTIFY_MISSING_PREFIX
 import com.music.bitchord.data.remote.RemoteArtworkStore
 import com.music.bitchord.data.scrobbling.LastFM
 import com.music.bitchord.data.scrobbling.ListenBrainzManager
@@ -9381,10 +9383,22 @@ class PlaybackService : MediaLibraryService() {
             super.seekToDefaultPosition(mediaItemIndex)
         }
 
+        /**
+         * KO: [items] without the Spotify rows that have no YouTube Music
+         * version yet ("sp:") or at all ("sp-miss:"). Every way in from outside
+         * — Play, Add to queue, Play next — comes through here, and the ones
+         * that did not filter them queued songs that failed one by one until
+         * playback stopped.
+         */
+        private fun playable(items: List<MediaItem>): List<MediaItem> =
+            items.filterNot { it.mediaId.startsWith(SPOTIFY_PENDING_PREFIX) || it.mediaId.startsWith(SPOTIFY_MISSING_PREFIX) }
+
         override fun setMediaItems(mediaItems: List<MediaItem>, resetPosition: Boolean) {
             if (locked()) return
+            val items = playable(mediaItems)
+            if (items.isEmpty() && mediaItems.isNotEmpty()) return
             onAutoMixInterruptingIntent()
-            super.setMediaItems(mediaItems, resetPosition)
+            super.setMediaItems(items, resetPosition)
         }
 
         override fun setMediaItems(
@@ -9393,8 +9407,17 @@ class PlaybackService : MediaLibraryService() {
             startPositionMs: Long,
         ) {
             if (locked()) return
+            val items = playable(mediaItems)
+            if (items.isEmpty() && mediaItems.isNotEmpty()) return
+            // The start moves down by the rows taken out before it; a start on one of them begins at the next.
+            val start = if (startIndex < 0) startIndex else {
+                (startIndex - (0 until startIndex.coerceAtMost(mediaItems.size)).count { mediaItems[it] !in items })
+                    .coerceIn(0, (items.size - 1).coerceAtLeast(0))
+            }
             onAutoMixInterruptingIntent()
-            super.setMediaItems(mediaItems, startIndex, startPositionMs)
+            // Its position belongs to the row it was given for: a start that was taken out begins the next row at the top.
+            val startRemoved = mediaItems.getOrNull(startIndex)?.let { it !in items } == true
+            super.setMediaItems(items, start, if (startRemoved) C.TIME_UNSET else startPositionMs)
         }
 
         // Every other way the running order can change from outside: Play next,
@@ -9406,14 +9429,18 @@ class PlaybackService : MediaLibraryService() {
         // who can reorder it is still choosing the music.
         override fun addMediaItems(index: Int, mediaItems: List<MediaItem>) {
             if (locked()) return
+            val items = playable(mediaItems)
+            if (items.isEmpty()) return
             onAutoMixInterruptingIntent()
-            super.addMediaItems(index, mediaItems)
+            super.addMediaItems(index, items)
         }
 
         override fun addMediaItems(mediaItems: List<MediaItem>) {
             if (locked()) return
+            val items = playable(mediaItems)
+            if (items.isEmpty()) return
             onAutoMixInterruptingIntent()
-            super.addMediaItems(mediaItems)
+            super.addMediaItems(items)
         }
 
         override fun removeMediaItem(index: Int) {
@@ -9447,7 +9474,7 @@ class PlaybackService : MediaLibraryService() {
         ) {
             if (locked()) return
             onAutoMixInterruptingIntent()
-            super.replaceMediaItems(fromIndex, toIndex, mediaItems)
+            super.replaceMediaItems(fromIndex, toIndex, playable(mediaItems))
         }
 
         override fun clearMediaItems() {

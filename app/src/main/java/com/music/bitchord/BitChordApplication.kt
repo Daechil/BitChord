@@ -174,6 +174,7 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory, Configu
         // the next connect, which is the only way to be sure they are current.
         ListenTogether.init(this)
         SearchHistory.init(this)
+        com.music.bitchord.data.spotify.SpotifyMatchMemory.init(this)
         LastPlayed.init(this)
         BoundedContextPersistence.init(this)
         com.music.bitchord.playback.PartyPersonalQueueStash.init(this)

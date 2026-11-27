@@ -239,6 +239,8 @@ object SpotifyImporter {
     suspend fun resolveToSongs(
         tracks: List<SpotifyImportTrack>,
         language: String? = null,
+        /** KO: with no language asked for, a track the rules cannot place goes to [SpotifyClaudeMatch]. */
+        useClaude: Boolean = false,
         onProgress: (completed: Int, total: Int) -> Unit,
     ): Pair<List<Song>, List<SpotifyImportTrack>> = coroutineScope {
         val total = tracks.size
@@ -274,7 +276,13 @@ object SpotifyImporter {
                     )
                     val bestMatch = TrackMatcher.best(candidates, target) ?: candidates.firstOrNull()
 
-                    val matchedSong = if (cleanLang != null && candidates.isNotEmpty()) {
+                    val matchedSong = if (useClaude && cleanLang == null) {
+                        SpotifyClaudeMatch.match(
+                            SpotifyTrack(id = "", title = track.title, artist = track.artist, album = null, durationMs = 0, imageUrl = null),
+                            useClaude = true,
+                            search = { candidates.takeIf { _ -> it == query } ?: YtMusicRepository.search(it, SearchFilter.SONGS).getOrNull()?.filterIsInstance<SearchResult.Track>()?.map { r -> r.song }.orEmpty() },
+                        ).song
+                    } else if (cleanLang != null && candidates.isNotEmpty()) {
                         val conflictingLangs = knownLanguages.filter { !it.equals(cleanLang, ignoreCase = true) }
                         val nonConflictingCandidates = candidates.filter { candidate ->
                             val meta = "${candidate.title} ${candidate.artist} ${candidate.albumName.orEmpty()}".lowercase()

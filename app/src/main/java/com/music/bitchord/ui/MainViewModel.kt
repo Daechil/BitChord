@@ -3135,7 +3135,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     launch {
                         gate.withPermit {
                             if (!open()) return@withPermit
-                            val match = runCatching { SpotifyImporter.matchTrack(track) }.getOrNull()
+                            val match = runCatching { matchSpotify(track) }.getOrNull()
                             val found = match?.copy(thumbnailUrl = match.thumbnailUrl ?: track.imageUrl)
                                 ?: track.asPendingSong().let {
                                     it.copy(videoId = SPOTIFY_MISSING_PREFIX + track.id)
@@ -3151,6 +3151,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
         }
+    }
+
+    /**
+     * KO: [track]'s YouTube Music version: Claude's answer kept from before, or
+     * [SpotifyClaudeMatch] — the rules, and Claude where they find no plain
+     * match, when Settings allows and a key is set — and Claude's answer kept.
+     */
+    private suspend fun matchSpotify(track: SpotifyTrack): Song? {
+        com.music.bitchord.data.spotify.SpotifyMatchMemory.get(track.id)?.let { return it.song }
+        val useClaude = com.music.bitchord.data.settings.AppSettings.spotifyClaudeMatch.value &&
+            com.music.bitchord.data.lyrics.LyricsTranslation.claudeKeyUsable
+        val outcome = com.music.bitchord.data.spotify.SpotifyClaudeMatch.match(track, useClaude = useClaude)
+        if (outcome.claudeCalls > 0) com.music.bitchord.data.spotify.SpotifyMatchMemory.put(track.id, outcome.song)
+        return outcome.song
     }
 
     private fun SpotifyTrack.asPendingSong() = Song(

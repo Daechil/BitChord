@@ -430,7 +430,7 @@ private fun NerdStatsLines(song: Song) {
     val nerdStats by NerdStats.current.collectAsStateWithLifecycle()
     val smartFadeOn by PlayerSettings.smartFadeEnabled.collectAsStateWithLifecycle()
     val smartAnalysis by PlayerSettings.smartAnalysis.collectAsStateWithLifecycle()
-    val automixDetail by PlayerSettings.automixDetail.collectAsStateWithLifecycle()
+    val automixSummary by PlayerSettings.automixSummary.collectAsStateWithLifecycle()
     // A party doesn't mix, and doesn't analyse for one either — see
     // [com.music.bitchord.playback.CrossfadeController]. So the two flows above
     // simply stop moving there, and the stats line has to say why rather than
@@ -480,9 +480,10 @@ private fun NerdStatsLines(song: Song) {
                     inParty -> stringResource(Res.string.automix_stopped_in_party)
                     song.isVideoOrigin ->
                         stringResource(Res.string.automix_not_supported_video)
-                    // The detailed line once the controller has one: each song's
-                    // grid, then the planned mix — the loops and what cleared them.
-                    automixDetail != null -> automixDetail!!
+                    // KO: the planned mix in a few words once the controller has one.
+                    // The full English line (grids, loop checks, tempo ramp) goes to
+                    // the copied log instead — on the artwork it ran to two lines.
+                    automixSummary != null -> automixSummary!!.localized()
                     else -> stringResource(
                         Res.string.automix_analysis_status,
                         smartAnalysis.current.localizedLabel(),
@@ -494,8 +495,8 @@ private fun NerdStatsLines(song: Song) {
                 // the audio, this one describes the app, and the ranking
                 // should show.
                 color = Color.White.copy(alpha = 0.5f),
-                // The detailed line runs long on a phone: a second line rather
-                // than an ellipsis through the part that says what the mix is.
+                // KO: one line now that the detail has gone to the log; the
+                // analysis wording in a long language still gets a second.
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
@@ -2394,6 +2395,38 @@ private fun codecLabel(mimeType: String?): String? = when {
     mimeType.endsWith("flac") -> "FLAC"
     mimeType.endsWith("alac") -> "ALAC"
     else -> mimeType.substringAfter('/').uppercase(Locale.ROOT)
+}
+
+/** KO: the stats line's Automix part — "AutoMix · 12초 뒤 크로스페이드 · 8초". */
+@Composable
+private fun com.music.bitchord.playback.smart.AutomixSummary.localized(): String {
+    @Composable
+    fun soon(inSeconds: Int) =
+        if (inSeconds > 0) stringResource(Res.string.automix_in_seconds, inSeconds) else stringResource(Res.string.automix_now)
+
+    @Composable
+    fun length(bars: Int, seconds: Int) =
+        if (bars > 0) stringResource(Res.string.automix_bars, bars) else stringResource(Res.string.automix_seconds, seconds)
+    val parts = when (this) {
+        is com.music.bitchord.playback.smart.AutomixSummary.LoopSoon ->
+            listOf(stringResource(Res.string.automix_part_loop_soon, soon(inSeconds)))
+        com.music.bitchord.playback.smart.AutomixSummary.Looping -> listOf(stringResource(Res.string.automix_part_looping))
+        com.music.bitchord.playback.smart.AutomixSummary.LettingGo -> listOf(stringResource(Res.string.automix_part_letting_go))
+        is com.music.bitchord.playback.smart.AutomixSummary.Crossfade -> listOf(
+            stringResource(Res.string.automix_part_crossfade, soon(inSeconds)),
+            stringResource(Res.string.automix_seconds, fadeSeconds),
+        )
+        is com.music.bitchord.playback.smart.AutomixSummary.FilterMix -> listOf(
+            stringResource(Res.string.automix_part_filter, soon(inSeconds)),
+            length(bars, fadeSeconds),
+        )
+        is com.music.bitchord.playback.smart.AutomixSummary.BeatMix -> listOfNotNull(
+            stringResource(Res.string.automix_part_beat, soon(inSeconds)),
+            length(bars, fadeSeconds),
+            if (tempoChanged) stringResource(Res.string.automix_tempo_matched) else null,
+        )
+    }
+    return (listOf("AutoMix") + parts).joinToString(" · ")
 }
 
 /** Wording for the stats line; see [TrackAnalysisState]. */

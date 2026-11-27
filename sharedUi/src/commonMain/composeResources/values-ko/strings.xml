@@ -6,9 +6,9 @@
     <string name="audio_output">오디오 출력</string>
     <string name="audio_output_playing">여기서 재생</string>
     <string name="audio_pipeline">오디오 파이프라인</string>
-    <string name="automix_analysis_status">자동 믹스 · 이번 곡: %1$s · 다음: %2$s</string>
-    <string name="automix_not_supported_video">비디오 음악은 자동 믹스를 지원하지 않습니다</string>
-    <string name="automix_stopped_in_party">자동 믹스: 함께 듣기에서 중지됨</string>
+    <string name="automix_analysis_status">AutoMix · 이번 곡: %1$s · 다음: %2$s</string>
+    <string name="automix_not_supported_video">동영상 곡은 AutoMix를 지원하지 않아요</string>
+    <string name="automix_stopped_in_party">AutoMix · 함께 듣기 중에는 멈춰요</string>
     <string name="autoplay">자동 재생</string>
     <string name="autoplay_empty_description">비슷한 음악이 계속 재생됩니다</string>
     <string name="autoplay_off">자동 재생 끔</string>
@@ -332,4 +332,22 @@
     <string name="best_part">하이라이트</string>
     <string name="best_part_description">하이라이트로 건너뛰기</string>
     <string name="automix_overview_unavailable">다가오는 AutoMix 전환이 없어요</string>
+    <string name="automix_part_loop_soon">%1$s 루프 믹스</string>
+    <string name="automix_part_looping">루프 믹스 중</string>
+    <string name="automix_part_letting_go">다음 곡으로 넘기는 중</string>
+    <string name="automix_part_crossfade">%1$s 크로스페이드</string>
+    <string name="automix_part_filter">%1$s 필터 믹스</string>
+    <string name="automix_part_beat">%1$s 비트 믹스</string>
+    <string name="automix_in_seconds">%1$d초 뒤</string>
+    <string name="automix_now">지금</string>
+    <string name="automix_bars">%1$d마디</string>
+    <string name="automix_seconds">%1$d초</string>
+    <string name="automix_tempo_matched">템포 맞춤</string>
+    <string name="lyrics_hint_translate">누르면 번역 · 길게 누르면 다시 번역해요</string>
+    <string name="lyrics_hint_translate_claude">누르면 번역 · 길게 누르면 Claude로 다시 번역해요</string>
+    <string name="lyrics_hint_reading">누르면 가사 발음을 보여줘요</string>
+    <string name="lyrics_hint_reading_claude">누르면 발음 · 길게 누르면 Claude 발음을 받아요</string>
+    <string name="lyrics_hint_furigana">누르면 한자 위에 읽는 법을 달아요</string>
+    <string name="lyrics_long_retranslate">다시 번역</string>
+    <string name="lyrics_long_claude_reading">Claude 발음 받기</string>
 </resources>

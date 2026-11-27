@@ -127,6 +127,7 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -552,13 +553,18 @@ fun SettingsScreen(
         }
     }
 
+    // KO: the KO features page's groups as chips to jump between; see SettingsJumpChips.
+    val jumpTargets = remember(section) { if (section == SettingsCategory.KO_FEATURES) SettingsJumpTargets() else null }
+    Box(modifier.fillMaxWidth().onGloballyPositioned { jumpTargets?.page = it }) {
+    CompositionLocalProvider(LocalJumpTargets provides jumpTargets) {
     Column(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
             .verticalScroll(scrollState)
             .padding(contentPadding),
     ) {
         SettingsPageTitle(stringResource(section?.title ?: R.string.settings))
+        if (jumpTargets != null) SettingsJumpChipsInPage(jumpTargets, scrollState, contentPadding)
         if (section == null) {
             SearchField(
                 query = searchQuery,
@@ -2306,6 +2312,10 @@ fun SettingsScreen(
             row(whatsNewTitle, "update", "what's new", "changelog", "업데이트", "새 기능", "변경 내역") {
                 com.music.bitchord.ui.components.WhatsNewRow(whatsNewTitle)
             }
+            val lyricsHintsTitle = stringResource(R.string.lyrics_hints_reset)
+            row(lyricsHintsTitle, "hint", "tip", "lyrics", "안내", "도움말", "가사", "버튼") {
+                com.music.bitchord.ui.components.LyricsHintsResetRow(lyricsHintsTitle)
+            }
             val playNextOnSwipeTitle = stringResource(R.string.play_next_on_swipe)
             row(playNextOnSwipeTitle, "swipe", "queue") {
                 SettingsRow(
@@ -2595,6 +2605,9 @@ fun SettingsScreen(
                 .padding(top = 24.dp, bottom = 8.dp),
         )
         }
+    }
+    }
+    if (jumpTargets != null) SettingsJumpChipsPinned(jumpTargets, scrollState, contentPadding)
     }
 
     // Everything in the Cached songs folder goes with it, so say so first.
@@ -3306,7 +3319,7 @@ internal fun SettingsGroup(
                 end = GROUP_INSET,
                 top = 26.dp,
                 bottom = 8.dp,
-            ),
+            ).jumpTarget(header),
         )
     } else {
         Spacer(Modifier.height(topSpacing))

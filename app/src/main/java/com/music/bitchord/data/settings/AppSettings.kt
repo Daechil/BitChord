@@ -717,6 +717,9 @@ object AppSettings {
     /** KO: the what's-new window is never shown after an update. */
     val whatsNewNever = MutableStateFlow(false)
 
+    /** KO: the lyrics buttons whose first-use hint this device has shown; see LyricsHints. */
+    val lyricsHintsSeen = MutableStateFlow<Set<String>>(emptySet())
+
     /** Furigana written in Hangul rather than hiragana; see LyricsTranslation.claudeFurigana. */
     val furiganaHangul = MutableStateFlow(false)
 
@@ -1300,6 +1303,9 @@ object AppSettings {
      */
     val automixDetail = MutableStateFlow<String?>(null)
 
+    /** KO: [automixDetail] in a few words for the stats line over the artwork; see [AutomixSummary]. */
+    val automixSummary = MutableStateFlow<com.music.bitchord.playback.smart.AutomixSummary?>(null)
+
     /**
      * Where on the *playing* track the next transition is planned to happen, as
      * fractions of its duration, or null when there is nothing worth drawing.
@@ -1555,6 +1561,7 @@ object AppSettings {
         whatsNewSeen.value = prefs.getString(KEY_WHATS_NEW_SEEN, null).orEmpty()
         spotifyClaudeMatch.value = prefs.getBoolean(KEY_SPOTIFY_CLAUDE_MATCH, true)
         whatsNewNever.value = prefs.getBoolean(KEY_WHATS_NEW_NEVER, false)
+        lyricsHintsSeen.value = prefs.getStringSet(KEY_LYRICS_HINTS_SEEN, null)?.toSet().orEmpty()
         radioFreshDays.value = prefs.getInt(KEY_RADIO_FRESH_DAYS, 0).takeIf { it in RADIO_FRESH_DAY_CHOICES } ?: 0
         radioFreshDrop.value = prefs.getBoolean(KEY_RADIO_FRESH_DROP, false)
         bluetoothLyrics.value = prefs.getBoolean(KEY_BLUETOOTH_LYRICS, false)
@@ -2387,6 +2394,19 @@ object AppSettings {
     fun setWhatsNewNever(value: Boolean) {
         whatsNewNever.value = value
         prefs.edit().putBoolean(KEY_WHATS_NEW_NEVER, value).apply()
+    }
+
+    fun markLyricsHintSeen(key: String) {
+        val seen = lyricsHintsSeen.value + key
+        if (seen == lyricsHintsSeen.value) return
+        lyricsHintsSeen.value = seen
+        prefs.edit().putStringSet(KEY_LYRICS_HINTS_SEEN, seen).apply()
+    }
+
+    /** Settings › 기타 › 버튼 안내 다시 보기: every hint shows once more. */
+    fun resetLyricsHints() {
+        lyricsHintsSeen.value = emptySet()
+        prefs.edit().remove(KEY_LYRICS_HINTS_SEEN).apply()
     }
 
     fun setFuriganaHangul(value: Boolean) {
@@ -3383,6 +3403,8 @@ object AppSettings {
         KEY_ONBOARDING_COMPLETE,
         // KO: which version's what's-new this device has shown is this device's own.
         KEY_WHATS_NEW_SEEN,
+        // KO: and which button hints it has shown.
+        KEY_LYRICS_HINTS_SEEN,
         // What this device has spent on Claude and the rate it last fetched: an
         // older settings file brought in must not roll the month's spending back
         // and let the limits through again.
@@ -3508,6 +3530,7 @@ object AppSettings {
     private const val KEY_WHATS_NEW_SEEN = "ko_whats_new_seen"
     private const val KEY_SPOTIFY_CLAUDE_MATCH = "ko_spotify_claude_match"
     private const val KEY_WHATS_NEW_NEVER = "ko_whats_new_never"
+    private const val KEY_LYRICS_HINTS_SEEN = "ko_lyrics_hints_seen"
     private const val KEY_TRANSLATE_AHEAD_FURIGANA = "ko_ahead_furigana"
     private const val KEY_RADIO_FRESH_DROP = "ko_radio_fresh_drop"
     private const val KEY_BLUETOOTH_LYRICS = "ko_bluetooth_lyrics"

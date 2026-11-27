@@ -107,6 +107,9 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
         override val showListenTogetherButton get() = AppSettings.showListenTogetherButton
         override val smartAnalysis get() = AppSettings.smartAnalysis
         override val automixDetail get() = AppSettings.automixDetail
+        override val automixSummary get() = AppSettings.automixSummary
+        override val lyricsHintsSeen get() = AppSettings.lyricsHintsSeen
+        override fun markLyricsHintSeen(key: String) = AppSettings.markLyricsHintSeen(key)
         override val smartFadeEnabled get() = AppSettings.smartFadeEnabled
         override val autoMixArtwork get() = AppSettings.autoMixArtwork
         override val smartMixInProgress get() = AppSettings.smartMixInProgress

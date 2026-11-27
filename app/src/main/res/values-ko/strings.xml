@@ -257,9 +257,9 @@
     <string name="blocking">차단 중</string>
     <string name="crossfade">크로스페이드</string>
     <string name="crossfade_subtitle">이번 곡과 다음 곡을 섞습니다</string>
-    <string name="automix">자동 믹스 [베타]</string>
-    <string name="automix_overview">자동 믹스 개요</string>
-    <string name="automix_performance">자동 믹스 성능</string>
+    <string name="automix">AutoMix [베타]</string>
+    <string name="automix_overview">AutoMix 개요</string>
+    <string name="automix_performance">AutoMix 성능</string>
     <string name="automix_performance_subtitle">CPU 백그라운드 분석을 얼마나 가동할지 설정합니다</string>
     <string name="automix_performance_warning">성능이 높을수록 곡을 빠르게 분석하지만, 배터리를 더 사용하고 폰이 뜨거워질 수 있습니다.</string>
     <string name="automix_mode_efficient">효율</string>
@@ -926,6 +926,9 @@
     <string name="folded_more">자세히</string>
     <string name="folded_close">닫기</string>
     <string name="folded_title">자세히 보기</string>
+    <string name="lyrics_hints_reset">가사 버튼 안내 다시 보기</string>
+    <string name="lyrics_hints_reset_subtitle">번역·발음·ふ 버튼 설명을 한 번씩 다시 보여줘요.</string>
+    <string name="lyrics_hints_reset_done">다음에 가사를 열면 안내가 다시 나와요.</string>
     <string name="ko_window_summary">요약</string>
     <string name="ko_window_songs">곡 · %1$d곡</string>
     <string name="ko_window_space">사용 공간</string>
@@ -1456,7 +1459,7 @@
     <string name="automix_models_failed">모델을 다운로드하지 못했습니다. 연결을 확인하고 다시 시도하세요.</string>
     <string name="automix_model_delete_title">Automix 모델을 삭제할까요?</string>
     <string name="automix_model_delete_warning">%1$d MB가 확보되고 Automix가 꺼집니다. Automix를 다시 켜면 모델을 다시 다운로드합니다.</string>
-    <string name="advanced_automix">고급 자동 믹스</string>
+    <string name="advanced_automix">고급 AutoMix</string>
     <string name="advanced_automix_subtitle">DJ처럼 믹싱합니다. 비트에 맞춰 전환하며, 어울리지 않는 곡 사이는 컷으로 넘깁니다. 처리를 추가로 요하지 않습니다.</string>
     <string name="no_lyrics_sources_enabled">없음. 가사를 가져오지 않습니다.</string>
     <string name="song_cache_large_subtitle">저장소에 최대 %1$s의 다운로드한 오디오를 유지합니다. 저장공간을 유의미할 정도로 차지할 수 있습니다.</string>
@@ -1874,7 +1877,7 @@
     <string name="font_footer">이전 글꼴은 앱이 Apple Music에 맞춰지기 전에 쓰던 더 굵고 촘촘한 글꼴을 되돌립니다.</string>
     <string name="bit_perfect_output">비트 퍼펙트 출력</string>
     <string name="bit_perfect_bypassed_footer">비트 퍼펙트 출력 중이라 흐린 설정은 적용되지 않아요. Dolby Atmos 버전도 받지 않아요. DAC를 빼거나 모드를 끄면 다시 적용돼요.</string>
-    <string name="bit_perfect_sheet_warning">트랙을 변경 없이 DAC로 보냅니다. 이퀄라이저, 체감 음량 평준화, 크로스페이드, 자동 믹스, 재생 속도, BitChord 음량은 우회됩니다.</string>
+    <string name="bit_perfect_sheet_warning">트랙을 변경 없이 DAC로 보냅니다. 이퀄라이저, 체감 음량 평준화, 크로스페이드, AutoMix, 재생 속도, BitChord 음량은 우회됩니다.</string>
     <string name="bit_perfect_mode_off_subtitle">오디오가 Android 믹서와 BitChord 효과를 거칩니다.</string>
     <string name="bit_perfect_mode_usb_android">USB DAC</string>
     <string name="bit_perfect_mode_usb_android_subtitle">Android 14가 믹싱이나 리샘플링 없이 각 트랙의 샘플레이트와 비트 심도로 DAC를 엽니다.</string>

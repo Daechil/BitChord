@@ -24,6 +24,8 @@ import com.music.bitchord.playback.loopmix.LoopMixPort
 import com.music.bitchord.playback.loopmix.LoopMixRenderer
 import com.music.bitchord.playback.loopmix.LoopMixSession
 import com.music.bitchord.playback.loopmix.LoopRegion
+import com.music.bitchord.data.TrackLog
+import com.music.bitchord.playback.smart.AutomixSummary
 import com.music.bitchord.playback.smart.CrossfadeMode
 import com.music.bitchord.playback.smart.LoopMix
 import com.music.bitchord.playback.smart.FILTER_ECHO_AT
@@ -2990,12 +2992,28 @@ class CrossfadeController(
     private fun publishAutomixDetail() {
         val player = active()
         val item = player.currentMediaItem
-        val text = when {
-            !AppSettings.smartFadeEnabled.value || item == null || ListenTogether.state.value.inParty -> null
-            else -> describeAutomix(player, item)
-        }
+        val off = !AppSettings.smartFadeEnabled.value || item == null || ListenTogether.state.value.inParty
+        automixSummaryOut = null
+        val text = if (off) null else describeAutomix(player, item!!)
         if (AppSettings.automixDetail.value != text) AppSettings.automixDetail.value = text
+        val summary = if (off) null else automixSummaryOut
+        if (AppSettings.automixSummary.value != summary) AppSettings.automixSummary.value = summary
+        // KO: the full line goes to the copied log rather than over the artwork — once per
+        // change of what it says, not once a second as its countdown ticks.
+        if (text != null) {
+            val shape = text.replace(AUTOMIX_FIGURES, "#")
+            if (shape != lastLoggedAutomix) {
+                lastLoggedAutomix = shape
+                TrackLog.d(TAG, text, about = item?.mediaId)
+            }
+        } else {
+            lastLoggedAutomix = null
+        }
     }
+
+    /** KO: set by [describeAutomix] alongside the line it returns; null when the line is only the analysis. */
+    private var automixSummaryOut: AutomixSummary? = null
+    private var lastLoggedAutomix: String? = null
 
     private fun describeAutomix(player: ExoPlayer, item: MediaItem): String {
         val session = loopSession
@@ -3009,6 +3027,12 @@ class CrossfadeController(
             }
             val aligned = session.alignedErrorMs.takeIf { it.isFinite() }
                 ?.let { " · handover ${"%+.1f".format(Locale.ROOT, it)} ms" }.orEmpty()
+            automixSummaryOut = when {
+                phase == Phase.LOOP_ARMING || m == null || m < 0 ->
+                    AutomixSummary.LoopSoon(ceil(-(m ?: -LOOP_ARM_LEAD_MS / 1000.0)).toInt().coerceAtLeast(0))
+                m < session.clock.releaseAt -> AutomixSummary.Looping
+                else -> AutomixSummary.LettingGo
+            }
             return "Automix · $stage · ${describeLoop(session.plan)}$aligned"
         }
         val nextIndex = player.nextMediaItemIndex
@@ -3016,6 +3040,7 @@ class CrossfadeController(
         val planned = loopPlanned
         if (planned != null && next != null && loopPlanKey?.startsWith("${item.mediaId}->${next.mediaId}|") == true) {
             val inSeconds = (planned.out.loopStart - player.currentPosition / 1000.0).coerceAtLeast(0.0)
+            automixSummaryOut = AutomixSummary.LoopSoon(ceil(inSeconds).toInt())
             return "Automix · loop mix in ${ceil(inSeconds).toInt()} s · ${describeLoop(planned)}"
         }
         val plan = lastSmartPlan
@@ -3026,6 +3051,13 @@ class CrossfadeController(
             val length = if (bars > 0) "$bars bars" else "${"%.1f".format(Locale.ROOT, plan.fadeSeconds)} s"
             val why = plan.policyReasons.firstOrNull()?.let { " · $it" }.orEmpty()
             val noLoop = loopRefusal?.let { " · no loop: $it" }.orEmpty()
+            val soon = ceil(inSeconds).toInt()
+            val fade = plan.fadeSeconds.roundToInt()
+            automixSummaryOut = when (plan.transitionStyle) {
+                TransitionStyle.EQUAL_POWER -> AutomixSummary.Crossfade(soon, fade)
+                TransitionStyle.DJ_FILTER -> AutomixSummary.FilterMix(soon, bars, fade)
+                else -> AutomixSummary.BeatMix(soon, bars, fade, tempoChanged = abs(plan.incomingPlaybackRate - 1) >= 0.0005)
+            }
             return when (plan.transitionStyle) {
                 TransitionStyle.EQUAL_POWER -> "Automix · crossfading $whenText · ${"%.0f".format(Locale.ROOT, plan.fadeSeconds)} s$why$noLoop"
                 TransitionStyle.DJ_FILTER -> "Automix · filter mix $whenText · $length$why$noLoop"
@@ -3990,6 +4022,9 @@ class CrossfadeController(
         const val MIX_PREVIEW_STALE_MS = 1_500L
 
         const val TAG = "BitChordCrossfade"
+
+        /** The figures in an Automix line that move by themselves: countdowns, the handover error. */
+        private val AUTOMIX_FIGURES = Regex("[+-]?\\d+(\\.\\d+)?")
 
         /**
          * Used only before a pair has been analysed, or when the evidence is

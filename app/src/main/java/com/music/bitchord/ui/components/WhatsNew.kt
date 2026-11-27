@@ -125,3 +125,20 @@ fun WhatsNewRow(title: String) {
         onClick = { AppSettings.setWhatsNewNever(!never) },
     )
 }
+
+/** KO: Settings › 기타 — the lyrics discs' first-use hints shown once more; greyed out while none has been seen. */
+@Composable
+fun LyricsHintsResetRow(title: String) {
+    val seen by AppSettings.lyricsHintsSeen.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    com.music.bitchord.ui.screens.SettingsRow(
+        icon = com.music.bitchord.ui.icons.SfIcons.Info,
+        title = title,
+        subtitle = stringResource(R.string.lyrics_hints_reset_subtitle),
+        enabled = seen.isNotEmpty(),
+        onClick = {
+            AppSettings.resetLyricsHints()
+            android.widget.Toast.makeText(context, R.string.lyrics_hints_reset_done, android.widget.Toast.LENGTH_SHORT).show()
+        },
+    )
+}

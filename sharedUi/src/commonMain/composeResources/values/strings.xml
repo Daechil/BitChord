@@ -331,4 +331,22 @@
     <string name="lyrics_furigana_loading">Adding furigana…</string>
     <string name="lyrics_furigana_show">Show furigana</string>
     <string name="lyrics_furigana_hide">Hide furigana</string>
+    <string name="automix_part_loop_soon">loop mix %1$s</string>
+    <string name="automix_part_looping">looping</string>
+    <string name="automix_part_letting_go">handing over</string>
+    <string name="automix_part_crossfade">crossfade %1$s</string>
+    <string name="automix_part_filter">filter mix %1$s</string>
+    <string name="automix_part_beat">beat mix %1$s</string>
+    <string name="automix_in_seconds">in %1$d s</string>
+    <string name="automix_now">now</string>
+    <string name="automix_bars">%1$d bars</string>
+    <string name="automix_seconds">%1$d s</string>
+    <string name="automix_tempo_matched">tempo matched</string>
+    <string name="lyrics_hint_translate">Tap to translate · hold to translate again</string>
+    <string name="lyrics_hint_translate_claude">Tap to translate · hold to translate again with Claude</string>
+    <string name="lyrics_hint_reading">Tap to show how the lyrics are read</string>
+    <string name="lyrics_hint_reading_claude">Tap for the reading · hold to have Claude write it</string>
+    <string name="lyrics_hint_furigana">Tap to put readings over the kanji</string>
+    <string name="lyrics_long_retranslate">Translate again</string>
+    <string name="lyrics_long_claude_reading">Reading by Claude</string>
 </resources>

@@ -349,6 +349,11 @@ interface PlayerSettingsSource {
      * there is nothing to say beyond [smartAnalysis].
      */
     val automixDetail: StateFlow<String?>
+    /**
+     * KO: [automixDetail] in a few words, for the line over the artwork; the full
+     * line goes to the copied log. Null while there is nothing past the analysis to say.
+     */
+    val automixSummary: StateFlow<com.music.bitchord.playback.smart.AutomixSummary?> get() = noAutomixSummary
     val smartFadeEnabled: StateFlow<Boolean>
     val autoMixArtwork: StateFlow<AutoMixArtworkPreferences> get() = defaultAutoMixArtwork
     /** True only while an analysed Automix transition is audibly mixing two tracks. */
@@ -373,12 +378,18 @@ interface PlayerSettingsSource {
     fun setLyricsOffsetMs(value: Int)
     /** Whether the mix popup is up, so the host lays out [smartMixPreview] for it. */
     fun setMixViewOpen(open: Boolean)
+
+    /** KO: the lyrics discs whose first-use hint this device has shown; see [LyricsHints]. */
+    val lyricsHintsSeen: StateFlow<Set<String>> get() = noHintsSeen
+    fun markLyricsHintSeen(key: String) = Unit
 }
 
 /** The player's name for the installed host's settings, read where AppSettings used to be. */
 internal val PlayerSettings: PlayerSettingsSource
     get() = PlayerPlatform.host.settings
 
+private val noAutomixSummary: StateFlow<com.music.bitchord.playback.smart.AutomixSummary?> = MutableStateFlow(null)
+private val noHintsSeen: StateFlow<Set<String>> = MutableStateFlow(emptySet())
 private val defaultAutoMixArtwork: StateFlow<AutoMixArtworkPreferences> = MutableStateFlow(AutoMixArtworkPreferences())
 
 /** The lyric offset sheet's range, in milliseconds either way. */

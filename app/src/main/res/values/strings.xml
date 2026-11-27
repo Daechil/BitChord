@@ -978,6 +978,9 @@ Adding: %4$s
     <string name="folded_more">More</string>
     <string name="folded_close">Close</string>
     <string name="folded_title">Details</string>
+    <string name="lyrics_hints_reset">Show lyrics button hints again</string>
+    <string name="lyrics_hints_reset_subtitle">The translate, reading and ふ buttons explain themselves once more, one at a time.</string>
+    <string name="lyrics_hints_reset_done">The hints show next time you open the lyrics.</string>
     <string name="ko_window_summary">Summary</string>
     <string name="ko_window_songs">Songs · %1$d</string>
     <string name="ko_window_space">Space used</string>

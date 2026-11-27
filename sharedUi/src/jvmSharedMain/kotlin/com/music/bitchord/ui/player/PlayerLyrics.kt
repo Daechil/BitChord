@@ -1541,6 +1541,9 @@ internal fun TranslationToggleButton(
         targetValue = if (active) 0.34f else 0.18f,
         label = "translateDisc",
     )
+    val claude by PlayerPlatform.host.songMeaningAvailable.collectAsStateWithLifecycle()
+    val hintText = stringResource(if (claude) Res.string.lyrics_hint_translate_claude else Res.string.lyrics_hint_translate)
+    LyricsHintAnchor(LyricsHint.TRANSLATE, hintText, enabled = enabled && onLongClick != null) {
     Box(
         modifier = Modifier
             .size(34.dp)
@@ -1551,8 +1554,9 @@ internal fun TranslationToggleButton(
                 enabled = enabled,
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                onClick = onClick,
-                onLongClick = onLongClick,
+                onClick = { LyricsHints.used(LyricsHint.TRANSLATE); onClick() },
+                onLongClick = onLongClick?.let { long -> { LyricsHints.used(LyricsHint.TRANSLATE); long() } },
+                onLongClickLabel = stringResource(Res.string.lyrics_long_retranslate),
             ),
         contentAlignment = Alignment.Center,
     ) {
@@ -1586,6 +1590,7 @@ internal fun TranslationToggleButton(
         }
     }
 }
+}
 
 /** The left-hand companion to [TranslationToggleButton], producing Latin script. */
 @Composable
@@ -1608,6 +1613,9 @@ internal fun RomanizationToggleButton(
         targetValue = if (active) 0.34f else 0.18f,
         label = "romanizeDisc",
     )
+    val claude by PlayerPlatform.host.songMeaningAvailable.collectAsStateWithLifecycle()
+    val hintText = stringResource(if (claude) Res.string.lyrics_hint_reading_claude else Res.string.lyrics_hint_reading)
+    LyricsHintAnchor(LyricsHint.READING, hintText, enabled = enabled) {
     Box(
         modifier = Modifier
             .size(34.dp)
@@ -1618,8 +1626,9 @@ internal fun RomanizationToggleButton(
                 enabled = enabled,
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                onClick = onClick,
-                onLongClick = onLongClick,
+                onClick = { LyricsHints.used(LyricsHint.READING); onClick() },
+                onLongClick = onLongClick?.let { long -> { LyricsHints.used(LyricsHint.READING); long() } },
+                onLongClickLabel = stringResource(Res.string.lyrics_long_claude_reading),
             ),
         contentAlignment = Alignment.Center,
     ) {
@@ -1640,6 +1649,7 @@ internal fun RomanizationToggleButton(
                 modifier = Modifier.size(19.dp),
             )
         }
+    }
     }
 }
 
@@ -1680,6 +1690,7 @@ internal fun FuriganaToggleButton(loading: Boolean, showing: Boolean, enabled: B
     }
     val discAlpha by animateFloatAsState(targetValue = if (active) 0.34f else 0.18f, label = "furiganaDisc")
     val label = stringResource(if (showing) Res.string.lyrics_furigana_hide else Res.string.lyrics_furigana_show)
+    LyricsHintAnchor(LyricsHint.FURIGANA, stringResource(Res.string.lyrics_hint_furigana), enabled = enabled) {
     Box(
         modifier = Modifier
             .size(34.dp)
@@ -1690,7 +1701,7 @@ internal fun FuriganaToggleButton(loading: Boolean, showing: Boolean, enabled: B
                 enabled = enabled,
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                onClick = onClick,
+                onClick = { LyricsHints.used(LyricsHint.FURIGANA); onClick() },
             )
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
@@ -1700,6 +1711,7 @@ internal fun FuriganaToggleButton(loading: Boolean, showing: Boolean, enabled: B
         } else {
             Text(text = "ふ", color = tint, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
+    }
     }
 }
 

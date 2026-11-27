@@ -1601,7 +1601,9 @@ private fun BitChordApp(
     ) {
         // A Spotify page lists songs it has not found on YouTube Music yet (or
         // never will); those can't be queued, so play the rest in their order.
-        if (allSongs.getOrNull(allIndex)?.isUnresolvedSpotify == true) return
+        // KO: a grey one tapped is looked for again; found, its row turns playable.
+        val tapped = allSongs.getOrNull(allIndex)
+        if (tapped?.isUnresolvedSpotify == true) return com.music.bitchord.ui.components.SpotifyRowTap.tap(tapped, viewModel)
         val songs = allSongs.filterNot { it.isUnresolvedSpotify }
         val index = songs.indexOf(allSongs.getOrNull(allIndex)).coerceAtLeast(0)
         playRequestGeneration++
@@ -3484,7 +3486,8 @@ private fun BitChordApp(
                                         // Play is the release in order, so a shuffle left on
                                         // from the last queue goes off before this one is built.
                                         QueueShuffle.disableForNextQueue()
-                                        playDetailSongs(songs, 0)
+                                        // KO: from the first song that can play, not a grey Spotify row; -1 when none can.
+                                        playDetailSongs(songs, com.music.bitchord.ui.components.SpotifyRowTap.firstPlayable(songs))
                                     }
                                 },
                                 onShuffle = { songs ->
@@ -3493,7 +3496,7 @@ private fun BitChordApp(
                                         // as it is set — the random pick here only decides
                                         // which track leads it.
                                         QueueShuffle.enableForNextQueue()
-                                        playDetailSongs(songs, songs.indices.random())
+                                        playDetailSongs(songs, com.music.bitchord.ui.components.SpotifyRowTap.randomPlayable(songs))
                                     }
                                 },
                                 onSectionItemClick = { item ->

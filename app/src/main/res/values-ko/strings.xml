@@ -929,6 +929,11 @@
     <string name="lyrics_hints_reset">가사 버튼 안내 다시 보기</string>
     <string name="lyrics_hints_reset_subtitle">번역·발음·ふ 버튼 설명을 한 번씩 다시 보여줘요.</string>
     <string name="lyrics_hints_reset_done">다음에 가사를 열면 안내가 다시 나와요.</string>
+    <string name="spotify_row_still_matching">아직 YouTube Music에서 이 곡을 찾는 중이에요.</string>
+    <string name="spotify_row_retrying">이 곡을 다시 찾고 있어요…</string>
+    <string name="spotify_row_still_missing">YouTube Music에서 여전히 찾지 못했어요.</string>
+    <string name="spotify_nothing_playable">아직 YouTube Music에서 찾은 곡이 없어요. 회색 곡을 누르면 다시 찾아요.</string>
+    <string name="spotify_row_found">YouTube Music에서 찾았어요. 누르면 재생해요.</string>
     <string name="ko_window_summary">요약</string>
     <string name="ko_window_songs">곡 · %1$d곡</string>
     <string name="ko_window_space">사용 공간</string>

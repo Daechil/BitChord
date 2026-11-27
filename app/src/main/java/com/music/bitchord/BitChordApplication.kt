@@ -175,6 +175,7 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory, Configu
         ListenTogether.init(this)
         SearchHistory.init(this)
         com.music.bitchord.data.spotify.SpotifyMatchMemory.init(this)
+        com.music.bitchord.ui.components.SpotifyRowTap.init(this)
         LastPlayed.init(this)
         BoundedContextPersistence.init(this)
         com.music.bitchord.playback.PartyPersonalQueueStash.init(this)

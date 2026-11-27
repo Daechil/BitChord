@@ -2778,7 +2778,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         private const val ADDON_SEARCH_LIMIT = 20
 
         /** How many Spotify tracks are looked up on YouTube Music at once. */
-        private const val SPOTIFY_MATCH_PARALLELISM = 6
+        // KO: 4, not 6 — YouTube turned searches away when a long playlist asked six at a time.
+        private const val SPOTIFY_MATCH_PARALLELISM = 4
+        private const val SPOTIFY_RETRY_PARALLELISM = 2
+        private const val SPOTIFY_RETRY_DELAY_MS = 4_000L
 
         /**
          * How long a keystroke waits before the typeahead is asked about it.
@@ -3129,28 +3132,67 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 setSongs(UiState.Error(text(R.string.spotify_empty_tracks)))
                 return@launch
             }
-            val gate = Semaphore(SPOTIFY_MATCH_PARALLELISM)
-            coroutineScope {
-                tracks.forEachIndexed { index, track ->
-                    launch {
-                        gate.withPermit {
-                            if (!open()) return@withPermit
-                            val match = runCatching { matchSpotify(track) }.getOrNull()
-                            val found = match?.copy(thumbnailUrl = match.thumbnailUrl ?: track.imageUrl)
-                                ?: track.asPendingSong().let {
-                                    it.copy(videoId = SPOTIFY_MISSING_PREFIX + track.id)
-                                }
-                            _detailStack.value = _detailStack.value.map { page ->
-                                val list = (page.songs as? UiState.Success<List<Song>>)?.data
-                                if (page.browseId == browseId && list != null && index < list.size) {
-                                    page.copy(songs = UiState.Success(list.toMutableList().also { it[index] = found }))
-                                } else page
+            tracks.forEach { spotifyTracks[it.id] = it }
+            // Tracks whose answer could not be had (searches turned away, a failed call):
+            // shown as not found for now, and tried once more, slowly, once the rest are in.
+            val unsettled = java.util.Collections.synchronizedList(mutableListOf<SpotifyTrack>())
+            suspend fun pass(batch: List<SpotifyTrack>, parallel: Int) {
+                val gate = Semaphore(parallel)
+                coroutineScope {
+                    batch.forEach { track ->
+                        launch {
+                            gate.withPermit {
+                                if (!open()) return@withPermit
+                                val (match, settled) = runCatching { matchSpotify(track) }.getOrElse { null to false }
+                                if (!settled) unsettled += track
+                                setSpotifyRow(browseId, track, match)
                             }
                         }
                     }
                 }
             }
+            pass(tracks, SPOTIFY_MATCH_PARALLELISM)
+            val again = unsettled.toList()
+            if (again.isNotEmpty() && open()) {
+                unsettled.clear()
+                delay(SPOTIFY_RETRY_DELAY_MS)
+                pass(again, SPOTIFY_RETRY_PARALLELISM)
+            }
         }
+    }
+
+    /** KO: every Spotify track listed on an open page, by id — for a grey row tapped to try again. */
+    private val spotifyTracks = java.util.concurrent.ConcurrentHashMap<String, SpotifyTrack>()
+
+    /** Puts [match] (or "not found") in [track]'s row on the page [browseId], wherever that row now is. */
+    private fun setSpotifyRow(browseId: String?, track: SpotifyTrack, match: Song?) {
+        val found = match?.copy(thumbnailUrl = match.thumbnailUrl ?: track.imageUrl)
+            ?: track.asPendingSong().copy(videoId = SPOTIFY_MISSING_PREFIX + track.id)
+        val ids = setOf(SPOTIFY_PENDING_PREFIX + track.id, SPOTIFY_MISSING_PREFIX + track.id)
+        _detailStack.value = _detailStack.value.map { page ->
+            val list = (page.songs as? UiState.Success<List<Song>>)?.data
+            if ((browseId == null || page.browseId == browseId) && list != null && list.any { it.videoId in ids }) {
+                page.copy(songs = UiState.Success(list.map { if (it.videoId in ids) found else it }))
+            } else page
+        }
+    }
+
+    /**
+     * KO: a grey Spotify row tapped — that one track looked for again, the row
+     * spinning meanwhile. The YouTube Music version, or null when there still is none.
+     */
+    suspend fun retrySpotifyRow(song: Song): Song? {
+        val id = song.videoId.removePrefix(SPOTIFY_MISSING_PREFIX).removePrefix(SPOTIFY_PENDING_PREFIX)
+        val track = spotifyTracks[id] ?: return null
+        _detailStack.value = _detailStack.value.map { page ->
+            val list = (page.songs as? UiState.Success<List<Song>>)?.data
+            if (list != null && list.any { it.videoId == song.videoId }) {
+                page.copy(songs = UiState.Success(list.map { if (it.videoId == song.videoId) track.asPendingSong() else it }))
+            } else page
+        }
+        val match = runCatching { matchSpotify(track).first }.getOrNull()
+        setSpotifyRow(null, track, match)
+        return match?.copy(thumbnailUrl = match.thumbnailUrl ?: track.imageUrl)
     }
 
     /**
@@ -3158,13 +3200,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * [SpotifyClaudeMatch] — the rules, and Claude where they find no plain
      * match, when Settings allows and a key is set — and Claude's answer kept.
      */
-    private suspend fun matchSpotify(track: SpotifyTrack): Song? {
-        com.music.bitchord.data.spotify.SpotifyMatchMemory.get(track.id)?.let { return it.song }
+    private suspend fun matchSpotify(track: SpotifyTrack): Pair<Song?, Boolean> {
+        com.music.bitchord.data.spotify.SpotifyMatchMemory.get(track.id)?.let { return it.song to true }
         val useClaude = com.music.bitchord.data.settings.AppSettings.spotifyClaudeMatch.value &&
             com.music.bitchord.data.lyrics.LyricsTranslation.claudeKeyUsable
         val outcome = com.music.bitchord.data.spotify.SpotifyClaudeMatch.match(track, useClaude = useClaude)
-        if (outcome.claudeCalls > 0) com.music.bitchord.data.spotify.SpotifyMatchMemory.put(track.id, outcome.song)
-        return outcome.song
+        // Only an answer Claude actually gave is kept: a failed call or searches turned
+        // away say nothing about the track, and kept as "none" they greyed it out for good.
+        if (outcome.claudeCalls > 0 && outcome.settled) {
+            com.music.bitchord.data.spotify.SpotifyMatchMemory.put(track.id, outcome.song)
+        }
+        return outcome.song to outcome.settled
     }
 
     private fun SpotifyTrack.asPendingSong() = Song(

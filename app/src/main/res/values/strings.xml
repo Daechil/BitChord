@@ -981,6 +981,11 @@ Adding: %4$s
     <string name="lyrics_hints_reset">Show lyrics button hints again</string>
     <string name="lyrics_hints_reset_subtitle">The translate, reading and ふ buttons explain themselves once more, one at a time.</string>
     <string name="lyrics_hints_reset_done">The hints show next time you open the lyrics.</string>
+    <string name="spotify_row_still_matching">Still looking for this song on YouTube Music.</string>
+    <string name="spotify_row_retrying">Looking for this song again…</string>
+    <string name="spotify_row_still_missing">Still not found on YouTube Music.</string>
+    <string name="spotify_nothing_playable">No songs found on YouTube Music yet. Tap a grey song to look again.</string>
+    <string name="spotify_row_found">Found it on YouTube Music. Tap it to play.</string>
     <string name="ko_window_summary">Summary</string>
     <string name="ko_window_songs">Songs · %1$d</string>
     <string name="ko_window_space">Space used</string>

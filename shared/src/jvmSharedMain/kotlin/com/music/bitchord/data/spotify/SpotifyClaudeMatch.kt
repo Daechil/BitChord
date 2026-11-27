@@ -40,7 +40,15 @@ object SpotifyClaudeMatch {
     /** How a match was made, for logs and the probe. */
     enum class How { RULES, CLAUDE, CLAUDE_SECOND_SEARCH, NONE }
 
-    class Outcome(val song: Song?, val how: How, val claudeCalls: Int, val candidates: Int)
+    /**
+     * [settled] is false when the answer could not be had — YouTube turned the
+     * searches away, or Claude's call failed — so "not found" here means "try
+     * again later", and is never to be remembered as the track's answer.
+     */
+    class Outcome(val song: Song?, val how: How, val claudeCalls: Int, val candidates: Int, val settled: Boolean = true)
+
+    /** Every attempt at a YouTube Music search was turned away (not: it found nothing). */
+    class SearchRefused(query: String) : Exception("search refused: ${query.take(40)}")
 
     /** Candidates shown to Claude at most. */
     private const val MAX_CANDIDATES = 12
@@ -73,25 +81,33 @@ object SpotifyClaudeMatch {
             durationSec = track.durationMs.takeIf { it > 0 }?.div(1000),
             album = track.album,
         )
-        val first = runCatching { search(listOf(track.title, track.artist).filter { it.isNotBlank() }.joinToString(" ")) }
+        var refused = 0
+        suspend fun searched(query: String): List<Song> = runCatching { search(query) }
+            .onFailure { if (it is kotlin.coroutines.cancellation.CancellationException) throw it; refused++ }
             .getOrDefault(emptyList())
+        val first = searched(listOf(track.title, track.artist).filter { it.isNotBlank() }.joinToString(" "))
         val ruled = TrackMatcher.best(first, target)
         // The rules' pick stands only when it is plainly the track: its performer, its version.
         // A cover by someone else or the original of a "Twin Ver." got past them on a title alone.
         if (ruled != null && plainlySame(track, ruled)) return Outcome(ruled, How.RULES, 0, first.size)
-        if (!useClaude) return Outcome(ruled ?: first.firstOrNull(), How.NONE, 0, first.size)
+        if (!useClaude) return Outcome(ruled ?: first.firstOrNull(), How.NONE, 0, first.size, settled = refused == 0)
 
-        val titleOnly = runCatching { search(plainTitle(track.title)) }.getOrDefault(emptyList())
+        val titleOnly = searched(plainTitle(track.title))
         var candidates = merged(first, titleOnly)
+        // Nothing to choose from: no call. Searches turned away are worth trying again;
+        // two that answered with nothing are the answer.
+        if (candidates.isEmpty()) return Outcome(null, How.NONE, 0, 0, settled = refused == 0)
 
-        val answer = ask(track, candidates) ?: return Outcome(null, How.NONE, 1, candidates.size)
+        val answer = ask(track, candidates) ?: return Outcome(null, How.NONE, 1, candidates.size, settled = false)
         accepted(answer, candidates, track)?.let { return Outcome(it, How.CLAUDE, 1, candidates.size) }
 
         // None among these: Claude's own searches, once.
-        val more = answer.searches.take(2).flatMap { query -> runCatching { search(query) }.getOrDefault(emptyList()) }
-        if (more.isEmpty()) return Outcome(null, How.NONE, 1, candidates.size)
+        val refusedBefore = refused
+        val more = answer.searches.take(2).flatMap { query -> searched(query) }
+        if (more.isEmpty()) return Outcome(null, How.NONE, 1, candidates.size, settled = refused == refusedBefore)
         candidates = merged(candidates, more)
-        val second = ask(track, candidates, askForSearches = false) ?: return Outcome(null, How.NONE, 2, candidates.size)
+        val second = ask(track, candidates, askForSearches = false)
+            ?: return Outcome(null, How.NONE, 2, candidates.size, settled = false)
         val chosen = accepted(second, candidates, track)
         return Outcome(chosen, if (chosen != null) How.CLAUDE_SECOND_SEARCH else How.NONE, 2, candidates.size)
     }
@@ -108,7 +124,7 @@ object SpotifyClaudeMatch {
             result.getOrNull()?.let { found -> return found.filterIsInstance<SearchResult.Track>().map { it.song } }
             if (attempt == 0) kotlinx.coroutines.delay(SEARCH_RETRY_MS)
         }
-        return emptyList()
+        throw SearchRefused(query)
     }
 
     private const val SEARCH_RETRY_MS = 1_500L

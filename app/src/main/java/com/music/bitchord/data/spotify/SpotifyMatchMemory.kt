@@ -13,7 +13,10 @@ import org.json.JSONObject
  */
 object SpotifyMatchMemory {
 
-    private const val PREFS = "ko_spotify_matches"
+    // v2: the first file also kept "none" for calls that failed and for searches YouTube
+    // turned away, which left whole playlists grey for good; it is dropped, not read.
+    private const val PREFS = "ko_spotify_matches_v2"
+    private const val OLD_PREFS = "ko_spotify_matches"
     private const val MAX_ENTRIES = 3_000
     private const val NONE = "none"
 
@@ -21,6 +24,7 @@ object SpotifyMatchMemory {
 
     fun init(context: Context) {
         prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        runCatching { context.applicationContext.deleteSharedPreferences(OLD_PREFS) }
     }
 
     /** Null when never asked; [Remembered.song] null when Claude found the song is not there. */

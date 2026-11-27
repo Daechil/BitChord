@@ -42,4 +42,35 @@ class SpotifyClaudeMatchTest {
         assertEquals("Bohemian Rhapsody", SpotifyClaudeMatch.plainTitle("Bohemian Rhapsody - Remastered 2011"))
         assertEquals("Seven", SpotifyClaudeMatch.plainTitle("Seven (feat. Latto) - Clean Ver."))
     }
+
+    @Test
+    fun `searches turned away are not an answer`() = kotlinx.coroutines.runBlocking {
+        val outcome = SpotifyClaudeMatch.match(
+            track("God-ish", "PinocchioP", 200),
+            useClaude = true,
+            search = { throw SpotifyClaudeMatch.SearchRefused(it) },
+        )
+        assertNull(outcome.song)
+        assertEquals(0, outcome.claudeCalls) // nothing to choose from: Claude is not asked
+        assertFalse(outcome.settled)
+    }
+
+    @Test
+    fun `searches that find nothing are the answer, without a call`() = kotlinx.coroutines.runBlocking {
+        val outcome = SpotifyClaudeMatch.match(track("Nonexistent", "Nobody", 200), useClaude = true, search = { emptyList() })
+        assertNull(outcome.song)
+        assertEquals(0, outcome.claudeCalls)
+        assertTrue(outcome.settled)
+    }
+
+    @Test
+    fun `a plain match by the rules is settled`() = kotlinx.coroutines.runBlocking {
+        val outcome = SpotifyClaudeMatch.match(
+            track("God-ish", "PinocchioP", 200),
+            useClaude = true,
+            search = { listOf(song("God-ish", "PinocchioP", "3:20")) },
+        )
+        assertEquals("God-ish", outcome.song?.title)
+        assertTrue(outcome.settled)
+    }
 }

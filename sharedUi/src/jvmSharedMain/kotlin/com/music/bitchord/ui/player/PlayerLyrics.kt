@@ -1,5 +1,7 @@
 package com.music.bitchord.ui.player
 
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.Animatable
@@ -1543,6 +1545,7 @@ internal fun TranslationToggleButton(
     )
     val claude by PlayerPlatform.host.songMeaningAvailable.collectAsStateWithLifecycle()
     val hintText = stringResource(if (claude) Res.string.lyrics_hint_translate_claude else Res.string.lyrics_hint_translate)
+    val haptics = LocalHapticFeedback.current
     LyricsHintAnchor(LyricsHint.TRANSLATE, hintText, enabled = enabled && onLongClick != null) {
     Box(
         modifier = Modifier
@@ -1555,7 +1558,10 @@ internal fun TranslationToggleButton(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = { LyricsHints.used(LyricsHint.TRANSLATE); onClick() },
-                onLongClick = onLongClick?.let { long -> { LyricsHints.used(LyricsHint.TRANSLATE); long() } },
+                // A tick under the finger: a long press asks Claude again, and should feel taken.
+                onLongClick = onLongClick?.let { long ->
+                    { haptics.performHapticFeedback(HapticFeedbackType.LongPress); LyricsHints.used(LyricsHint.TRANSLATE); long() }
+                },
                 onLongClickLabel = stringResource(Res.string.lyrics_long_retranslate),
             ),
         contentAlignment = Alignment.Center,
@@ -1615,6 +1621,7 @@ internal fun RomanizationToggleButton(
     )
     val claude by PlayerPlatform.host.songMeaningAvailable.collectAsStateWithLifecycle()
     val hintText = stringResource(if (claude) Res.string.lyrics_hint_reading_claude else Res.string.lyrics_hint_reading)
+    val haptics = LocalHapticFeedback.current
     LyricsHintAnchor(LyricsHint.READING, hintText, enabled = enabled) {
     Box(
         modifier = Modifier
@@ -1627,7 +1634,9 @@ internal fun RomanizationToggleButton(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = { LyricsHints.used(LyricsHint.READING); onClick() },
-                onLongClick = onLongClick?.let { long -> { LyricsHints.used(LyricsHint.READING); long() } },
+                onLongClick = onLongClick?.let { long ->
+                    { haptics.performHapticFeedback(HapticFeedbackType.LongPress); LyricsHints.used(LyricsHint.READING); long() }
+                },
                 onLongClickLabel = stringResource(Res.string.lyrics_long_claude_reading),
             ),
         contentAlignment = Alignment.Center,

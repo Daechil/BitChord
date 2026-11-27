@@ -3216,9 +3216,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val useClaude = com.music.bitchord.data.settings.AppSettings.spotifyClaudeMatch.value &&
             com.music.bitchord.data.lyrics.LyricsTranslation.claudeKeyUsable
         val outcome = com.music.bitchord.data.spotify.SpotifyClaudeMatch.match(track, useClaude = useClaude)
-        // Only an answer Claude actually gave is kept: a failed call or searches turned
-        // away say nothing about the track, and kept as "none" they greyed it out for good.
-        if (outcome.claudeCalls > 0 && outcome.settled) {
+        // A settled answer is kept — a version found by the rules too, so reopening the
+        // playlist does not search YouTube Music again; "none" only when Claude said so.
+        // A failed call or searches turned away say nothing, and are never kept.
+        if (outcome.settled && (outcome.song != null || outcome.claudeCalls > 0)) {
             com.music.bitchord.data.spotify.SpotifyMatchMemory.put(track.id, outcome.song)
         }
         return outcome.song to outcome.settled

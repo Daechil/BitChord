@@ -103,6 +103,20 @@ object QueueBuilder {
      */
     fun isSameRecording(a: Song, b: Song): Boolean = same(Key(a), Key(b))
 
+    /**
+     * Which of [songs] each song asked about is the same recording as — its
+     * index there, or -1 — with [songs]' keys worked out once rather than once
+     * per question. For holding a station's candidates against a long list.
+     */
+    fun indexAmong(songs: List<Song>): (Song) -> Int {
+        val keys = songs.map(::Key)
+        val byId = HashMap<String, Int>()
+        songs.forEachIndexed { index, song -> if (song.videoId.isNotBlank()) byId.putIfAbsent(song.videoId, index) }
+        return { song ->
+            byId[song.videoId] ?: Key(song).let { key -> keys.indexOfFirst { same(it, key) } }
+        }
+    }
+
     /** The listener's own groups of one song, as [SameSongLinks] keeps them; read for every comparison. */
     @Volatile
     private var linkKeys: List<List<Key>> = emptyList()

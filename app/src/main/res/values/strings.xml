@@ -938,6 +938,22 @@ Adding: %4$s
     <string name="beta_updates_subtitle">New features arrive first, before the stable release. They may have problems.</string>
     <string name="beta_updates_off_on_beta">This is a beta build. Android won\'t install an older version over it, so updates resume once a stable release passes this one.</string>
     <string name="update_beta_badge">Beta</string>
+    <string name="radio_fresh">Fewer songs heard lately</string>
+    <string name="radio_fresh_subtitle">Radio and AutoPlay put songs you heard through in this period after the new ones.</string>
+    <string name="radio_fresh_off">Off</string>
+    <string name="radio_fresh_drop">Leave them out</string>
+    <string name="radio_fresh_drop_off">Heard songs still fill in, longest-unheard first.</string>
+    <string name="radio_fresh_drop_on">Heard songs are left out. Under 3 new ones, the longest-unheard fill in.</string>
+    <string name="bluetooth_lyrics">Lyrics over Bluetooth</string>
+    <string name="bluetooth_lyrics_subtitle">On a car or speaker display, the playing line shows in place of the title.</string>
+    <string name="bluetooth_lyrics_original">Original</string>
+    <string name="bluetooth_lyrics_translation">Translation</string>
+    <string name="bluetooth_lyrics_either">Translation, else original</string>
+    <string name="bluetooth_lyrics_note">Only while playing over Bluetooth. The phone’s notification and lock-screen media card show the line too, and other apps that read the notification may log it as the title. Some cars update slowly or not at all.</string>
+    <plurals name="radio_fresh_days">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
     <string name="ko_window_summary">Summary</string>
     <string name="ko_window_songs">Songs · %1$d</string>
     <string name="ko_window_space">Space used</string>

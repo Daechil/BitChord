@@ -1009,6 +1009,9 @@ class PlaybackService : MediaLibraryService() {
     private var serviceLyricsJob: Job? = null
     private var serviceLyrics: List<LyricLine>? = null
     private var lastPublishedSubtitle: String? = null
+
+    /** KO: the lyric line standing in for the title over Bluetooth, as last announced; see [BluetoothLyrics]. */
+    private var lastBluetoothShown: BluetoothLyrics.Shown? = null
     /** How long the service's own lyrics lookup waits for the track's length. */
     private val LYRICS_DURATION_WAIT_MS = 5_000L
     private var lyricsTickerJob: Job? = null
@@ -1497,6 +1500,7 @@ class PlaybackService : MediaLibraryService() {
         headphoneResume.attach()
         com.music.bitchord.lockscreen.LockScreenLyrics.attach(this) { player?.currentMediaItem != null }
         com.music.bitchord.lockscreen.FloatingLyrics.attach(this)
+        BluetoothLyrics.attach(this)
 
         setMediaNotificationProvider(
             DefaultMediaNotificationProvider.Builder(this)
@@ -2096,6 +2100,7 @@ class PlaybackService : MediaLibraryService() {
         lockedTransport = { playing -> partySync?.onLockedTransport(playing) == true },
         cast = speakers,
         onShuffleRequest = ::toggleShuffleFromSession,
+        getBluetoothShown = { lastBluetoothShown },
     ) { lastPublishedSubtitle }
 
     /**
@@ -8665,6 +8670,7 @@ class PlaybackService : MediaLibraryService() {
         headphoneResume.detach()
         com.music.bitchord.lockscreen.LockScreenLyrics.detach(this)
         com.music.bitchord.lockscreen.FloatingLyrics.detach(this)
+        BluetoothLyrics.detach()
         audioManager?.unregisterAudioDeviceCallback(outputDeviceCallback)
         partySync?.stop()
         partySync = null
@@ -8841,6 +8847,12 @@ class PlaybackService : MediaLibraryService() {
         val currentSong = exoPlayer.currentMediaItem?.toSong() ?: return
         val lines = serviceLyrics
         val pos = crossfade?.loopPositionMs() ?: exoPlayer.currentPosition
+        // KO: over Bluetooth, the line in the title's place; told to the session only when it changes.
+        val bluetooth = BluetoothLyrics.shownFor(currentSong, lines, pos, exoPlayer.isPlaying, speakers.active)
+        if (bluetooth != lastBluetoothShown) {
+            lastBluetoothShown = bluetooth
+            (mediaSession?.player as? SessionPlayer)?.announceMetadata()
+        }
         val subtitleText = if (lines != null && lines.isNotEmpty() && AppSettings.syncedLyrics.value) {
             val idx = lines.indexOfLast { it.timeMs <= pos }
             val currentLine = lines.getOrNull(idx)
@@ -8920,6 +8932,8 @@ class PlaybackService : MediaLibraryService() {
         private val onQueueUndoRouteChanged: () -> Unit,
         /** Flips the app's own shuffle — the queue edit in [QueueShuffle]. */
         private val onShuffleRequest: () -> Unit,
+        /** KO: the Bluetooth lyric title, when one stands in for the song's own; see [BluetoothLyrics]. */
+        private val getBluetoothShown: () -> BluetoothLyrics.Shown? = { null },
         private val getSubtitle: () -> String?,
     ) : ForwardingPlayer(player), CastSink {
 
@@ -9445,11 +9459,33 @@ class PlaybackService : MediaLibraryService() {
         override fun getMediaMetadata(): MediaMetadata {
             val base = wrappedPlayer.mediaMetadata
             val subtitle = getSubtitle()
-            return if (!subtitle.isNullOrBlank()) {
+            val withSubtitle = if (!subtitle.isNullOrBlank()) {
                 base.buildUpon().setSubtitle(subtitle).build()
             } else {
                 base
             }
+            // KO: the lyric line as the title over Bluetooth — only for the song it was worked out for.
+            val bluetooth = getBluetoothShown()
+                ?.takeIf { it.videoId == wrappedPlayer.currentMediaItem?.mediaId }
+                ?: return withSubtitle
+            return withSubtitle.buildUpon()
+                .setTitle(bluetooth.title)
+                .setDisplayTitle(bluetooth.title)
+                .setArtist(bluetooth.artist)
+                .build()
+        }
+
+        /**
+         * KO: tells the session the metadata changed though the player's has not
+         * — the Bluetooth lyric title — so the media session, and with it a car's
+         * display, reads [getMediaMetadata] again. Only `onMediaMetadataChanged`
+         * makes Media3 rebuild the platform session's metadata.
+         */
+        fun announceMetadata() {
+            val metadata = getMediaMetadata()
+            listeners.forEach { it.onMediaMetadataChanged(metadata) }
+            val events = Player.Events(FlagSet.Builder().add(Player.EVENT_MEDIA_METADATA_CHANGED).build())
+            listeners.forEach { it.onEvents(this, events) }
         }
 
         override fun seekTo(mediaItemIndex: Int, positionMs: Long) {

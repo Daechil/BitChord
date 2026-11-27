@@ -415,6 +415,45 @@ object ListeningStats {
         ReplayYearData(year, summary, dayMs, monthTops, busiestDaySong)
     }
 
+    /**
+     * KO: every track heard through — a counted play, not a skip — on or after
+     * [since], with the last day it was, on this device or another synced to
+     * it. For [com.music.bitchord.playback.RecentRadio]; the months it reads are
+     * the ones [since] reaches, flushed first like [summary].
+     */
+    suspend fun heardSince(since: LocalDate): List<HeardTrack> = withContext(Dispatchers.IO) {
+        if (!ready) return@withContext emptyList()
+        flushAndAwait()
+        val sinceKey = since.toString()
+        val heard = HashMap<String, HeardTrack>()
+        var month = YearMonth.from(since)
+        val last = YearMonth.now()
+        while (month <= last) {
+            for (bucket in bucketsOf(month)) {
+                for (track in bucket.tracks) {
+                    val day = lastPlayDay(track) ?: continue
+                    if (day < sinceKey) continue
+                    val held = heard[track.id]
+                    if (held == null || held.day < day) {
+                        heard[track.id] = HeardTrack(track.id, track.title, track.artist, day)
+                    }
+                }
+            }
+            month = month.plusMonths(1)
+        }
+        heard.values.toList()
+    }
+
+    /** The last day [track] was played through, as "YYYY-MM-DD", or null if it never was. */
+    private fun lastPlayDay(track: TrackEntry): String? {
+        track.days.entries.filter { it.value.plays > 0 }.maxOfOrNull { it.key }?.let { return it }
+        // A month written before the per-day breakdown: its last sample stands in.
+        if (track.days.isEmpty() && track.plays > 0 && track.last > 0) {
+            return Instant.ofEpochMilli(track.last).atZone(ZoneId.systemDefault()).toLocalDate().toString()
+        }
+        return null
+    }
+
     /** This device's copy of [month], then every other device's. See [summary]. */
     private fun bucketsOf(month: YearMonth): List<StoredBucket> =
         listOfNotNull(read(month.toString())) + PeerListening.buckets(month.toString())
@@ -971,6 +1010,9 @@ object ListeningStats {
     private const val MAX_TRACKS = 600
     private const val MAX_NAMES = 400
 }
+
+/** KO: a track heard through lately, and the last day it was ("YYYY-MM-DD"); see ListeningStats.heardSince. */
+data class HeardTrack(val id: String, val title: String, val artist: String, val day: String)
 
 /** Daily-level listening for a single track or artist. */
 @Serializable

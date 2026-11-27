@@ -225,3 +225,93 @@ fun QueueTidyAutoRow(title: String) {
         onClick = { com.music.bitchord.data.settings.AppSettings.setQueueTidyAuto(!on) },
     )
 }
+
+/**
+ * Settings' "fewer songs heard lately": how far back radio and AutoPlay hold
+ * heard songs back, and whether they go last or out; see
+ * [com.music.bitchord.playback.RecentRadio].
+ */
+@androidx.compose.runtime.Composable
+fun RadioFreshRows(title: String) {
+    val days by com.music.bitchord.data.settings.AppSettings.radioFreshDays.collectAsStateWithLifecycle()
+    val drop by com.music.bitchord.data.settings.AppSettings.radioFreshDrop.collectAsStateWithLifecycle()
+    val choices = com.music.bitchord.data.settings.AppSettings.RADIO_FRESH_DAY_CHOICES
+    com.music.bitchord.ui.screens.SettingsRow(
+        icon = com.music.bitchord.ui.icons.SfIcons.Radio,
+        title = title,
+        subtitle = androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.radio_fresh_subtitle),
+    )
+    com.music.bitchord.ui.screens.SegmentedControl(
+        options = choices.map { day ->
+            if (day == 0) {
+                androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.radio_fresh_off)
+            } else {
+                androidx.compose.ui.res.pluralStringResource(com.music.bitchord.R.plurals.radio_fresh_days, day, day)
+            }
+        },
+        selectedIndex = choices.indexOf(days).coerceAtLeast(0),
+        onSelect = { index -> com.music.bitchord.data.settings.AppSettings.setRadioFreshDays(choices[index]) },
+        modifier = androidx.compose.ui.Modifier.padding(
+            start = com.music.bitchord.ui.screens.TEXT_INSET,
+            end = com.music.bitchord.ui.screens.ROW_INSET,
+            bottom = 14.dp,
+        ),
+    )
+    if (days > 0) {
+        com.music.bitchord.ui.screens.SettingsSubRow(
+            title = androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.radio_fresh_drop),
+            subtitle = androidx.compose.ui.res.stringResource(
+                if (drop) com.music.bitchord.R.string.radio_fresh_drop_on else com.music.bitchord.R.string.radio_fresh_drop_off,
+            ),
+            checked = drop,
+            onCheckedChange = com.music.bitchord.data.settings.AppSettings::setRadioFreshDrop,
+            aligned = true,
+        )
+    }
+}
+
+/**
+ * Settings' "lyrics over Bluetooth": the playing line in the title's place on
+ * a car's or speaker's display, and what it shows; see
+ * [com.music.bitchord.playback.BluetoothLyrics].
+ */
+@androidx.compose.runtime.Composable
+fun BluetoothLyricsRows(title: String) {
+    val on by com.music.bitchord.data.settings.AppSettings.bluetoothLyrics.collectAsStateWithLifecycle()
+    val show by com.music.bitchord.data.settings.AppSettings.bluetoothLyricsShow.collectAsStateWithLifecycle()
+    com.music.bitchord.ui.screens.SettingsRow(
+        icon = com.music.bitchord.ui.icons.SfIcons.Bluetooth,
+        title = title,
+        subtitle = androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.bluetooth_lyrics_subtitle),
+        trailing = {
+            IosSwitch(checked = on, onCheckedChange = com.music.bitchord.data.settings.AppSettings::setBluetoothLyrics)
+        },
+        onClick = { com.music.bitchord.data.settings.AppSettings.setBluetoothLyrics(!on) },
+    )
+    if (on) {
+        com.music.bitchord.ui.screens.SegmentedControl(
+            options = listOf(
+                androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.bluetooth_lyrics_original),
+                androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.bluetooth_lyrics_translation),
+                androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.bluetooth_lyrics_either),
+            ),
+            selectedIndex = show.coerceIn(0, 2),
+            onSelect = com.music.bitchord.data.settings.AppSettings::setBluetoothLyricsShow,
+            modifier = androidx.compose.ui.Modifier.padding(
+                start = com.music.bitchord.ui.screens.TEXT_INSET,
+                end = com.music.bitchord.ui.screens.ROW_INSET,
+                bottom = 6.dp,
+            ),
+        )
+        androidx.compose.material3.Text(
+            text = androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.bluetooth_lyrics_note),
+            style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+            color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = androidx.compose.ui.Modifier.padding(
+                start = com.music.bitchord.ui.screens.TEXT_INSET,
+                end = com.music.bitchord.ui.screens.ROW_INSET,
+                bottom = 14.dp,
+            ),
+        )
+    }
+}

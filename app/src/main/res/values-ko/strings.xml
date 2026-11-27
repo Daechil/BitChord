@@ -887,6 +887,21 @@
     <string name="beta_updates_subtitle">새 기능을 정식보다 먼저 받아요. 문제가 있을 수 있어요.</string>
     <string name="beta_updates_off_on_beta">지금 베타 버전을 쓰고 있어요. 이 버전보다 높은 정식 버전이 나오면 그때부터 정식으로 업데이트돼요.</string>
     <string name="update_beta_badge">베타</string>
+    <string name="radio_fresh">최근 들은 곡 줄이기</string>
+    <string name="radio_fresh_subtitle">이 기간에 끝까지 들은 곡은 라디오·자동 재생에서 안 들은 곡 뒤로 보내요.</string>
+    <string name="radio_fresh_off">끔</string>
+    <string name="radio_fresh_drop">아예 빼기</string>
+    <string name="radio_fresh_drop_off">들은 곡은 안 들은 곡 뒤에, 오래전에 들은 곡부터 넣어요.</string>
+    <string name="radio_fresh_drop_on">들은 곡은 넣지 않아요. 새 곡이 3곡도 안 되면 오래전에 들은 곡으로 채워요.</string>
+    <string name="bluetooth_lyrics">블루투스 가사</string>
+    <string name="bluetooth_lyrics_subtitle">차량·스피커 화면의 제목 자리에 지금 부르는 가사를 보여 줘요.</string>
+    <string name="bluetooth_lyrics_original">원문</string>
+    <string name="bluetooth_lyrics_translation">번역</string>
+    <string name="bluetooth_lyrics_either">번역(없으면 원문)</string>
+    <string name="bluetooth_lyrics_note">블루투스로 재생할 때만 바뀌어요. 이때 폰 알림과 잠금화면 미디어 카드의 제목도 가사로 바뀌고, 알림을 읽는 다른 기록 앱에는 가사가 곡 제목으로 남을 수 있어요. 차량에 따라 늦게 바뀌거나 안 바뀔 수 있어요.</string>
+    <plurals name="radio_fresh_days">
+        <item quantity="other">%1$d일</item>
+    </plurals>
     <string name="ko_window_summary">요약</string>
     <string name="ko_window_songs">곡 · %1$d곡</string>
     <string name="ko_window_space">사용 공간</string>

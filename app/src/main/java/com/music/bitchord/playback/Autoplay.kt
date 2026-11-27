@@ -106,7 +106,9 @@ suspend fun loadAutoplayTracks(
     // they would only be converted again, when the station's songs are the answer.
     val videos = seedSong.isVideo && seed == seedSong.videoId && !MusicOnlyPlayback.isActive()
     val related = YtMusicRepository.radio(seed, preferVideo = videos).getOrElse { return Result.failure(it) }
-    val extra = QueueBuilder.extend(existing, related, limit, preferVideos = videos)
+    // KO: songs heard lately behind the new ones, or out, as Settings says.
+    val station = RecentRadio.reorder(related)
+    val extra = QueueBuilder.extend(existing, station, limit, preferVideos = videos)
     if (extra.isEmpty()) return Result.success(emptyList())
 
     return Result.success(extra.map {

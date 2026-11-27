@@ -821,14 +821,20 @@ fun SettingsScreen(
                 com.music.bitchord.ui.components.SongBackgroundRows(songBackgroundTitle)
             }
         }
-        if (shows(SettingsCategory.KO_FEATURES) && claudeApiKey.isNotBlank()) SearchableSettingsGroup(
+        if (shows(SettingsCategory.KO_FEATURES)) SearchableSettingsGroup(
             search,
             header = stringResource(R.string.ko_group_queue),
             headerInPage = true,
         ) {
-            val queueTidyTitle = stringResource(R.string.queue_tidy_auto)
-            row(queueTidyTitle, "claude", "queue", "radio", "duplicate", "다음 곡", "라디오", "중복", "겹친", "정리") {
-                com.music.bitchord.ui.components.QueueTidyAutoRow(queueTidyTitle)
+            val radioFreshTitle = stringResource(R.string.radio_fresh)
+            row(radioFreshTitle, "radio", "autoplay", "new", "heard", "라디오", "자동 재생", "새 곡", "들은 곡") {
+                com.music.bitchord.ui.components.RadioFreshRows(radioFreshTitle)
+            }
+            if (claudeApiKey.isNotBlank()) {
+                val queueTidyTitle = stringResource(R.string.queue_tidy_auto)
+                row(queueTidyTitle, "claude", "queue", "radio", "duplicate", "다음 곡", "라디오", "중복", "겹친", "정리") {
+                    com.music.bitchord.ui.components.QueueTidyAutoRow(queueTidyTitle)
+                }
             }
         }
         if (shows(SettingsCategory.KO_FEATURES) && claudeApiKey.isNotBlank()) SearchableSettingsGroup(
@@ -1116,6 +1122,10 @@ fun SettingsScreen(
                         }
                     },
                 )
+            }
+            val bluetoothLyricsTitle = stringResource(R.string.bluetooth_lyrics)
+            row(bluetoothLyricsTitle, "lyrics", "bluetooth", "car", "블루투스", "차량", "자동차", "가사") {
+                com.music.bitchord.ui.components.BluetoothLyricsRows(bluetoothLyricsTitle)
             }
             val waveformTitle = stringResource(R.string.waveform_seek_bar)
             row(waveformTitle, "waveform", "seek bar", "progress", "음파", "재생 막대", "파형") {

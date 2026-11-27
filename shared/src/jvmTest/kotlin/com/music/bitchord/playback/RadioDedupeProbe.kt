@@ -91,4 +91,46 @@ class RadioDedupeProbe {
         file.writeText(out.toString())
         println(out)
     }
+
+    /**
+     * KO: how much of a station the listener heard yesterday comes back
+     * today, and how much once [FreshRadio] holds it back. "Yesterday" is the
+     * first ten songs queued from the seed's station; "today" is radio started
+     * again from the seed and from a song in it. Counts only, no names.
+     */
+    @Test
+    fun freshProbe() {
+        val seeds = System.getenv("LIVE_RADIO")?.split(';')?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
+        if (seeds.isEmpty()) return
+        val report = StringBuilder("# Fresh radio check\n\n| seed | again from | heard in plain 10 | heard, moved back | heard, left out |\n|---|---|---|---|---|\n")
+        var plainTotal = 0
+        var deferTotal = 0
+        var dropTotal = 0
+        var rows = 0
+        seeds.forEachIndexed { n, query ->
+            runBlocking {
+                val seed = runCatching {
+                    YtMusicRepository.search(query, SearchFilter.SONGS).getOrNull().orEmpty()
+                        .firstNotNullOfOrNull { (it as? SearchResult.Track)?.song ?: (it as? SearchResult.TopTrack)?.song }
+                }.getOrNull() ?: return@runBlocking
+                val first = YtMusicRepository.radio(seed.videoId).getOrNull().orEmpty()
+                val yesterday = QueueBuilder.extend(listOf(seed), first, limit = 10)
+                if (yesterday.isEmpty()) return@runBlocking
+                val heard = (listOf(seed) + yesterday).mapIndexed { i, song -> FreshRadio.Heard(song, i.toLong()) }
+                val isHeard = QueueBuilder.indexAmong(heard.map { it.song })
+                for ((label, again) in listOf("seed" to seed, "3rd song" to yesterday.getOrNull(2))) {
+                    again ?: continue
+                    val station = YtMusicRepository.radio(again.videoId).getOrNull().orEmpty()
+                    fun count(order: List<Song>) = QueueBuilder.extend(listOf(again), order, limit = 10).count { isHeard(it) >= 0 }
+                    val plain = count(station)
+                    val defer = count(FreshRadio.order(station, heard, drop = false).songs)
+                    val drop = count(FreshRadio.order(station, heard, drop = true).songs)
+                    plainTotal += plain; deferTotal += defer; dropTotal += drop; rows++
+                    report.append("| ${n + 1} | $label | $plain | $defer | $drop |\n")
+                }
+            }
+        }
+        report.append("\n$rows stations: heard songs in the first 10 — plain $plainTotal, moved back $deferTotal, left out $dropTotal\n")
+        println(report)
+    }
 }

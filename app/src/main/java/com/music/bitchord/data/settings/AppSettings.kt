@@ -708,6 +708,18 @@ object AppSettings {
     /** Radio and AutoPlay songs that repeat a queued recording are taken out as they arrive, by Claude. */
     val queueTidyAuto = MutableStateFlow(false)
 
+    /** Radio and AutoPlay hold back songs heard through in this many days (0 = off); see RecentRadio. */
+    val radioFreshDays = MutableStateFlow(0)
+
+    /** Heard songs left out of a station rather than only moved behind the unheard ones. */
+    val radioFreshDrop = MutableStateFlow(false)
+
+    /** Over Bluetooth, the playing lyric line takes the title's place; see BluetoothLyrics. */
+    val bluetoothLyrics = MutableStateFlow(false)
+
+    /** What the Bluetooth title shows: one of the BLUETOOTH_LYRICS_* values. */
+    val bluetoothLyricsShow = MutableStateFlow(BLUETOOTH_LYRICS_TRANSLATION_OR_ORIGINAL)
+
     /** The song background looked up by Sonnet rather than Haiku. */
     val songBackgroundSonnet = MutableStateFlow(false)
 
@@ -1521,6 +1533,11 @@ object AppSettings {
         com.music.bitchord.data.lyrics.SongBackgrounds.widenWhenMissing = songBackgroundWiden.value
         songBackgroundSonnet.value = prefs.getBoolean(KEY_SONG_BACKGROUND_SONNET, false)
         queueTidyAuto.value = prefs.getBoolean(KEY_QUEUE_TIDY_AUTO, false)
+        radioFreshDays.value = prefs.getInt(KEY_RADIO_FRESH_DAYS, 0).takeIf { it in RADIO_FRESH_DAY_CHOICES } ?: 0
+        radioFreshDrop.value = prefs.getBoolean(KEY_RADIO_FRESH_DROP, false)
+        bluetoothLyrics.value = prefs.getBoolean(KEY_BLUETOOTH_LYRICS, false)
+        bluetoothLyricsShow.value = prefs.getInt(KEY_BLUETOOTH_LYRICS_SHOW, BLUETOOTH_LYRICS_TRANSLATION_OR_ORIGINAL)
+            .coerceIn(BLUETOOTH_LYRICS_ORIGINAL, BLUETOOTH_LYRICS_TRANSLATION_OR_ORIGINAL)
         // A beta build asks for betas until told otherwise: it came from that channel.
         betaUpdates.value = prefs.getBoolean(KEY_BETA_UPDATES, com.music.bitchord.BuildConfig.KO_BETA)
         com.music.bitchord.data.lyrics.SongBackgrounds.researchModel = researchModelFor(songBackgroundSonnet.value)
@@ -2331,6 +2348,28 @@ object AppSettings {
     fun setQueueTidyAuto(value: Boolean) {
         queueTidyAuto.value = value
         prefs.edit().putBoolean(KEY_QUEUE_TIDY_AUTO, value).apply()
+    }
+
+    fun setRadioFreshDays(value: Int) {
+        val days = value.takeIf { it in RADIO_FRESH_DAY_CHOICES } ?: 0
+        radioFreshDays.value = days
+        prefs.edit().putInt(KEY_RADIO_FRESH_DAYS, days).apply()
+    }
+
+    fun setRadioFreshDrop(value: Boolean) {
+        radioFreshDrop.value = value
+        prefs.edit().putBoolean(KEY_RADIO_FRESH_DROP, value).apply()
+    }
+
+    fun setBluetoothLyrics(value: Boolean) {
+        bluetoothLyrics.value = value
+        prefs.edit().putBoolean(KEY_BLUETOOTH_LYRICS, value).apply()
+    }
+
+    fun setBluetoothLyricsShow(value: Int) {
+        val show = value.coerceIn(BLUETOOTH_LYRICS_ORIGINAL, BLUETOOTH_LYRICS_TRANSLATION_OR_ORIGINAL)
+        bluetoothLyricsShow.value = show
+        prefs.edit().putInt(KEY_BLUETOOTH_LYRICS_SHOW, show).apply()
     }
 
     fun setSongBackgroundSonnet(value: Boolean) {
@@ -3408,6 +3447,18 @@ object AppSettings {
     private const val KEY_SAME_SONG_LINKS = "ko_same_song_links"
     private const val KEY_SONG_BACKGROUND_SONNET = "ko_song_background_sonnet"
     private const val KEY_QUEUE_TIDY_AUTO = "ko_queue_tidy_auto"
+    private const val KEY_RADIO_FRESH_DAYS = "ko_radio_fresh_days"
+    private const val KEY_RADIO_FRESH_DROP = "ko_radio_fresh_drop"
+    private const val KEY_BLUETOOTH_LYRICS = "ko_bluetooth_lyrics"
+    private const val KEY_BLUETOOTH_LYRICS_SHOW = "ko_bluetooth_lyrics_show"
+
+    /** The periods Settings offers for [radioFreshDays]; 0 is off. */
+    val RADIO_FRESH_DAY_CHOICES = listOf(0, 7, 30, 90)
+
+    const val BLUETOOTH_LYRICS_ORIGINAL = 0
+    /** The translation only: a line with none leaves the song's own title showing. */
+    const val BLUETOOTH_LYRICS_TRANSLATION = 1
+    const val BLUETOOTH_LYRICS_TRANSLATION_OR_ORIGINAL = 2
     private const val KEY_BETA_UPDATES = "ko_beta_updates"
     private const val KEY_CLAUDE_INSTRUCTIONS_MEANING = "ko_claude_instructions_meaning"
     private const val KEY_KRW_RATE_MODE = "ko_krw_rate_mode"

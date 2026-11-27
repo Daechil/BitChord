@@ -3485,9 +3485,8 @@ private fun BitChordApp(
                                     if (songs.isNotEmpty()) {
                                         // Play is the release in order, so a shuffle left on
                                         // from the last queue goes off before this one is built.
-                                        QueueShuffle.disableForNextQueue()
-                                        // KO: from the first song that can play, not a grey Spotify row; -1 when none can.
-                                        playDetailSongs(songs, com.music.bitchord.ui.components.SpotifyRowTap.firstPlayable(songs))
+                                        // KO: from the first song that can play, not a grey Spotify row (see SpotifyRowTap).
+                                        playDetailSongs(songs, com.music.bitchord.ui.components.SpotifyRowTap.playStart(songs))
                                     }
                                 },
                                 onShuffle = { songs ->
@@ -3495,8 +3494,7 @@ private fun BitChordApp(
                                         // Shuffle goes on first so the queue is built shuffled
                                         // as it is set — the random pick here only decides
                                         // which track leads it.
-                                        QueueShuffle.enableForNextQueue()
-                                        playDetailSongs(songs, com.music.bitchord.ui.components.SpotifyRowTap.randomPlayable(songs))
+                                        playDetailSongs(songs, com.music.bitchord.ui.components.SpotifyRowTap.shuffleStart(songs))
                                     }
                                 },
                                 onSectionItemClick = { item ->

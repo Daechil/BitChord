@@ -3190,7 +3190,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 page.copy(songs = UiState.Success(list.map { if (it.videoId == song.videoId) track.asPendingSong() else it }))
             } else page
         }
-        val match = runCatching { matchSpotify(track).first }.getOrNull()
+        // Tapped to try again: past a remembered "none" too, or the tap could never help.
+        val match = runCatching { matchSpotify(track, fresh = true).first }.getOrNull()
         setSpotifyRow(null, track, match)
         return match?.copy(thumbnailUrl = match.thumbnailUrl ?: track.imageUrl)
     }
@@ -3200,8 +3201,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * [SpotifyClaudeMatch] — the rules, and Claude where they find no plain
      * match, when Settings allows and a key is set — and Claude's answer kept.
      */
-    private suspend fun matchSpotify(track: SpotifyTrack): Pair<Song?, Boolean> {
-        com.music.bitchord.data.spotify.SpotifyMatchMemory.get(track.id)?.let { return it.song to true }
+    private suspend fun matchSpotify(track: SpotifyTrack, fresh: Boolean = false): Pair<Song?, Boolean> {
+        if (!fresh) com.music.bitchord.data.spotify.SpotifyMatchMemory.get(track.id)?.let { return it.song to true }
         val useClaude = com.music.bitchord.data.settings.AppSettings.spotifyClaudeMatch.value &&
             com.music.bitchord.data.lyrics.LyricsTranslation.claudeKeyUsable
         val outcome = com.music.bitchord.data.spotify.SpotifyClaudeMatch.match(track, useClaude = useClaude)

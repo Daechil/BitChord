@@ -6,6 +6,7 @@ import com.music.bitchord.R
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.model.isMatchPending
 import com.music.bitchord.data.model.isUnresolvedSpotify
+import com.music.bitchord.playback.QueueShuffle
 import com.music.bitchord.ui.MainViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.launch
@@ -46,13 +47,23 @@ object SpotifyRowTap {
         }
     }
 
-    /** Where Play starts: the first song that can play; when none can, says so. */
-    fun firstPlayable(songs: List<Song>): Int =
-        songs.indexOfFirst { !it.isUnresolvedSpotify }.takeIf { it >= 0 } ?: nothingPlayable()
+    /**
+     * Play: shuffle off for the queue it builds, and where it starts — the first
+     * song that can play. When none can it says so, and leaves shuffle as it was.
+     */
+    fun playStart(songs: List<Song>): Int {
+        val index = songs.indexOfFirst { !it.isUnresolvedSpotify }
+        if (index < 0) return nothingPlayable()
+        QueueShuffle.disableForNextQueue()
+        return index
+    }
 
-    /** Where Shuffle starts: any song that can play; when none can, says so. */
-    fun randomPlayable(songs: List<Song>): Int =
-        songs.indices.filter { !songs[it].isUnresolvedSpotify }.randomOrNull() ?: nothingPlayable()
+    /** Shuffle: shuffle on, and any song that can play to lead; none, and shuffle is left alone. */
+    fun shuffleStart(songs: List<Song>): Int {
+        val index = songs.indices.filter { !songs[it].isUnresolvedSpotify }.randomOrNull() ?: return nothingPlayable()
+        QueueShuffle.enableForNextQueue()
+        return index
+    }
 
     private var nothingPlayableAt = 0L
 

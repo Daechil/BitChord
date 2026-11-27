@@ -272,7 +272,7 @@
     <string name="skip_silence_subtitle">1초보다 긴 공백 자르기</string>
     <string name="skip_silence_float_subtitle">32비트 부동소수점 출력에서는 이용 불가</string>
     <string name="content_preferences">콘텐츠 표시</string>
-    <string name="hide_recents">Hide Recents</string>
+    <string name="hide_recents">홈에서 최근 재생 숨기기</string>
     <string name="hide_home_videos">홈에서 동영상 숨기기</string>
     <string name="hide_home_videos_subtitle">동영상만 있는 칸도 숨겨요. 검색·아티스트·재생목록에는 그대로 나와요</string>
     <string name="hide_top_picks">홈의 \'추천 음악\' 숨기기</string>

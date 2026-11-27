@@ -89,6 +89,9 @@ class FuriganaTest {
         val item = kotlin.test.assertNotNull(asked.item)
         assertEquals(hira.tag, item.furigana)
         assertEquals(hira.tag, item.target)
+        // Only the line with kanji is sent; the kana-only line is never paid for.
+        assertEquals(listOf(0), item.furiganaLines)
+        assertTrue(asked.params.toString().contains("抜錨") && !asked.params.toString().contains("ひらがな"))
         val system = asked.params?.get("system").toString()
         assertTrue(system.contains("furigana") && system.contains("cache_control"))
         // Never with a web search, whatever was asked.

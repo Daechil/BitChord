@@ -949,7 +949,7 @@ Adding: %4$s
     <string name="bluetooth_lyrics_original">Original</string>
     <string name="bluetooth_lyrics_translation">Translation</string>
     <string name="bluetooth_lyrics_either">Translation, else original</string>
-    <string name="bluetooth_lyrics_note">Only while playing over Bluetooth. The phone’s notification and lock-screen media card show the line too, and other apps that read the notification may log it as the title. Some cars update slowly or not at all.</string>
+    <string name="bluetooth_lyrics_note">Only while playing to a car or speaker over Bluetooth. The phone’s notification and lock-screen media card show the line too, and other apps that read the notification may log it as the title. Some cars update slowly or not at all.</string>
     <plurals name="radio_fresh_days">
         <item quantity="one">%1$d day</item>
         <item quantity="other">%1$d days</item>
@@ -963,6 +963,8 @@ Adding: %4$s
     <string name="furigana_hangul_detail">抜錨 → 바츠뵤, for reading without kana</string>
     <string name="translate_ahead_furigana">Furigana too</string>
     <string name="translate_ahead_furigana_detail">Japanese songs only: readings over the kanji, at half price (about 2–3 won a song)</string>
+    <string name="bluetooth_lyrics_earphones">Earbuds and headphones too</string>
+    <string name="bluetooth_lyrics_earphones_subtitle">Off: only a car, a speaker or a device that names neither</string>
     <string name="ko_window_summary">Summary</string>
     <string name="ko_window_songs">Songs · %1$d</string>
     <string name="ko_window_space">Space used</string>

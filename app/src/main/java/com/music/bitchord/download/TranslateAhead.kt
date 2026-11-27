@@ -457,6 +457,42 @@ object TranslateAhead {
         return (input * inPrice / 1_000_000.0 + output * outPrice / 1_000_000.0) * requests + researchUsd
     }
 
+    /**
+     * KO: what furigana for [songs] songs is expected to cost at the batch
+     * rate: the average of those already asked, or the tokens measured on ten
+     * real songs (Haiku writes about twice what Sonnet does, thinking included).
+     */
+    fun estimateFuriganaUsd(songs: Int, model: String): Double {
+        if (songs <= 0) return 0.0
+        val past = com.music.bitchord.data.lyrics.ClaudeDiagnostics.entries.value.filter {
+            it.purpose == com.music.bitchord.data.lyrics.ClaudeDiagnostics.PURPOSE_FURIGANA &&
+                it.model == model && !it.failed && it.inputTokens != null && it.outputTokens != null
+        }
+        val input = if (past.size >= 3) past.sumOf { it.inputTokens ?: 0L } / past.size else FURIGANA_INPUT_TOKENS
+        val output = when {
+            past.size >= 3 -> past.sumOf { it.outputTokens ?: 0L } / past.size
+            model == LyricsTranslation.CLAUDE_SONNET -> FURIGANA_OUTPUT_TOKENS_SONNET
+            else -> FURIGANA_OUTPUT_TOKENS_HAIKU
+        }
+        val (inPrice, outPrice) = AppSettings.claudePricePerMillion(model + LyricsTranslation.BATCH_MODEL_SUFFIX)
+        return (input * inPrice / 1_000_000.0 + output * outPrice / 1_000_000.0) * songs
+    }
+
+    /**
+     * KO: whether [song] may be Japanese, by its name, before its lyrics are
+     * looked at: kana or kanji in the title or the artist. Errs towards yes —
+     * a Chinese title counts — so an estimate runs high rather than low.
+     */
+    fun mayBeJapanese(song: Song): Boolean = (song.title + song.artist).any { c ->
+        val script = Character.UnicodeScript.of(c.code)
+        script == Character.UnicodeScript.HIRAGANA || script == Character.UnicodeScript.KATAKANA ||
+            script == Character.UnicodeScript.HAN
+    }
+
+    private const val FURIGANA_INPUT_TOKENS = 1_600L
+    private const val FURIGANA_OUTPUT_TOKENS_HAIKU = 5_000L
+    private const val FURIGANA_OUTPUT_TOKENS_SONNET = 2_000L
+
     /** The searches a song's background takes at most, and the tokens they bring back, measured on real songs. */
     private const val SEARCHES_PER_SONG = 2
     private const val RESEARCH_INPUT_TOKENS = 20_000

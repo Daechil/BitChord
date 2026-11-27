@@ -141,12 +141,22 @@ private suspend fun sendFromMenu(context: Context, title: String, songs: List<So
         emptyMap()
     }
     val plan = aheadPlan(statuses, ids, reading)
-    if (plan.requests == 0) {
+    // KO: furigana for the songs that may be Japanese, when it is asked for too.
+    val furiganaSongs = if (AppSettings.translateAheadFurigana.value) {
+        songs.distinctBy { it.videoId }.count { song ->
+            TranslateAhead.mayBeJapanese(song) && statuses[song.videoId]?.furigana == null &&
+                statuses[song.videoId]?.state != com.music.bitchord.download.TranslationStatus.State.NO_LYRICS
+        }
+    } else {
+        0
+    }
+    // A playlist already translated can still be sent for its furigana.
+    if (plan.requests == 0 && furiganaSongs == 0) {
         Toast.makeText(context, context.getString(R.string.translate_ahead_nothing), Toast.LENGTH_LONG).show()
         return
     }
     val research = if (com.music.bitchord.data.lyrics.SongBackgrounds.enabled && LyricsTranslation.claudeKeyUsable) plan.send else 0
-    val estimate = TranslateAhead.estimateUsd(plan.requests, model, research)
+    val estimate = TranslateAhead.estimateUsd(plan.requests, model, research) + TranslateAhead.estimateFuriganaUsd(furiganaSongs, model)
     val remaining = remainingCapUsd()
     if (remaining != null && estimate > remaining) {
         Toast.makeText(
@@ -251,8 +261,19 @@ private fun TranslateAheadAskAlert(hazeState: HazeState, ask: AheadAsk, onDismis
     // With the background setting on, each song sent may have its background looked up too.
     val researching = com.music.bitchord.data.lyrics.SongBackgrounds.enabled && LyricsTranslation.claudeKeyUsable
     val research = if (researching) plan?.send ?: count else 0
-    val haikuUsd = TranslateAhead.estimateUsd(requests, LyricsTranslation.CLAUDE_HAIKU, research)
-    val sonnetUsd = TranslateAhead.estimateUsd(requests, LyricsTranslation.CLAUDE_SONNET, research)
+    // KO: furigana for the songs that may be Japanese, while it is ticked.
+    val furiganaSongs = if (furigana) {
+        ask.songs.distinctBy { it.videoId }.count { song ->
+            TranslateAhead.mayBeJapanese(song) && statuses?.get(song.videoId)?.furigana == null &&
+                statuses?.get(song.videoId)?.state != com.music.bitchord.download.TranslationStatus.State.NO_LYRICS
+        }
+    } else {
+        0
+    }
+    val haikuUsd = TranslateAhead.estimateUsd(requests, LyricsTranslation.CLAUDE_HAIKU, research) +
+        TranslateAhead.estimateFuriganaUsd(furiganaSongs, LyricsTranslation.CLAUDE_HAIKU)
+    val sonnetUsd = TranslateAhead.estimateUsd(requests, LyricsTranslation.CLAUDE_SONNET, research) +
+        TranslateAhead.estimateFuriganaUsd(furiganaSongs, LyricsTranslation.CLAUDE_SONNET)
     val estimate = if (model == LyricsTranslation.CLAUDE_SONNET) sonnetUsd else haikuUsd
     val remaining = remainingCapUsd()
     val overCap = remaining != null && estimate > remaining
@@ -335,7 +356,7 @@ private fun TranslateAheadAskAlert(hazeState: HazeState, ask: AheadAsk, onDismis
             label = stringResource(R.string.translate_ahead_send),
             emphasised = true,
             // Nothing to send can still be a playlist to start watching for new songs.
-            enabled = !sending && !overCap && (plan?.requests != 0 || (ask.browseId != null && watch != TranslateAhead.isWatched(ask.browseId))),
+            enabled = !sending && !overCap && (plan?.requests != 0 || furiganaSongs > 0 || (ask.browseId != null && watch != TranslateAhead.isWatched(ask.browseId))),
             onClick = onClick@{
                 if (sending) return@onClick
                 sending = true
@@ -343,7 +364,7 @@ private fun TranslateAheadAskAlert(hazeState: HazeState, ask: AheadAsk, onDismis
                 AppSettings.setTranslateAheadFurigana(furigana)
                 if (dontShow) AppSettings.setTranslateAheadIntro(false)
                 askNotifications()
-                val wanted = plan?.requests != 0
+                val wanted = plan?.requests != 0 || furiganaSongs > 0
                 val duplicate = wanted && TranslateAhead.isDuplicate(ask.songs.map { it.videoId }, model, reading)
                 if (wanted && !duplicate) TranslateAhead.start(ask.title, ask.songs, model, reading)
                 ask.browseId?.let { id ->

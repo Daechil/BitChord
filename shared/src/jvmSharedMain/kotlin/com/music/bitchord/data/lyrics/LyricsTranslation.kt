@@ -1903,18 +1903,22 @@ object LyricsTranslation {
             return shown(ahead.texts, fromCache = true)
         }
         if (storedOnly) return null
+        // Only the lines with kanji: the rest would come back exactly as sent, paid for line by line.
+        val asked = furiganaLinesOf(slots)
+        if (asked.isEmpty()) return null
+        val askedSlots = asked.map { slots[it] }
         val model = claudeModel
-        var reply = requestClaudeTranslation(slots, target, model, trackId = trackId, furigana = script)
+        var reply = requestClaudeTranslation(askedSlots, target, model, trackId = trackId, furigana = script)
         var usedModel = model
         if (reply.failure == ClaudeFailure.REFUSAL && model == CLAUDE_HAIKU && sonnetStandInEnabled) {
-            reply = requestClaudeTranslation(slots, target, CLAUDE_SONNET, trackId = trackId, furigana = script)
+            reply = requestClaudeTranslation(askedSlots, target, CLAUDE_SONNET, trackId = trackId, furigana = script)
             usedModel = CLAUDE_SONNET
         }
         val answer = reply.value ?: return null
         val entry = CachedTranslation(
             sourceLanguage = answer.sourceLanguage,
             targetLanguage = target,
-            texts = checkedFurigana(slots.map { it.text }, answer.translations, script),
+            texts = expandFurigana(slots.map { it.text }, asked, answer.translations, script),
             engine = ENGINE_CLAUDE,
         )
         memory.put(cacheKey, entry)
@@ -1928,6 +1932,23 @@ object LyricsTranslation {
     /** Each answer held to its line by [Furigana.checked]; a line that fails keeps its own words, with no reading. */
     private fun checkedFurigana(sources: List<String>, answers: List<String>, script: Furigana.Script): List<String> =
         sources.mapIndexed { index, source -> answers.getOrNull(index)?.let { Furigana.checked(source, it, script) } ?: source }
+
+    /** Which of [slots] furigana is asked for: lines with a kanji, section labels aside. */
+    private fun furiganaLinesOf(slots: List<TextSlot>): List<Int> =
+        slots.indices.filter { !slots[it].sectionHeader && Furigana.hasKanji(slots[it].text) }
+
+    /**
+     * The answers for the lines asked ([asked], by place in [sources]) put
+     * back among all of them, each held to its line; every other line as it is.
+     */
+    private fun expandFurigana(sources: List<String>, asked: List<Int>, answers: List<String>, script: Furigana.Script): List<String> {
+        val texts = sources.toMutableList()
+        asked.forEachIndexed { k, i ->
+            val answer = answers.getOrNull(k) ?: return@forEachIndexed
+            texts[i] = Furigana.checked(sources[i], answer, script) ?: sources[i]
+        }
+        return texts
+    }
 
     /** The stored markup back on [lines]: the lead vocal's, line by line, null where it has no reading. */
     private fun furiganaByLine(lines: List<LyricLine>, slots: List<TextSlot>, texts: List<String>, script: Furigana.Script): List<String?> {
@@ -2031,6 +2052,8 @@ object LyricsTranslation {
         val researchArtist: String? = null,
         /** KO: furigana in this script ([Furigana.Script.tag]) rather than a translation; empty for none. */
         val furigana: String = "",
+        /** KO: the places in [sources] furigana was asked for — the lines with kanji; empty for every line. */
+        val furiganaLines: List<Int> = emptyList(),
     )
 
     enum class AheadSkip { NOTHING_TO_TRANSLATE, ALREADY_TRANSLATED, SAME_LANGUAGE }
@@ -2089,6 +2112,10 @@ object LyricsTranslation {
         // succeeds: the numbered array, where a line split in two is joined back.
         val shape = AnswerShape.INDEXED
         val lookUp = research?.takeIf { !reading && furigana == null }
+        // KO: furigana is asked for the lines with kanji only; see [claudeFurigana].
+        val furiganaLines = if (furigana != null) furiganaLinesOf(slots) else emptyList()
+        if (furigana != null && furiganaLines.isEmpty()) return AheadRequest(null, null, AheadSkip.SAME_LANGUAGE)
+        val sentSlots = if (furigana != null) furiganaLines.map { slots[it] } else slots
         val params = claudeBody(
             model = model,
             system = if (furigana != null) {
@@ -2098,8 +2125,8 @@ object LyricsTranslation {
             } else {
                 translationInstruction(target, slots.size, shape) + (lookUp?.let { SongBackgrounds.batchInstruction(target) } ?: "")
             },
-            input = translationInput(slots, target, trackId),
-            schema = schemaFor(shape, slots.size).let { if (lookUp != null) withBackgroundField(it) else it },
+            input = translationInput(sentSlots, target, trackId),
+            schema = schemaFor(shape, sentSlots.size).let { if (lookUp != null) withBackgroundField(it) else it },
             effort = if (furigana != null) furiganaEffort else "medium",
             tools = lookUp?.let { SongBackgrounds.searchTools(SongBackgrounds.batchDomains) },
             cache = true,
@@ -2120,6 +2147,7 @@ object LyricsTranslation {
             researchTitle = lookUp?.title,
             researchArtist = lookUp?.artist,
             furigana = furigana?.tag.orEmpty(),
+            furiganaLines = furiganaLines,
         )
         return AheadRequest(item, params, null)
     }
@@ -2497,10 +2525,17 @@ object LyricsTranslation {
                 )
             }
         }
+        // KO: furigana answers only the lines it was asked for.
+        val furiganaScript = Furigana.Script.of(item.furigana)
+        val answered = if (furiganaScript != null && item.furiganaLines.isNotEmpty()) {
+            item.furiganaLines.mapNotNull { item.sources.getOrNull(it) }
+        } else {
+            item.sources
+        }
         val parsed = try {
             parseTranslation(
                 answer,
-                item.sources,
+                answered,
                 when {
                     item.keyed -> AnswerShape.KEYED
                     item.indexed -> AnswerShape.INDEXED
@@ -2512,12 +2547,16 @@ object LyricsTranslation {
         }
         val value = parsed.value?.takeIf { parsed.failure == null }
             ?: return out(parsed.failure ?: ClaudeFailure.BAD_ANSWER, parsed.detail)
-        if (value.translations.size != item.sources.size) {
-            return out(ClaudeFailure.LINE_MISMATCH, "${value.translations.size}/${item.sources.size}")
+        if (value.translations.size != answered.size) {
+            return out(ClaudeFailure.LINE_MISMATCH, "${value.translations.size}/${answered.size}")
         }
-        val furigana = Furigana.Script.of(item.furigana)
+        val furigana = furiganaScript
         val texts = if (furigana != null) {
-            checkedFurigana(item.sources, value.translations, furigana)
+            if (item.furiganaLines.isNotEmpty()) {
+                expandFurigana(item.sources, item.furiganaLines, value.translations, furigana)
+            } else {
+                checkedFurigana(item.sources, value.translations, furigana)
+            }
         } else {
             value.translations.mapIndexed { index, text -> text.ifBlank { item.sources[index] } }
         }

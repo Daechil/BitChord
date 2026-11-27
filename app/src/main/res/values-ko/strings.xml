@@ -898,7 +898,7 @@
     <string name="bluetooth_lyrics_original">원문</string>
     <string name="bluetooth_lyrics_translation">번역</string>
     <string name="bluetooth_lyrics_either">번역(없으면 원문)</string>
-    <string name="bluetooth_lyrics_note">블루투스로 재생할 때만 바뀌어요. 이때 폰 알림과 잠금화면 미디어 카드의 제목도 가사로 바뀌고, 알림을 읽는 다른 기록 앱에는 가사가 곡 제목으로 남을 수 있어요. 차량에 따라 늦게 바뀌거나 안 바뀔 수 있어요.</string>
+    <string name="bluetooth_lyrics_note">블루투스로 차량·스피커에 재생할 때만 바뀌어요. 이때 폰 알림과 잠금화면 미디어 카드의 제목도 가사로 바뀌고, 알림을 읽는 다른 기록 앱에는 가사가 곡 제목으로 남을 수 있어요. 차량에 따라 늦게 바뀌거나 안 바뀔 수 있어요.</string>
     <plurals name="radio_fresh_days">
         <item quantity="other">%1$d일</item>
     </plurals>
@@ -911,6 +911,8 @@
     <string name="furigana_hangul_detail">抜錨 → 바츠뵤, 가나를 몰라도 읽을 수 있게</string>
     <string name="translate_ahead_furigana">후리가나도 함께 받기</string>
     <string name="translate_ahead_furigana_detail">일본어 곡만: 한자 위 읽는 법, 반값(곡당 약 2~3원)</string>
+    <string name="bluetooth_lyrics_earphones">이어폰·헤드폰에서도</string>
+    <string name="bluetooth_lyrics_earphones_subtitle">끄면 차량·스피커(종류를 알 수 없는 기기 포함)에서만 바뀌어요</string>
     <string name="ko_window_summary">요약</string>
     <string name="ko_window_songs">곡 · %1$d곡</string>
     <string name="ko_window_space">사용 공간</string>

@@ -3591,6 +3591,7 @@ internal fun rememberLyricsTranslation(
         }
     }
     // KO: furigana — asked for on a tap only, and brought along to the next song from what is stored.
+    val claudeUsable by PlayerPlatform.host.songMeaningAvailable.collectAsStateWithLifecycle()
     val furiganaOffered = remember(lyrics) {
         com.music.bitchord.data.lyrics.Furigana.wanted(lyrics.orEmpty().map { it.text })
     }
@@ -3734,7 +3735,8 @@ internal fun rememberLyricsTranslation(
         byClaude = (translationState as? LyricsTranslationUiState.Ready)?.byClaude == true,
         retranslate = retranslate,
         furiganaLines = furiganaMarkup?.takeIf { showingFurigana },
-        furiganaOffered = furiganaOffered,
+        // Without a usable Claude key the disc has nothing to ask with — unless readings are already on screen, to switch them off.
+        furiganaOffered = furiganaOffered && (claudeUsable || furiganaMarkup != null),
         furiganaState = furiganaState,
         showingFurigana = showingFurigana,
         toggleFurigana = toggleFurigana,

@@ -720,6 +720,9 @@ object AppSettings {
     /** Over Bluetooth, the playing lyric line takes the title's place; see BluetoothLyrics. */
     val bluetoothLyrics = MutableStateFlow(false)
 
+    /** Bluetooth lyrics on earbuds and headphones too, not only a car or a speaker. */
+    val bluetoothLyricsEarphones = MutableStateFlow(false)
+
     /** What the Bluetooth title shows: one of the BLUETOOTH_LYRICS_* values. */
     val bluetoothLyricsShow = MutableStateFlow(BLUETOOTH_LYRICS_TRANSLATION_OR_ORIGINAL)
 
@@ -1543,6 +1546,7 @@ object AppSettings {
         radioFreshDays.value = prefs.getInt(KEY_RADIO_FRESH_DAYS, 0).takeIf { it in RADIO_FRESH_DAY_CHOICES } ?: 0
         radioFreshDrop.value = prefs.getBoolean(KEY_RADIO_FRESH_DROP, false)
         bluetoothLyrics.value = prefs.getBoolean(KEY_BLUETOOTH_LYRICS, false)
+        bluetoothLyricsEarphones.value = prefs.getBoolean(KEY_BLUETOOTH_LYRICS_EARPHONES, false)
         bluetoothLyricsShow.value = prefs.getInt(KEY_BLUETOOTH_LYRICS_SHOW, BLUETOOTH_LYRICS_TRANSLATION_OR_ORIGINAL)
             .coerceIn(BLUETOOTH_LYRICS_ORIGINAL, BLUETOOTH_LYRICS_TRANSLATION_OR_ORIGINAL)
         // A beta build asks for betas until told otherwise: it came from that channel.
@@ -2377,6 +2381,11 @@ object AppSettings {
     fun setBluetoothLyrics(value: Boolean) {
         bluetoothLyrics.value = value
         prefs.edit().putBoolean(KEY_BLUETOOTH_LYRICS, value).apply()
+    }
+
+    fun setBluetoothLyricsEarphones(value: Boolean) {
+        bluetoothLyricsEarphones.value = value
+        prefs.edit().putBoolean(KEY_BLUETOOTH_LYRICS_EARPHONES, value).apply()
     }
 
     fun setBluetoothLyricsShow(value: Int) {
@@ -3471,6 +3480,7 @@ object AppSettings {
     private const val KEY_RADIO_FRESH_DROP = "ko_radio_fresh_drop"
     private const val KEY_BLUETOOTH_LYRICS = "ko_bluetooth_lyrics"
     private const val KEY_BLUETOOTH_LYRICS_SHOW = "ko_bluetooth_lyrics_show"
+    private const val KEY_BLUETOOTH_LYRICS_EARPHONES = "ko_bluetooth_lyrics_earphones"
 
     /** The periods Settings offers for [radioFreshDays]; 0 is off. */
     val RADIO_FRESH_DAY_CHOICES = listOf(0, 7, 30, 90)

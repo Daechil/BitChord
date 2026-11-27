@@ -116,17 +116,25 @@ object BluetoothLyrics {
         return Shown(song.videoId, text.trim(), artist)
     }
 
-    /** Whether the sound is going out to a Bluetooth device, asked of Android at most every [ROUTE_CHECK_MS]. */
+    /**
+     * Whether the sound is going out to a Bluetooth device with a display worth
+     * showing a line on, asked of Android at most every [ROUTE_CHECK_MS]: a car
+     * or a speaker, or one the name and class say nothing about — not earbuds
+     * or headphones, unless Settings says those too. On earbuds the line only
+     * reached the phone's own notification and lock screen, in place of the title.
+     */
     private fun bluetoothOut(context: Context): Boolean {
         val now = System.currentTimeMillis()
         if (now - routeCheckedAt < ROUTE_CHECK_MS) return routeIsBluetooth
         routeCheckedAt = now
         val manager = context.getSystemService(AudioManager::class.java)
-        val infos = manager?.let { runCatching { it.getDevices(AudioManager.GET_DEVICES_OUTPUTS) }.getOrNull() }
-        val active = infos?.let { AudioRouting.activeOf(it, AudioRouting.selectedId.value) }
-        routeIsBluetooth = active != null && AudioRouting.kindOf(active.type) == AudioRouting.Kind.BLUETOOTH
+        val active = manager?.let { runCatching { AudioRouting.outputs(it) }.getOrNull() }?.firstOrNull { it.isActive }
+        routeIsBluetooth = active != null && active.kind == AudioRouting.Kind.BLUETOOTH &&
+            (AppSettings.bluetoothLyricsEarphones.value || active.form !in WORN)
         return routeIsBluetooth
     }
+
+    private val WORN = setOf(AudioRouting.Form.BUDS, AudioRouting.Form.HEADPHONES)
 
     private fun lookUpTranslation(context: Context) {
         val id = trackId ?: return

@@ -289,6 +289,14 @@ fun BluetoothLyricsRows(title: String) {
         onClick = { com.music.bitchord.data.settings.AppSettings.setBluetoothLyrics(!on) },
     )
     if (on) {
+        val earphones by com.music.bitchord.data.settings.AppSettings.bluetoothLyricsEarphones.collectAsStateWithLifecycle()
+        com.music.bitchord.ui.screens.SettingsSubRow(
+            title = androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.bluetooth_lyrics_earphones),
+            subtitle = androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.bluetooth_lyrics_earphones_subtitle),
+            checked = earphones,
+            onCheckedChange = com.music.bitchord.data.settings.AppSettings::setBluetoothLyricsEarphones,
+            aligned = true,
+        )
         com.music.bitchord.ui.screens.SegmentedControl(
             options = listOf(
                 androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.bluetooth_lyrics_original),

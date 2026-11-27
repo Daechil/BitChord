@@ -126,12 +126,28 @@ object SpotifyClaudeMatch {
      */
     private suspend fun searchSongs(query: String): List<Song> {
         repeat(2) { attempt ->
-            val result = YtMusicRepository.search(query, SearchFilter.SONGS)
-            result.getOrNull()?.let { found -> return found.filterIsInstance<SearchResult.Track>().map { it.song } }
+            // Anonymous first, as before; then signed in, as the search tab asks. A phone that
+            // had looked up a long playlist got empty anonymous answers back for hours, while
+            // the signed-in search went on working — the whole playlist stayed grey.
+            val anonymous = YtMusicRepository.search(query, SearchFilter.SONGS)
+            anonymous.getOrNull()?.songs()?.takeIf { it.isNotEmpty() }?.let { return it }
+            val signedIn = YtMusicRepository.searchPage(query, SearchFilter.SONGS, anonymous = false)
+            signedIn.getOrNull()?.rows?.songs()?.let { found ->
+                if (found.isNotEmpty() || anonymous.isSuccess) return found
+            }
             if (attempt == 0) kotlinx.coroutines.delay(SEARCH_RETRY_MS)
         }
         throw SearchRefused(query)
     }
+
+    /** The songs among search rows, the top result's card included. */
+    private fun List<SearchResult>.songs(): List<Song> = mapNotNull {
+        when (it) {
+            is SearchResult.Track -> it.song
+            is SearchResult.TopTrack -> it.song
+            else -> null
+        }
+    }.distinctBy { it.videoId }
 
     private const val SEARCH_RETRY_MS = 1_500L
 

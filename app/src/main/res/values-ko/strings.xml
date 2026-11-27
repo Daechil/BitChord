@@ -904,13 +904,13 @@
     </plurals>
     <string name="translation_kind_furigana">후리가나</string>
     <string name="furigana_header">후리가나 (일본어)</string>
-    <string name="furigana_footer">발음 버튼 옆 ふ 버튼을 누르면 한자 위에 읽는 법을 달아요. 처음 누를 때 Claude가 써요(발음과 비슷한 요금). 한 번 받은 곡은 저장되고, 켜 두면 받아 둔 곡에서는 저절로 나와요.</string>
+    <string name="furigana_footer">발음 버튼 옆 ふ 버튼을 누르면 한자 위에 읽는 법을 달아요. 처음 누를 때 Claude가 써요(Haiku로 곡당 약 3~6원). 한 번 받은 곡은 저장되고, 켜 두면 받아 둔 곡에서는 저절로 나와요.</string>
     <string name="furigana_hiragana">히라가나</string>
     <string name="furigana_hiragana_detail">抜錨 → ばつびょう, 일본 책에 쓰는 방식</string>
     <string name="furigana_hangul">한글</string>
     <string name="furigana_hangul_detail">抜錨 → 바츠뵤, 가나를 몰라도 읽을 수 있게</string>
     <string name="translate_ahead_furigana">후리가나도 함께 받기</string>
-    <string name="translate_ahead_furigana_detail">일본어 곡만: 한자 위 읽는 법, 반값(곡당 약 1원)</string>
+    <string name="translate_ahead_furigana_detail">일본어 곡만: 한자 위 읽는 법, 반값(곡당 약 2~3원)</string>
     <string name="ko_window_summary">요약</string>
     <string name="ko_window_songs">곡 · %1$d곡</string>
     <string name="ko_window_space">사용 공간</string>

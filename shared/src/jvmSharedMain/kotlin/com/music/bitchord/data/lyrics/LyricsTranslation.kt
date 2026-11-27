@@ -855,7 +855,6 @@ object LyricsTranslation {
             },
             input = input,
             schema = schemaFor(shape, slots.size),
-            // Furigana is copying with readings added, not writing: little to think over.
             effort = if (furigana != null) furiganaEffort else "medium",
             linesAsked = slots.size,
             cache = true,
@@ -2560,9 +2559,13 @@ object LyricsTranslation {
     /** KO: readings over the kanji; see [claudeFurigana]. */
     const val KIND_FURIGANA = "furigana"
 
-    /** KO: how hard Claude thinks over furigana; see [claudeFurigana]. "low" since a live test: as accurate as "medium", and quicker. */
+    /**
+     * KO: how hard Claude thinks over furigana; see [claudeFurigana]. "medium":
+     * tried at "low" on ten songs, the hiragana held up but the Hangul readings
+     * fell apart (300 of 430 lines kept, against 422), for little time saved.
+     */
     @Volatile
-    var furiganaEffort: String = "low"
+    var furiganaEffort: String = "medium"
     const val KIND_MEANING = "meaning"
     const val VIA_PLAYER = "player"
     const val VIA_AHEAD = "ahead"

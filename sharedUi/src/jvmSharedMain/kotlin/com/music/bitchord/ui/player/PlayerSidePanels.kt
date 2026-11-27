@@ -83,12 +83,9 @@ fun LyricsSidePanel(
                 status = lyricsTranslation.status,
                 onStatusClick = { showLyricsProviders = true },
                 romanizationToggle = {
-                    RomanizationToggleButton(
-                        state = lyricsTranslation.romanizationState,
-                        showingRomanization = lyricsTranslation.showingRomanization,
+                    ReadingToggleButtons(
+                        lyricsTranslation = lyricsTranslation,
                         enabled = !lyrics.isNullOrEmpty(),
-                        onClick = lyricsTranslation.toggleRomanization,
-                        onLongClick = lyricsTranslation.reromanize,
                     )
                 },
                 translationToggle = {
@@ -121,6 +118,7 @@ fun LyricsSidePanel(
                         lines = lyrics.orEmpty(),
                         subLines = lyricsTranslation.translationLines,
                         readingLines = lyricsTranslation.readingLines,
+                        furiganaLines = lyricsTranslation.furiganaLines,
                         trackKey = song.videoId,
                         playhead = lyricsPlayhead,
                         looking = !lyricsUnavailable,

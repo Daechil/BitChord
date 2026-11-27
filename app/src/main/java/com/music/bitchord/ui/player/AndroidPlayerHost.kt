@@ -281,6 +281,15 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
         )
     }
 
+    override suspend fun furiganaLyrics(trackId: String, lines: List<LyricLine>, storedOnly: Boolean): List<String?>? {
+        val script = if (AppSettings.furiganaHangul.value) {
+            com.music.bitchord.data.lyrics.Furigana.Script.HANGUL
+        } else {
+            com.music.bitchord.data.lyrics.Furigana.Script.HIRAGANA
+        }
+        return LyricsTranslation.claudeFurigana(trackId, lines, script, storedOnly = storedOnly)?.lines
+    }
+
     override suspend fun romanizeLyrics(
         trackId: String,
         lines: List<LyricLine>,

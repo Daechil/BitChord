@@ -143,6 +143,13 @@ interface PlayerHost {
      */
     val translationStoreChanges: kotlinx.coroutines.flow.Flow<Unit> get() = kotlinx.coroutines.flow.emptyFlow()
 
+    /**
+     * KO: furigana markup for [lines], line for line ([com.music.bitchord.data.lyrics.Furigana]),
+     * or null where there is none — not Japanese with kanji, Claude off, or the
+     * request failed. [storedOnly] never asks. None where a platform has no Claude.
+     */
+    suspend fun furiganaLyrics(trackId: String, lines: List<LyricLine>, storedOnly: Boolean = false): List<String?>? = null
+
     suspend fun romanizeLyrics(
         trackId: String,
         lines: List<LyricLine>,

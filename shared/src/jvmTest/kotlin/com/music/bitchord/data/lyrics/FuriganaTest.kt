@@ -78,4 +78,25 @@ class FuriganaTest {
         assertFalse(Furigana.wanted(listOf("我爱你")))
         assertFalse(Furigana.wanted(listOf("I love you")))
     }
+
+    @Test
+    fun `a batch asks for furigana only for Japanese with kanji`() = kotlinx.coroutines.runBlocking {
+        val dir = java.nio.file.Files.createTempDirectory("furibatch").toFile()
+        LyricsTranslation.cacheDir = dir
+        LyricsTranslation.keepDir = dir
+        val japanese = listOf(LyricLine(0, "抜錨を見て"), LyricLine(1000, "ひらがな"))
+        val asked = LyricsTranslation.aheadRequest("f0", "vidf", japanese, "ko", LyricsTranslation.CLAUDE_HAIKU, reading = false, furigana = hira)
+        val item = kotlin.test.assertNotNull(asked.item)
+        assertEquals(hira.tag, item.furigana)
+        assertEquals(hira.tag, item.target)
+        val system = asked.params?.get("system").toString()
+        assertTrue(system.contains("furigana") && system.contains("cache_control"))
+        // Never with a web search, whatever was asked.
+        assertEquals(null, asked.params?.get("tools"))
+        val chinese = listOf(LyricLine(0, "我爱你"))
+        assertEquals(
+            LyricsTranslation.AheadSkip.SAME_LANGUAGE,
+            LyricsTranslation.aheadRequest("f1", "vidc", chinese, "ko", LyricsTranslation.CLAUDE_HAIKU, reading = false, furigana = hira).skip,
+        )
+    }
 }

@@ -114,6 +114,7 @@ import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -840,6 +841,8 @@ private fun SweptLyricLine(
     translationProgress: State<Float>? = null,
     /** What the words are set in — see [PanelVoice] for which lines differ. */
     color: Color = Color.White,
+    /** KO: furigana over the line's kanji; [style] already has the room for it ([rubyRoomStyle]). */
+    ruby: List<RubyMark>? = null,
 ) {
     var layout by remember(line) { mutableStateOf<TextLayoutResult?>(null) }
 
@@ -1015,6 +1018,22 @@ private fun SweptLyricLine(
                     .then(sweep),
             ),
         )
+        if (!ruby.isNullOrEmpty()) {
+            // KO: the readings, lit once the line has begun and dim before it, like the words under them.
+            val measurer = rememberTextMeasurer()
+            val readings = remember(ruby, style) { measureRuby(measurer, ruby, style) }
+            Spacer(
+                Modifier
+                    .matchParentSize()
+                    .drawBehind {
+                        val measured = layout ?: return@drawBehind
+                        val inset = glowRoom.toPx()
+                        val x = if (right) size.width - inset - measured.size.width else inset
+                        val lit = if (drawnAt() > line.timeMs) 1f else dimAlpha
+                        drawRuby(measured, ruby, readings, Offset(x, inset), color.copy(alpha = lit), style.fontSize.toPx())
+                    },
+            )
+        }
     }
 }
 
@@ -1624,6 +1643,66 @@ internal fun RomanizationToggleButton(
 }
 
 /**
+ * KO: the romanize disc, with the ふ disc beside it for a Japanese song with
+ * kanji — one slot for both, wherever the player puts the romanize disc.
+ */
+@Composable
+internal fun ReadingToggleButtons(lyricsTranslation: LyricsTranslationUi, enabled: Boolean) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        RomanizationToggleButton(
+            state = lyricsTranslation.romanizationState,
+            showingRomanization = lyricsTranslation.showingRomanization,
+            enabled = enabled,
+            onClick = lyricsTranslation.toggleRomanization,
+            onLongClick = lyricsTranslation.reromanize,
+        )
+        if (lyricsTranslation.furiganaOffered) {
+            FuriganaToggleButton(
+                loading = lyricsTranslation.furiganaState is LyricsTranslationUiState.Loading,
+                showing = lyricsTranslation.showingFurigana,
+                enabled = enabled,
+                onClick = lyricsTranslation.toggleFurigana,
+            )
+        }
+    }
+}
+
+/** KO: the ふ disc — furigana over the kanji, asked of Claude on the first tap and switched after. */
+@Composable
+internal fun FuriganaToggleButton(loading: Boolean, showing: Boolean, enabled: Boolean, onClick: () -> Unit) {
+    val active = showing || loading
+    val chrome = LocalPlayerChrome.current
+    val tint = when {
+        !enabled -> chromeWhite(0.42f)
+        active -> Color.White.copy(alpha = if (chrome) CHROME_FULL_ALPHA else 1f)
+        else -> chromeWhite(0.78f)
+    }
+    val discAlpha by animateFloatAsState(targetValue = if (active) 0.34f else 0.18f, label = "furiganaDisc")
+    val label = stringResource(if (showing) Res.string.lyrics_furigana_hide else Res.string.lyrics_furigana_show)
+    Box(
+        modifier = Modifier
+            .size(34.dp)
+            .clip(CircleShape)
+            .additiveChrome(chrome)
+            .background(Color.White.copy(alpha = discAlpha))
+            .clickable(
+                enabled = enabled,
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            )
+            .semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) {
+        if (loading) {
+            CircularProgressIndicator(modifier = Modifier.size(16.dp), color = tint, strokeWidth = 1.7.dp)
+        } else {
+            Text(text = "ふ", color = tint, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+/**
  * A short text-material transition: the list and its playback clock stay in
  * place while a field of tiny glyph-like particles resolves into the new text.
  * Only the dedicated Canvas drawing moves, so changing language never causes a
@@ -1834,6 +1913,8 @@ internal fun LyricsPanel(
      * translation on or off never moves the reading.
      */
     readingLines: List<LyricLine>? = null,
+    /** KO: furigana markup for [lines], index for index, drawn over each line's kanji; see [rubyMarks]. */
+    furiganaLines: List<String?>? = null,
     trackKey: String,
     playhead: LyricPlayhead,
     /** Whether a lookup for this track is still in flight. */
@@ -2508,6 +2589,7 @@ internal fun LyricsPanel(
                         room = GLOW_ROOM,
                         alignEnd = alignEnd,
                         laneLocked = duet,
+                        furigana = furiganaLines?.getOrNull(index),
                         modifier = Modifier.fillMaxWidth(),
                     )
                     // The pronunciation first, the meaning under it: read the
@@ -2706,14 +2788,18 @@ private fun PanelVoice(
      * movement competes with the line being read and makes the row look busy.
      */
     rise: Boolean = true,
+    /** KO: this line's furigana markup, when it has readings to show; see [rubyMarks]. */
+    furigana: String? = null,
     modifier: Modifier = Modifier,
 ) {
     // Vazirmatn for Persian/Arabic-script lines; Latin lines keep the player's font.
     val arabicScript = remember(line.text) { usesArabicScript(line.text) }
-    val lyricStyle = if (arabicScript) {
+    val ruby = remember(line.text, furigana) { rubyMarks(line.text, furigana) }
+    val voiced = if (arabicScript) {
         val vazirmatn = Font(Res.font.vazirmatn_regular)
         remember(style, vazirmatn) { style.copy(fontFamily = FontFamily(vazirmatn)) }
     } else style
+    val lyricStyle = if (ruby != null) remember(voiced) { rubyRoomStyle(voiced) } else voiced
     if (line.isWordSynced && !browsing) {
         // Every word-synced line goes through the sweep, not just the playing
         // one — a line that has already been sung is fully revealed and one
@@ -2742,6 +2828,7 @@ private fun PanelVoice(
             laneLocked = laneLocked,
             translationProgress = translationProgress,
             color = Color.White,
+            ruby = ruby,
         )
     } else if (line.isWordSynced) {
         // Browsing: keep the sweep so sung lines stay fully lit and unsung
@@ -2766,6 +2853,7 @@ private fun PanelVoice(
             laneLocked = laneLocked,
             translationProgress = translationProgress,
             color = Color.White,
+            ruby = ruby,
         )
     } else {
         // No word timings, so there is no sweep to light the words as they are
@@ -2782,12 +2870,25 @@ private fun PanelVoice(
             label = "lyricLit",
         )
         var layout by remember(line.text) { mutableStateOf<TextLayoutResult?>(null) }
+        val measurer = rememberTextMeasurer()
+        val readings = remember(ruby, lyricStyle) { ruby?.let { measureRuby(measurer, it, lyricStyle) } }
         Text(
             text = line.text,
             style = lyricStyle,
             color = Color.White.copy(alpha = lit),
             onTextLayout = { layout = it },
-            modifier = modifier.lyricParticles(layout, translationProgress, room).padding(room),
+            modifier = modifier.lyricParticles(layout, translationProgress, room).padding(room).then(
+                if (ruby == null || readings == null) {
+                    Modifier
+                } else {
+                    // KO: furigana, inside the padding where the text's own coordinates are.
+                    Modifier.drawWithContent {
+                        drawContent()
+                        val measured = layout ?: return@drawWithContent
+                        drawRuby(measured, ruby, readings, Offset.Zero, Color.White.copy(alpha = lit), lyricStyle.fontSize.toPx())
+                    }
+                }
+            ),
         )
     }
 }
@@ -3218,6 +3319,13 @@ internal class LyricsTranslationUi(
     val retranslate: () -> Unit = {},
     /** A long press on the romanize disc: Claude's reading of this song. */
     val reromanize: () -> Unit = {},
+    /** KO: furigana markup drawn over each line's kanji; null while it is off. */
+    val furiganaLines: List<String?>? = null,
+    /** KO: the song is Japanese with kanji, so the ふ disc is offered. */
+    val furiganaOffered: Boolean = false,
+    val furiganaState: LyricsTranslationUiState = LyricsTranslationUiState.Idle,
+    val showingFurigana: Boolean = false,
+    val toggleFurigana: () -> Unit = {},
 )
 
 /**
@@ -3482,9 +3590,62 @@ internal fun rememberLyricsTranslation(
             }
         }
     }
+    // KO: furigana — asked for on a tap only, and brought along to the next song from what is stored.
+    val furiganaOffered = remember(lyrics) {
+        com.music.bitchord.data.lyrics.Furigana.wanted(lyrics.orEmpty().map { it.text })
+    }
+    var furiganaState by remember(trackId, lyrics) { mutableStateOf<LyricsTranslationUiState>(LyricsTranslationUiState.Idle) }
+    var furiganaMarkup by remember(trackId, lyrics) { mutableStateOf<List<String?>?>(null) }
+    var wantFurigana by remember(trackId, lyrics) { mutableStateOf(false) }
+    var furiganaJob by remember(trackId, lyrics) { mutableStateOf<Job?>(null) }
+    val furiganaUnavailableMessage = stringResource(Res.string.lyrics_furigana_unavailable)
+    val showingFurigana = wantFurigana && furiganaMarkup != null
+    val toggleFurigana: () -> Unit = toggleFurigana@{
+        if (furiganaState == LyricsTranslationUiState.Loading) return@toggleFurigana
+        if (furiganaMarkup != null) {
+            wantFurigana = !wantFurigana
+            LyricsViewMemory.furigana.value = wantFurigana
+            haptics.play(Haptic.Select)
+            return@toggleFurigana
+        }
+        val source = lyrics.orEmpty()
+        if (source.isEmpty()) return@toggleFurigana
+        haptics.play(Haptic.Tap)
+        furiganaState = LyricsTranslationUiState.Loading
+        furiganaJob?.cancel()
+        furiganaJob = translationScope.launch {
+            val found = PlayerPlatform.host.furiganaLyrics(trackId, source)
+            if (found == null || found.all { it == null }) {
+                furiganaState = LyricsTranslationUiState.Idle
+                PlayerPlatform.host.showMessage(furiganaUnavailableMessage)
+            } else {
+                furiganaMarkup = found
+                furiganaState = LyricsTranslationUiState.Ready(emptyList(), byClaude = true)
+                wantFurigana = true
+                LyricsViewMemory.furigana.value = true
+                haptics.play(Haptic.ToggleOn)
+            }
+        }
+    }
+    fun showStoredFurigana() {
+        val source = lyrics.orEmpty()
+        if (!furiganaOffered || source.isEmpty() || !LyricsViewMemory.furigana.value || furiganaMarkup != null) return
+        if (furiganaState != LyricsTranslationUiState.Idle) return
+        furiganaJob?.cancel()
+        furiganaJob = translationScope.launch {
+            val found = PlayerPlatform.host.furiganaLyrics(trackId, source, storedOnly = true) ?: return@launch
+            if (found.all { it == null } || furiganaMarkup != null) return@launch
+            furiganaMarkup = found
+            furiganaState = LyricsTranslationUiState.Ready(emptyList(), byClaude = true)
+            wantFurigana = true
+        }
+    }
+    DisposableEffect(trackId, lyrics) { onDispose { furiganaJob?.cancel() } }
+
     LaunchedEffect(trackId, translationLanguage, lyrics) {
         showStoredTranslation()
         showStoredReading()
+        showStoredFurigana()
     }
     LaunchedEffect(trackId, translationLanguage, lyrics) {
         @OptIn(kotlinx.coroutines.FlowPreview::class)
@@ -3497,6 +3658,7 @@ internal fun rememberLyricsTranslation(
                     swapInArrived()
                 }
                 showStoredReading()
+                showStoredFurigana()
             }
     }
 
@@ -3519,6 +3681,8 @@ internal fun rememberLyricsTranslation(
             stringResource(Res.string.translating_lyrics_to, translationLanguageName)
         romanizationState is LyricsTranslationUiState.Loading ->
             stringResource(Res.string.romanizing_lyrics)
+        furiganaState is LyricsTranslationUiState.Loading ->
+            stringResource(Res.string.lyrics_furigana_loading)
         showingTranslation && (translationState as? LyricsTranslationUiState.Ready)?.aheadPending == true ->
             stringResource(Res.string.lyrics_translation_ahead_waiting)
         // Named only when Claude wrote it: Google Translate is the default the
@@ -3569,6 +3733,11 @@ internal fun rememberLyricsTranslation(
         targetLanguage = translationLanguage,
         byClaude = (translationState as? LyricsTranslationUiState.Ready)?.byClaude == true,
         retranslate = retranslate,
+        furiganaLines = furiganaMarkup?.takeIf { showingFurigana },
+        furiganaOffered = furiganaOffered,
+        furiganaState = furiganaState,
+        showingFurigana = showingFurigana,
+        toggleFurigana = toggleFurigana,
     )
 }
 

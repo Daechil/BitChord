@@ -325,4 +325,8 @@
     <string name="queue_download">다운로드</string>
     <string name="queue_selection_remove">제거</string>
     <string name="queue_add_all_to_playlist">모두 재생목록에 추가</string>
+    <string name="lyrics_furigana_unavailable">이 가사에는 후리가나를 받을 수 없어요.</string>
+    <string name="lyrics_furigana_loading">후리가나 받는 중…</string>
+    <string name="lyrics_furigana_show">후리가나 보기</string>
+    <string name="lyrics_furigana_hide">후리가나 숨기기</string>
 </resources>

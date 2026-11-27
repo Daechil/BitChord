@@ -15,6 +15,9 @@ internal object LyricsViewMemory {
     /** The pronunciation switch. Brought along to the next song only with the translation, from what is stored. */
     val reading = MutableStateFlow(false)
 
+    /** KO: the furigana switch. Brought along to the next song from what is stored only, never asked for. */
+    val furigana = MutableStateFlow(false)
+
     /**
      * Whether a translation read from storage, with nothing asked for, may go
      * on screen by itself. Not Google's where Claude would answer a tap: shown

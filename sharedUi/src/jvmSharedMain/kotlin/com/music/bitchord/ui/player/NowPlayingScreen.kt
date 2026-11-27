@@ -2642,12 +2642,9 @@ fun NowPlayingScreen(
                                 )
                             },
                             romanizationToggle = {
-                                RomanizationToggleButton(
-                                    state = lyricsTranslation.romanizationState,
-                                    showingRomanization = lyricsTranslation.showingRomanization,
+                                ReadingToggleButtons(
+                                    lyricsTranslation = lyricsTranslation,
                                     enabled = !lyrics.isNullOrEmpty(),
-                                    onClick = lyricsTranslation.toggleRomanization,
-                                    onLongClick = lyricsTranslation.reromanize,
                                 )
                             },
                             translationToggle = {
@@ -2683,6 +2680,7 @@ fun NowPlayingScreen(
                                     lines = lyrics.orEmpty(),
                                     subLines = lyricsTranslation.translationLines,
                                     readingLines = lyricsTranslation.readingLines,
+                                    furiganaLines = lyricsTranslation.furiganaLines,
                                     trackKey = song.videoId,
                                     playhead = lyricsPlayhead,
                                     looking = !lyricsUnavailable,
@@ -4371,6 +4369,7 @@ fun NowPlayingScreen(
                                         lines = lyrics.orEmpty(),
                                         subLines = lyricsTranslation.translationLines,
                                         readingLines = lyricsTranslation.readingLines,
+                                        furiganaLines = lyricsTranslation.furiganaLines,
                                         trackKey = song.videoId,
                                         playhead = lyricsPlayhead,
                                         looking = !lyricsUnavailable,
@@ -4415,12 +4414,9 @@ fun NowPlayingScreen(
                                         .align(Alignment.BottomStart)
                                         .graphicsLayer { alpha = translateFade },
                                 ) {
-                                    RomanizationToggleButton(
-                                        state = lyricsTranslation.romanizationState,
-                                        showingRomanization = lyricsTranslation.showingRomanization,
+                                    ReadingToggleButtons(
+                                        lyricsTranslation = lyricsTranslation,
                                         enabled = translateShown && !lyrics.isNullOrEmpty(),
-                                        onClick = lyricsTranslation.toggleRomanization,
-                                        onLongClick = lyricsTranslation.reromanize,
                                     )
                                 }
                                 Row(

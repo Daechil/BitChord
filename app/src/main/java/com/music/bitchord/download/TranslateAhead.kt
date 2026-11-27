@@ -152,6 +152,8 @@ object TranslateAhead {
         val createdAt: Long,
         val model: String,
         val reading: Boolean,
+        /** KO: furigana asked for too, for the Japanese songs; see LyricsTranslation.claudeFurigana. */
+        val furigana: Boolean = false,
         /** The language and style the answers are in — a translation in another style is not looked for under these. */
         val target: String = "",
         val speech: String = "",
@@ -260,11 +262,17 @@ object TranslateAhead {
     }
 
     /** Starts a job for [songs]; its progress and outcome are in [jobs] from here on. False when it could not start. */
-    fun start(title: String, songs: List<Song>, model: String, reading: Boolean): Boolean = synchronized(startLock) {
-        startLocked(title, songs, model, reading)
+    fun start(
+        title: String,
+        songs: List<Song>,
+        model: String,
+        reading: Boolean,
+        furigana: Boolean = AppSettings.translateAheadFurigana.value,
+    ): Boolean = synchronized(startLock) {
+        startLocked(title, songs, model, reading, furigana)
     }
 
-    private fun startLocked(title: String, songs: List<Song>, model: String, reading: Boolean): Boolean {
+    private fun startLocked(title: String, songs: List<Song>, model: String, reading: Boolean, furigana: Boolean): Boolean {
         val app = context ?: return false
         // The same songs sent again while their job is under way, or a moment
         // after: a second tap, not a second job to pay for.
@@ -287,6 +295,7 @@ object TranslateAhead {
             createdAt = now,
             model = model,
             reading = reading,
+            furigana = furigana,
             target = DownloadTranslations.targetLanguage(app),
             speech = LyricsTranslation.translationSpeech,
             mode = LyricsTranslation.translationMode,
@@ -471,6 +480,8 @@ object TranslateAhead {
         val title: String,
         val model: String,
         val reading: Boolean,
+        /** KO: its new songs' furigana asked for too. */
+        val furigana: Boolean = false,
         /** Every song the playlist held when last looked at; only others are sent. */
         val known: List<String> = emptyList(),
         val lastChecked: Long = 0,
@@ -493,6 +504,7 @@ object TranslateAhead {
             title = title,
             model = model,
             reading = reading,
+            furigana = AppSettings.translateAheadFurigana.value,
             known = (existing?.known.orEmpty() + known).distinct(),
             lastChecked = System.currentTimeMillis(),
             sent = existing?.sent ?: 0,
@@ -543,7 +555,7 @@ object TranslateAhead {
                 fresh.forEach { TranslationStatus.remember(it.videoId, it.title, it.artist) }
                 val started = sendable.isEmpty() || (
                     available() &&
-                        start(app.getString(R.string.translate_ahead_watch_job, watch.title), sendable, watch.model, watch.reading)
+                        start(app.getString(R.string.translate_ahead_watch_job, watch.title), sendable, watch.model, watch.reading, watch.furigana)
                     )
                 val updated = if (started) {
                     watch.copy(
@@ -730,6 +742,18 @@ object TranslateAhead {
                     val reading = LyricsTranslation.aheadRequest("r$index", track.videoId, lines, job.target, job.model, reading = true)
                     readingStatus = statusOf(reading)
                     pending.add(reading, track.videoId)
+                }
+                // KO: furigana for a Japanese song with kanji; any other is skipped by the request itself.
+                if (job.furigana) {
+                    val script = if (AppSettings.furiganaHangul.value) {
+                        com.music.bitchord.data.lyrics.Furigana.Script.HANGUL
+                    } else {
+                        com.music.bitchord.data.lyrics.Furigana.Script.HIRAGANA
+                    }
+                    pending.add(
+                        LyricsTranslation.aheadRequest("f$index", track.videoId, lines, job.target, job.model, reading = false, furigana = script),
+                        track.videoId,
+                    )
                 }
             }
             edit(job.id, save = index % 5 == 4) { now ->

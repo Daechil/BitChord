@@ -217,6 +217,7 @@ private fun TranslateAheadAskAlert(hazeState: HazeState, ask: AheadAsk, onDismis
     val context = LocalContext.current
     var model by remember { mutableStateOf(AppSettings.translateAheadModel.value) }
     var reading by remember { mutableStateOf(AppSettings.translateAheadReading.value) }
+    var furigana by remember { mutableStateOf(AppSettings.translateAheadFurigana.value) }
     var dontShow by remember { mutableStateOf(false) }
     var watch by remember { mutableStateOf(TranslateAhead.isWatched(ask.browseId)) }
     val askNotifications = rememberNotificationAsk()
@@ -303,6 +304,14 @@ private fun TranslateAheadAskAlert(hazeState: HazeState, ask: AheadAsk, onDismis
             checkbox = true,
             onClick = { reading = !reading },
         )
+        AlertRule()
+        AheadOptionRow(
+            label = stringResource(R.string.translate_ahead_furigana),
+            detail = stringResource(R.string.translate_ahead_furigana_detail),
+            checked = furigana,
+            checkbox = true,
+            onClick = { furigana = !furigana },
+        )
         if (ask.browseId != null) {
             AlertRule()
             AheadOptionRow(
@@ -331,6 +340,7 @@ private fun TranslateAheadAskAlert(hazeState: HazeState, ask: AheadAsk, onDismis
                 if (sending) return@onClick
                 sending = true
                 AppSettings.setTranslateAheadChoice(model, reading)
+                AppSettings.setTranslateAheadFurigana(furigana)
                 if (dontShow) AppSettings.setTranslateAheadIntro(false)
                 askNotifications()
                 val wanted = plan?.requests != 0

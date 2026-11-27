@@ -955,6 +955,14 @@ Adding: %4$s
         <item quantity="other">%1$d days</item>
     </plurals>
     <string name="translation_kind_furigana">Furigana</string>
+    <string name="furigana_header">Furigana (Japanese)</string>
+    <string name="furigana_footer">The ふ button by the pronunciation button puts each kanji word’s reading over it. Claude writes it on the first tap, about the cost of a pronunciation, and it is kept. Songs already done show it by themselves while it is on.</string>
+    <string name="furigana_hiragana">Hiragana</string>
+    <string name="furigana_hiragana_detail">抜錨 → ばつびょう, as Japanese books print it</string>
+    <string name="furigana_hangul">Hangul</string>
+    <string name="furigana_hangul_detail">抜錨 → 바츠뵤, for reading without kana</string>
+    <string name="translate_ahead_furigana">Furigana too</string>
+    <string name="translate_ahead_furigana_detail">Japanese songs only: readings over the kanji, at half price (about 1 won a song)</string>
     <string name="ko_window_summary">Summary</string>
     <string name="ko_window_songs">Songs · %1$d</string>
     <string name="ko_window_space">Space used</string>

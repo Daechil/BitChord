@@ -327,4 +327,8 @@
     <string name="queue_download">Download</string>
     <string name="queue_selection_remove">Remove</string>
     <string name="queue_add_all_to_playlist">Add all to playlist</string>
+    <string name="lyrics_furigana_unavailable">Furigana isn’t available for these lyrics.</string>
+    <string name="lyrics_furigana_loading">Adding furigana…</string>
+    <string name="lyrics_furigana_show">Show furigana</string>
+    <string name="lyrics_furigana_hide">Hide furigana</string>
 </resources>

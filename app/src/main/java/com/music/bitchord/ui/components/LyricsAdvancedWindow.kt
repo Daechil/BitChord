@@ -49,6 +49,13 @@ internal fun LyricsAdvancedWindow(onDismiss: () -> Unit) {
         AppSettings.PRONOUNCE_ROMAJI to stringResource(R.string.pronounce_romaji_detail),
     )
     val modeHeader = stringResource(R.string.pronounce_header)
+    val furiganaHangul by AppSettings.furiganaHangul.collectAsStateWithLifecycle()
+    val furiganaHeader = stringResource(R.string.furigana_header)
+    val furiganaFooter = stringResource(R.string.furigana_footer)
+    val furiganaHiraLabel = stringResource(R.string.furigana_hiragana)
+    val furiganaHiraDetail = stringResource(R.string.furigana_hiragana_detail)
+    val furiganaHangulLabel = stringResource(R.string.furigana_hangul)
+    val furiganaHangulDetail = stringResource(R.string.furigana_hangul_detail)
     val modeFooter = stringResource(R.string.pronounce_footer)
     val instructionsHeader = stringResource(R.string.instructions_header)
     val instructionsFooter = stringResource(R.string.instructions_footer)
@@ -98,6 +105,14 @@ internal fun LyricsAdvancedWindow(onDismiss: () -> Unit) {
             WindowChoice(label = modeLabels[option].orEmpty(), detail = modeDetails[option], checked = option == mode) {
                 AppSettings.setPronunciationMode(option)
             }
+        }
+        // KO: what the ふ disc writes over the kanji.
+        windowCard(rows = listOf(false, true), header = furiganaHeader, footer = furiganaFooter) { hangul ->
+            WindowChoice(
+                label = if (hangul) furiganaHangulLabel else furiganaHiraLabel,
+                detail = if (hangul) furiganaHangulDetail else furiganaHiraDetail,
+                checked = hangul == furiganaHangul,
+            ) { AppSettings.setFuriganaHangul(hangul) }
         }
         windowCard(rows = listOf(Unit), header = instructionsHeader, footer = instructionsFooter) {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {

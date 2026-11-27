@@ -708,6 +708,9 @@ object AppSettings {
     /** Radio and AutoPlay songs that repeat a queued recording are taken out as they arrive, by Claude. */
     val queueTidyAuto = MutableStateFlow(false)
 
+    /** Furigana written in Hangul rather than hiragana; see LyricsTranslation.claudeFurigana. */
+    val furiganaHangul = MutableStateFlow(false)
+
     /** Radio and AutoPlay hold back songs heard through in this many days (0 = off); see RecentRadio. */
     val radioFreshDays = MutableStateFlow(0)
 
@@ -792,6 +795,9 @@ object AppSettings {
 
     /** Whether the pronunciation was last asked for along with the translation. */
     val translateAheadReading = MutableStateFlow(false)
+
+    /** KO: translating ahead asks for furigana too, for the Japanese songs among them. */
+    val translateAheadFurigana = MutableStateFlow(false)
 
     /**
      * What Claude has been asked this month, in tokens per model, so Settings
@@ -1533,6 +1539,7 @@ object AppSettings {
         com.music.bitchord.data.lyrics.SongBackgrounds.widenWhenMissing = songBackgroundWiden.value
         songBackgroundSonnet.value = prefs.getBoolean(KEY_SONG_BACKGROUND_SONNET, false)
         queueTidyAuto.value = prefs.getBoolean(KEY_QUEUE_TIDY_AUTO, false)
+        furiganaHangul.value = prefs.getBoolean(KEY_FURIGANA_HANGUL, false)
         radioFreshDays.value = prefs.getInt(KEY_RADIO_FRESH_DAYS, 0).takeIf { it in RADIO_FRESH_DAY_CHOICES } ?: 0
         radioFreshDrop.value = prefs.getBoolean(KEY_RADIO_FRESH_DROP, false)
         bluetoothLyrics.value = prefs.getBoolean(KEY_BLUETOOTH_LYRICS, false)
@@ -1594,6 +1601,7 @@ object AppSettings {
         translateAheadModel.value = prefs.getString(KEY_TRANSLATE_AHEAD_MODEL, null)
             ?: com.music.bitchord.data.lyrics.LyricsTranslation.CLAUDE_HAIKU
         translateAheadReading.value = prefs.getBoolean(KEY_TRANSLATE_AHEAD_READING, false)
+        translateAheadFurigana.value = prefs.getBoolean(KEY_TRANSLATE_AHEAD_FURIGANA, false)
         com.music.bitchord.data.lyrics.LyricsTranslation.sonnetStandInEnabled = claudeSonnetStandIn.value
         pronunciationMode.value = prefs.getString(KEY_PRONUNCIATION_MODE, null)
             ?.takeIf { it == PRONOUNCE_FREE || it == PRONOUNCE_CLAUDE || it == PRONOUNCE_ROMAJI } ?: PRONOUNCE_FREE
@@ -2350,6 +2358,11 @@ object AppSettings {
         prefs.edit().putBoolean(KEY_QUEUE_TIDY_AUTO, value).apply()
     }
 
+    fun setFuriganaHangul(value: Boolean) {
+        furiganaHangul.value = value
+        prefs.edit().putBoolean(KEY_FURIGANA_HANGUL, value).apply()
+    }
+
     fun setRadioFreshDays(value: Int) {
         val days = value.takeIf { it in RADIO_FRESH_DAY_CHOICES } ?: 0
         radioFreshDays.value = days
@@ -2456,6 +2469,11 @@ object AppSettings {
     }
 
     /** Remembers what translating ahead was last asked with, for the next time and for when the intro is off. */
+    fun setTranslateAheadFurigana(value: Boolean) {
+        translateAheadFurigana.value = value
+        prefs.edit().putBoolean(KEY_TRANSLATE_AHEAD_FURIGANA, value).apply()
+    }
+
     fun setTranslateAheadChoice(model: String, reading: Boolean) {
         translateAheadModel.value = model
         translateAheadReading.value = reading
@@ -3448,6 +3466,8 @@ object AppSettings {
     private const val KEY_SONG_BACKGROUND_SONNET = "ko_song_background_sonnet"
     private const val KEY_QUEUE_TIDY_AUTO = "ko_queue_tidy_auto"
     private const val KEY_RADIO_FRESH_DAYS = "ko_radio_fresh_days"
+    private const val KEY_FURIGANA_HANGUL = "ko_furigana_hangul"
+    private const val KEY_TRANSLATE_AHEAD_FURIGANA = "ko_ahead_furigana"
     private const val KEY_RADIO_FRESH_DROP = "ko_radio_fresh_drop"
     private const val KEY_BLUETOOTH_LYRICS = "ko_bluetooth_lyrics"
     private const val KEY_BLUETOOTH_LYRICS_SHOW = "ko_bluetooth_lyrics_show"

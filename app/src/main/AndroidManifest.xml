@@ -75,6 +75,9 @@
         android:name="android.permission.READ_PHONE_STATE"
         tools:node="remove" />
 
+    <!-- KO: largeHeap, for AutoMix. Its analysis decodes a whole track to the heap (about 80 MB
+         live for a 3.5-minute song), beside the artwork, the AutoMix art and the lyric panel; on
+         the default limit (256 MB on most phones) that ran out of memory mid-analysis. -->
     <application
         android:name=".BitChordApplication"
         android:allowBackup="true"
@@ -82,6 +85,7 @@
         android:usesCleartextTraffic="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
+        android:largeHeap="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:localeConfig="@xml/locales_config"

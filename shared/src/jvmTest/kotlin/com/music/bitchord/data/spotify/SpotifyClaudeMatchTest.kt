@@ -73,4 +73,16 @@ class SpotifyClaudeMatchTest {
         assertEquals("God-ish", outcome.song?.title)
         assertTrue(outcome.settled)
     }
+
+    @Test
+    fun `when Claude cannot answer, the rules' pick still plays`() = kotlinx.coroutines.runBlocking {
+        // No key in tests, so the call is refused, as when a limit is reached on a phone.
+        val outcome = SpotifyClaudeMatch.match(
+            track("God-ish", "PinocchioP", 200),
+            useClaude = true,
+            search = { listOf(song("God-ish (神っぽいな)", "ピノキオピー", "3:21")) },
+        )
+        assertEquals("ピノキオピー", outcome.song?.artist)
+        assertFalse(outcome.settled) // not remembered: Claude is asked again next time
+    }
 }

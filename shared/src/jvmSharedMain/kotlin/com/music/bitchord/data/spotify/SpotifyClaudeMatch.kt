@@ -98,7 +98,14 @@ object SpotifyClaudeMatch {
         // two that answered with nothing are the answer.
         if (candidates.isEmpty()) return Outcome(null, How.NONE, 0, 0, settled = refused == 0)
 
-        val answer = ask(track, candidates) ?: return Outcome(null, How.NONE, 1, candidates.size, settled = false)
+        // Claude could not answer (a limit reached, resting after a rate limit, the key refused):
+        // the rules' own pick rather than nothing, so the song still plays — not remembered,
+        // and asked again next time the playlist opens.
+        fun fallback(calls: Int) = Outcome(
+            ruled ?: first.firstOrNull { closeInLength(it, track) },
+            How.RULES, calls, candidates.size, settled = false,
+        )
+        val answer = ask(track, candidates) ?: return fallback(1)
         accepted(answer, candidates, track)?.let { return Outcome(it, How.CLAUDE, 1, candidates.size) }
 
         // None among these: Claude's own searches, once.
@@ -106,8 +113,7 @@ object SpotifyClaudeMatch {
         val more = answer.searches.take(2).flatMap { query -> searched(query) }
         if (more.isEmpty()) return Outcome(null, How.NONE, 1, candidates.size, settled = refused == refusedBefore)
         candidates = merged(candidates, more)
-        val second = ask(track, candidates, askForSearches = false)
-            ?: return Outcome(null, How.NONE, 2, candidates.size, settled = false)
+        val second = ask(track, candidates, askForSearches = false) ?: return fallback(2)
         val chosen = accepted(second, candidates, track)
         return Outcome(chosen, if (chosen != null) How.CLAUDE_SECOND_SEARCH else How.NONE, 2, candidates.size)
     }
@@ -139,6 +145,15 @@ object SpotifyClaudeMatch {
     private fun names(artist: String): List<String> = artist.split(",", "&", " x ", " X ", " feat", " with ")
         .map { it.lowercase().filter(Char::isLetterOrDigit) }
         .filter { it.length >= 2 }
+
+    /** Within [FALLBACK_LENGTH_GAP_SEC] of the track's length; false when either is unknown. */
+    private fun closeInLength(song: Song, track: SpotifyTrack): Boolean {
+        val expected = track.durationMs.takeIf { it > 0 }?.div(1000) ?: return false
+        val actual = song.durationMillis().takeIf { it > 0 }?.div(1000) ?: return false
+        return abs(expected - actual) <= FALLBACK_LENGTH_GAP_SEC
+    }
+
+    private const val FALLBACK_LENGTH_GAP_SEC = 3
 
     /** Same performer (a shared name, however spaced or cased) and no version word the candidate lacks. */
     internal fun plainlySame(track: SpotifyTrack, song: Song): Boolean {

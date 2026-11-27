@@ -34,6 +34,10 @@ on:
         description: 'Japanese songs to give furigana with Haiku and Sonnet, separated by semicolons (needs ANTHROPIC_API_KEY; counts only)'
         required: false
         default: ''
+      spotify:
+        description: 'Spotify tracks to match on YouTube Music, title|artist|album|seconds|expected, separated by semicolons'
+        required: false
+        default: ''
       claude_search:
         description: 'Set to yes to try Claude web search (needs the ANTHROPIC_API_KEY secret; costs a few cents)'
         required: false
@@ -58,7 +62,7 @@ jobs:
           cache: gradle
 
       - name: Check
-        if: inputs.probe == '' && inputs.radio == '' && inputs.claude_search == '' && inputs.sources == '' && inputs.namu == '' && inputs.translate == '' && inputs.sources_ko == '' && inputs.furigana == ''
+        if: inputs.probe == '' && inputs.radio == '' && inputs.claude_search == '' && inputs.sources == '' && inputs.namu == '' && inputs.translate == '' && inputs.sources_ko == '' && inputs.furigana == '' && inputs.spotify == ''
         env:
           LIVE_LYRICS: '1'
           LIVE_LYRICS_REPORT: ${{ github.workspace }}/live-lyrics.md
@@ -70,6 +74,14 @@ jobs:
           LIVE_PROBE: ${{ inputs.probe }}
           LIVE_LYRICS_REPORT: ${{ github.workspace }}/live-lyrics.md
         run: ./gradlew :shared:jvmTest --tests 'com.music.bitchord.data.lyrics.LyricsProbe' --rerun --no-daemon
+
+      - name: Spotify match
+        if: inputs.spotify != ''
+        env:
+          LIVE_SPOTIFY: ${{ inputs.spotify }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          LIVE_LYRICS_REPORT: ${{ github.workspace }}/live-lyrics.md
+        run: ./gradlew :shared:jvmTest --tests 'com.music.bitchord.data.spotify.SpotifyMatchProbe' --rerun --no-daemon
 
       - name: Furigana
         if: inputs.furigana != ''

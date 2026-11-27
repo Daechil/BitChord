@@ -69,6 +69,8 @@ object ClaudeDiagnostics {
     const val PURPOSE_QUEUE = "queue"
     /** KO: readings over a Japanese line's kanji; see Furigana. */
     const val PURPOSE_FURIGANA = "furigana"
+    /** KO: a Spotify track's YouTube Music version, chosen among search results; see SpotifyClaudeMatch. */
+    const val PURPOSE_SPOTIFY = "spotify_match"
 
     @Serializable
     data class Entry(

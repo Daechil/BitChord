@@ -378,7 +378,7 @@ fun SearchScreen(
                                     song = row.song,
                                     onClick = {
                                         // KO: the row lit as playing opens the player instead of starting it again.
-                                        if (!(isCurrentRow(row.song) && com.music.bitchord.ui.player.PlayerPlatform.host.openPlayingNow())) {
+                                        if (!(isCurrentRow(row.song) && com.music.bitchord.ui.player.PlayerPlatform.hostOrNull?.openPlayingNow() == true)) {
                                             onSongClick(tracks, tracks.indexOf(row.song).coerceAtLeast(0))
                                         }
                                     },
@@ -484,7 +484,7 @@ private fun LazyListScope.librarySearchResults(
                     onClick = {
                         if (blocked) {
                             onBlockedSongClick(song)
-                        } else if (isCurrentRow(song) && com.music.bitchord.ui.player.PlayerPlatform.host.openPlayingNow()) {
+                        } else if (isCurrentRow(song) && com.music.bitchord.ui.player.PlayerPlatform.hostOrNull?.openPlayingNow() == true) {
                             // KO: the row lit as playing opens the player instead of starting it again.
                         } else {
                             // The queue skips blocked rows, or playing through
@@ -722,7 +722,7 @@ private fun LazyListScope.searchTypeaheadDropdown(
         when (result) {
             is SearchResult.Track -> TypeaheadSongRow(
                 song = result.song,
-                onClick = { if (!(isCurrentRow(result.song) && com.music.bitchord.ui.player.PlayerPlatform.host.openPlayingNow())) onSongClick(result.song) },
+                onClick = { if (!(isCurrentRow(result.song) && com.music.bitchord.ui.player.PlayerPlatform.hostOrNull?.openPlayingNow() == true)) onSongClick(result.song) },
                 onLongPress = onSongLongPress?.let { { it(result.song) } },
                 onSwipeToQueue = { onSongSwipe(result.song) },
                 isCurrent = isCurrentRow(result.song),
@@ -734,7 +734,7 @@ private fun LazyListScope.searchTypeaheadDropdown(
             )
             is SearchResult.TopTrack -> TypeaheadSongRow(
                 song = result.song,
-                onClick = { if (!(isCurrentRow(result.song) && com.music.bitchord.ui.player.PlayerPlatform.host.openPlayingNow())) onSongClick(result.song) },
+                onClick = { if (!(isCurrentRow(result.song) && com.music.bitchord.ui.player.PlayerPlatform.hostOrNull?.openPlayingNow() == true)) onSongClick(result.song) },
                 onLongPress = onSongLongPress?.let { { it(result.song) } },
                 onSwipeToQueue = { onSongSwipe(result.song) },
                 isCurrent = isCurrentRow(result.song),

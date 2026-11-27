@@ -109,6 +109,8 @@ fun rememberMediaController(): MediaController? {
     val listener = remember(context) { QueueSnapshotRefreshListener() }
 
     DisposableEffect(context) {
+        // KO: set once the screen is gone, so a connection that lands after it is not handed out.
+        var disposed = false
         val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
         val future = MediaController.Builder(context, token)
             .setListener(listener)
@@ -122,11 +124,12 @@ fun rememberMediaController(): MediaController? {
                     listener.ready = true
                 }
                 controller = connected
-                if (connected != null) PlayingRowTap.connected(connected)
+                if (connected != null && !disposed) PlayingRowTap.connected(connected)
             },
             ContextCompat.getMainExecutor(context),
         )
         onDispose {
+            disposed = true
             controller?.let(PlayingRowTap::released)
             MediaController.releaseFuture(future)
             controller = null

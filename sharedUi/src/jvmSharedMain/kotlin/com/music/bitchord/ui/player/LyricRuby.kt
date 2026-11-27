@@ -54,6 +54,8 @@ private const val RUBY_SCALE = 0.42f
 
 /** [style] with room above each row for its readings; the words sit at the bottom of the taller row. */
 internal fun rubyRoomStyle(style: TextStyle): TextStyle {
+    // No size to make room from: the line as it is, and no readings over it (see [drawRuby]).
+    if (!style.fontSize.isSpecified) return style
     val height = style.lineHeight.takeIf { it.isSpecified } ?: (style.fontSize * 1.2f)
     return style.copy(
         lineHeight = height * RUBY_ROOM,
@@ -63,7 +65,7 @@ internal fun rubyRoomStyle(style: TextStyle): TextStyle {
 
 /** The readings' own type: small, bold, set on their own. */
 internal fun rubyTextStyle(style: TextStyle): TextStyle = style.copy(
-    fontSize = style.fontSize * RUBY_SCALE,
+    fontSize = if (style.fontSize.isSpecified) style.fontSize * RUBY_SCALE else TextUnit.Unspecified,
     lineHeight = TextUnit.Unspecified,
     lineHeightStyle = null,
     fontWeight = FontWeight.Bold,
@@ -88,6 +90,7 @@ internal fun DrawScope.drawRuby(
     color: Color,
     baseFontPx: Float,
 ) {
+    if (baseFontPx.isNaN() || baseFontPx <= 0f) return
     val length = layout.layoutInput.text.length
     marks.forEachIndexed { index, mark ->
         val reading = readings.getOrNull(index) ?: return@forEachIndexed

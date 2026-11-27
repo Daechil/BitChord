@@ -5,6 +5,8 @@ import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.stats.ListeningStats
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
@@ -40,7 +42,9 @@ internal object RecentRadio {
             TrackLog.w("BitChord", "recent radio: listening record unreadable (${e.javaClass.simpleName})")
             return candidates
         }
-        val result = FreshRadio.order(candidates, heard, AppSettings.radioFreshDrop.value)
+        // Off the main thread: thousands of songs heard, each held against fifty candidates.
+        val drop = AppSettings.radioFreshDrop.value
+        val result = withContext(Dispatchers.Default) { FreshRadio.order(candidates, heard, drop) }
         if (result.heard > 0) {
             val how = if (result.dropped) "left out" else "moved back"
             TrackLog.i("BitChord", "recent radio: ${result.heard} of ${candidates.size} heard in ${days}d, $how")

@@ -302,6 +302,9 @@ object PlayerPlatform {
     fun install(host: PlayerHost) {
         installed = host
     }
+
+    /** KO: the host where one is installed, for a list's tap that must not fail without one. */
+    val hostOrNull: PlayerHost? get() = installed
 }
 
 /** The settings the player reads, named and typed as the phone's AppSettings has them. */

@@ -72,4 +72,12 @@ class FuriganaRenderTest {
             assertTrue(png.size > 1000)
         }
     }
+
+    @Test
+    fun `a style without a size is left alone`() {
+        val plain = TextStyle()
+        kotlin.test.assertEquals(plain, rubyRoomStyle(plain))
+        // Measured readings for such a style do not throw either.
+        kotlin.test.assertEquals(androidx.compose.ui.unit.TextUnit.Unspecified, rubyTextStyle(plain).fontSize)
+    }
 }

@@ -21,6 +21,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -1924,7 +1925,7 @@ object LyricsTranslation {
         val keep = keepClaude(trackId) || isKept(cacheKey)
         writeCache(cacheKey, entry, keep = keep)
         noteStored(cacheKey, trackId, KIND_FURIGANA, entry, target, model = usedModel, kept = keep && keepDir != null, via = VIA_PLAYER)
-        translationsChanged.value = translationsChanged.value + 1
+        translationsChanged.update { it + 1 }
         return shown(entry.texts, fromCache = false)
     }
 
@@ -2210,7 +2211,7 @@ object LyricsTranslation {
         if (onlyOnce && !lineMapsWritten.add(key)) return
         lineMapsWritten.add(key)
         writeCache(key, value.copy(texts = slots.map { it.text } + value.texts), keep = keep)
-        translationsChanged.value = translationsChanged.value + 1
+        translationsChanged.update { it + 1 }
     }
 
     /**
@@ -2583,7 +2584,7 @@ object LyricsTranslation {
         )
         // The lines and their answers side by side, for [fromAhead].
         writeCache(item.aheadKey, entry.copy(texts = item.sources + texts), keep = true)
-        translationsChanged.value = translationsChanged.value + 1
+        translationsChanged.update { it + 1 }
         return out(null)
     }
 
@@ -2875,7 +2876,7 @@ object LyricsTranslation {
         memory.clear()
         meanings.clear()
         lineMapsWritten.clear()
-        translationsChanged.value = translationsChanged.value + 1
+        translationsChanged.update { it + 1 }
     }
 
     private fun deleteAll(directory: File?, suffix: String): Cleared {

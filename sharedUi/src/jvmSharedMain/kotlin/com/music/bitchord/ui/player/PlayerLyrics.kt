@@ -127,6 +127,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.isSpecified
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.playback.PlaybackPosition
 import com.music.bitchord.sharedui.resources.*
@@ -2794,7 +2795,10 @@ private fun PanelVoice(
 ) {
     // Vazirmatn for Persian/Arabic-script lines; Latin lines keep the player's font.
     val arabicScript = remember(line.text) { usesArabicScript(line.text) }
-    val ruby = remember(line.text, furigana) { rubyMarks(line.text, furigana) }
+    // Readings need a size to scale from; a style without one draws the line alone.
+    val ruby = remember(line.text, furigana, style.fontSize) {
+        rubyMarks(line.text, furigana)?.takeIf { style.fontSize.isSpecified }
+    }
     val voiced = if (arabicScript) {
         val vazirmatn = Font(Res.font.vazirmatn_regular)
         remember(style, vazirmatn) { style.copy(fontFamily = FontFamily(vazirmatn)) }
@@ -2870,8 +2874,13 @@ private fun PanelVoice(
             label = "lyricLit",
         )
         var layout by remember(line.text) { mutableStateOf<TextLayoutResult?>(null) }
-        val measurer = rememberTextMeasurer()
-        val readings = remember(ruby, lyricStyle) { ruby?.let { measureRuby(measurer, it, lyricStyle) } }
+        // Only a line with readings measures any: a song without furigana pays nothing for it.
+        val readings = if (ruby != null) {
+            val measurer = rememberTextMeasurer()
+            remember(ruby, lyricStyle) { measureRuby(measurer, ruby, lyricStyle) }
+        } else {
+            null
+        }
         Text(
             text = line.text,
             style = lyricStyle,

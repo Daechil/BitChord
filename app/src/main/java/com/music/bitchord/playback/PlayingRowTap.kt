@@ -17,9 +17,27 @@ import com.music.bitchord.data.listentogether.ListenTogether
  */
 object PlayingRowTap {
 
-    /** The app's connection to the player, while there is one; see [rememberMediaController]. */
-    @Volatile
-    internal var controller: MediaController? = null
+    /**
+     * Every open connection to the player, newest last; see [rememberMediaController].
+     *
+     * More than one screen connects — the app, and the lock-screen lyrics over
+     * it — and each lets go of its own as it closes. Holding one slot, the lock
+     * screen closing emptied it while the app's was still open, and every tap
+     * after started the row over again.
+     */
+    private val controllers = java.util.concurrent.CopyOnWriteArrayList<MediaController>()
+
+    internal fun connected(controller: MediaController) {
+        controllers.remove(controller)
+        controllers.add(controller)
+    }
+
+    internal fun released(controller: MediaController) {
+        controllers.remove(controller)
+    }
+
+    /** The newest connection still open, if any. */
+    internal val controller: MediaController? get() = controllers.lastOrNull { it.isConnected }
 
     /** Opens the player on the song playing now. False when nothing is loaded, and the caller starts the row as before. */
     fun open(): Boolean {

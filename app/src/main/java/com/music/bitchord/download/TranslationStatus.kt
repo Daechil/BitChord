@@ -77,6 +77,8 @@ object TranslationStatus {
         val translation: StoredAnswer?,
         val reading: StoredAnswer?,
         val meaning: StoredAnswer?,
+        /** KO: furigana in either script; see LyricsTranslation.claudeFurigana. */
+        val furigana: StoredAnswer? = null,
     ) {
         /** Has what the player would use now, or needs none. */
         val covered: Boolean get() = state == State.CLAUDE || state == State.SAME_LANGUAGE || state == State.NO_LYRICS
@@ -123,6 +125,7 @@ object TranslationStatus {
             translation = current ?: if (state == State.GOOGLE) google else other ?: google,
             reading = answers.filter { it.kind == LyricsTranslation.KIND_READING && sameTarget(it.target, target) }.maxByOrNull { it.at },
             meaning = answers.filter { it.kind == LyricsTranslation.KIND_MEANING && sameTarget(it.target, target) }.maxByOrNull { it.at },
+            furigana = answers.filter { it.kind == LyricsTranslation.KIND_FURIGANA }.maxByOrNull { it.at },
         )
     }
 

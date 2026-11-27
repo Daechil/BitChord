@@ -59,6 +59,8 @@ kotlin {
         }
         jvmTest.dependencies {
             implementation("com.squareup.okhttp3:mockwebserver:5.3.2")
+            // KO: a Japanese dictionary for FuriganaProbe to check Claude's readings against; tests only.
+            implementation("com.atilika.kuromoji:kuromoji-ipadic:0.9.0")
         }
     }
 }

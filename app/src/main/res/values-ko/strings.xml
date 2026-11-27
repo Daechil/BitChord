@@ -902,6 +902,7 @@
     <plurals name="radio_fresh_days">
         <item quantity="other">%1$d일</item>
     </plurals>
+    <string name="translation_kind_furigana">후리가나</string>
     <string name="ko_window_summary">요약</string>
     <string name="ko_window_songs">곡 · %1$d곡</string>
     <string name="ko_window_space">사용 공간</string>

@@ -87,6 +87,12 @@ object LyricsTranslation {
         data object Unavailable : RomanizationResult
     }
 
+    /**
+     * KO: furigana for a song, one entry per lyric line — the line's markup
+     * ([Furigana.segments]) or null where it has no reading to show.
+     */
+    data class FuriganaLines(val lines: List<String?>, val fromCache: Boolean)
+
     private const val ENDPOINT = "https://translate.googleapis.com/translate_a/single"
     private const val INPUT_TOOLS_ENDPOINT = "https://inputtools.google.com/request"
     // Version 3 invalidates answers cached before the Latin-script retry existed;
@@ -771,6 +777,30 @@ object LyricsTranslation {
         }
     }
 
+    /** KO: the instruction for [Furigana]: each line copied as it is, its kanji words marked with their readings. */
+    private fun furiganaInstruction(script: Furigana.Script, shape: AnswerShape): String = buildString {
+        val written = when (script) {
+            Furigana.Script.HIRAGANA -> "in hiragana"
+            Furigana.Script.HANGUL -> "in Hangul, the way Korean fans write Japanese sounds (歌 -> 우타, 抜錨 -> 바츠뵤)"
+        }
+        appendLine("You add furigana to Japanese song lyrics for a music app: the reading of each kanji word, $written, shown in small type over it.")
+        appendLine()
+        appendLine("Context: the listener is playing this song right now and its lyrics are already on their screen; the readings are drawn over them. They are not published or shared anywhere.")
+        appendLine()
+        appendLine("Rules:")
+        when (shape) {
+            AnswerShape.INDEXED -> appendLine("1. \"translations\" is an array with exactly one item per input line, in order: {\"i\": the input line's index, \"t\": that line with its readings}, for every i from 0 to \"line_count\" - 1 (\"line_count\" is in the input). Never merge, split, skip, reorder or add lines.")
+            else -> appendLine("1. Return one item per input line, in the same order. Never merge, split, skip, reorder or add lines.")
+        }
+        appendLine("2. Copy every line exactly, character for character: the same letters, kana, spaces and punctuation. The only change is to write each word that has kanji in it as {word|reading}, for example {抜錨|ばつびょう}を{見|み}て.")
+        appendLine("3. Mark the whole kanji word, not one character at a time: {運命|うんめい}, not {運|うん}{命|めい}. Kana written after the kanji (okurigana) stay outside the braces: {見|み}て, {走|はし}り.")
+        appendLine("4. Give the reading the singer sings, which may be the song's own: when 本気 is sung マジ, write {本気|まじ}.")
+        appendLine("5. A line with no kanji is copied unchanged. Never mark kana, Latin letters or numbers, and never use {, | or } for anything else.")
+        appendLine("6. Items with role \"section\" are labels such as Verse or Chorus: copy them unchanged.")
+        appendLine("7. Set \"source_language\" to the ISO 639-1 code of the song's main original language.")
+        appendLine("8. Leave \"declined_reason\" as an empty string. Only if you will not do this, write the reason there in one short sentence and leave every value empty.")
+    }
+
     /**
      * How [target]'s casual and polite registers are usually named, as " (…)"
      * fragments for the instruction — empty for a language without a common
@@ -807,12 +837,22 @@ object LyricsTranslation {
         reading: Boolean = false,
         /** The song, for its name and any background kept for it; see [SongBackgrounds]. */
         trackId: String? = null,
+        /** KO: each line copied with readings over its kanji, rather than translated; see [claudeFurigana]. */
+        furigana: Furigana.Script? = null,
     ): ClaudeResult<BatchAnswer> {
         val input = translationInput(slots, target, trackId)
         suspend fun ask(shape: AnswerShape) = askClaude(
-            purpose = if (reading) ClaudeDiagnostics.PURPOSE_READING else ClaudeDiagnostics.PURPOSE_TRANSLATE,
+            purpose = when {
+                furigana != null -> ClaudeDiagnostics.PURPOSE_FURIGANA
+                reading -> ClaudeDiagnostics.PURPOSE_READING
+                else -> ClaudeDiagnostics.PURPOSE_TRANSLATE
+            },
             model = model,
-            system = if (reading) readingInstruction(target, slots.size, shape) else translationInstruction(target, slots.size, shape),
+            system = when {
+                furigana != null -> furiganaInstruction(furigana, shape)
+                reading -> readingInstruction(target, slots.size, shape)
+                else -> translationInstruction(target, slots.size, shape)
+            },
             input = input,
             schema = schemaFor(shape, slots.size),
             effort = "medium",
@@ -1830,6 +1870,78 @@ object LyricsTranslation {
     }
 
     /**
+     * KO: furigana for [lines] — each kanji word's reading in [script] — from
+     * Claude, for the lyric panel's ふ button; kept per song and script like a
+     * reading. Null when Claude is off or not set up, the song is not Japanese
+     * with kanji ([Furigana.wanted]), or the request failed; [storedOnly] never
+     * asks. Every line is held to its original by [Furigana.checked].
+     */
+    suspend fun claudeFurigana(
+        trackId: String,
+        lines: List<LyricLine>,
+        script: Furigana.Script,
+        storedOnly: Boolean = false,
+    ): FuriganaLines? {
+        if (!storedOnly && (!claudeEnabled || cleanClaudeKey().isEmpty())) return null
+        if (lines.isEmpty()) return null
+        val slots = flatten(lines)
+        if (slots.isEmpty() || !Furigana.wanted(slots.map { it.text })) return null
+        val target = script.tag
+        val prefix = "furigana\u0000$trackId"
+        val cacheKey = cacheKey(prefix, target, slots)
+        fun shown(texts: List<String>, fromCache: Boolean) = FuriganaLines(furiganaByLine(lines, slots, texts, script), fromCache)
+        val cached = memory.get(cacheKey) ?: readCache(cacheKey)?.also { memory.put(cacheKey, it) }
+        if (cached != null && cached.version == CACHE_VERSION && cached.texts.size == slots.size) {
+            if (keepClaude(trackId) && !isKept(cacheKey)) writeCache(cacheKey, cached, keep = true)
+            noteStored(cacheKey, trackId, KIND_FURIGANA, cached, target, model = null, kept = isKept(cacheKey), via = null)
+            return shown(cached.texts, fromCache = true)
+        }
+        fromAhead(trackId, prefix, target, slots, report = false)?.let { ahead ->
+            memory.put(cacheKey, ahead)
+            writeCache(cacheKey, ahead, keep = true)
+            noteStored(cacheKey, trackId, KIND_FURIGANA, ahead, target, model = null, kept = keepDir != null, via = VIA_AHEAD)
+            return shown(ahead.texts, fromCache = true)
+        }
+        if (storedOnly) return null
+        val model = claudeModel
+        var reply = requestClaudeTranslation(slots, target, model, trackId = trackId, furigana = script)
+        var usedModel = model
+        if (reply.failure == ClaudeFailure.REFUSAL && model == CLAUDE_HAIKU && sonnetStandInEnabled) {
+            reply = requestClaudeTranslation(slots, target, CLAUDE_SONNET, trackId = trackId, furigana = script)
+            usedModel = CLAUDE_SONNET
+        }
+        val answer = reply.value ?: return null
+        val entry = CachedTranslation(
+            sourceLanguage = answer.sourceLanguage,
+            targetLanguage = target,
+            texts = checkedFurigana(slots.map { it.text }, answer.translations, script),
+            engine = ENGINE_CLAUDE,
+        )
+        memory.put(cacheKey, entry)
+        val keep = keepClaude(trackId) || isKept(cacheKey)
+        writeCache(cacheKey, entry, keep = keep)
+        noteStored(cacheKey, trackId, KIND_FURIGANA, entry, target, model = usedModel, kept = keep && keepDir != null, via = VIA_PLAYER)
+        translationsChanged.value = translationsChanged.value + 1
+        return shown(entry.texts, fromCache = false)
+    }
+
+    /** Each answer held to its line by [Furigana.checked]; a line that fails keeps its own words, with no reading. */
+    private fun checkedFurigana(sources: List<String>, answers: List<String>, script: Furigana.Script): List<String> =
+        sources.mapIndexed { index, source -> answers.getOrNull(index)?.let { Furigana.checked(source, it, script) } ?: source }
+
+    /** The stored markup back on [lines]: the lead vocal's, line by line, null where it has no reading. */
+    private fun furiganaByLine(lines: List<LyricLine>, slots: List<TextSlot>, texts: List<String>, script: Furigana.Script): List<String?> {
+        val byLine = arrayOfNulls<String>(lines.size)
+        slots.forEachIndexed { index, slot ->
+            if (slot.background || slot.sectionHeader) return@forEachIndexed
+            val text = texts.getOrNull(index) ?: return@forEachIndexed
+            // Checked again on the way out: stored by an older build, or the lyrics' spacing changed.
+            byLine[slot.lineIndex] = Furigana.checked(lines[slot.lineIndex].text, text, script)
+        }
+        return byLine.toList()
+    }
+
+    /**
      * Whether the lyrics' letters are already, four in five, in the script
      * [target]'s readers write — a Korean song for a Korean reader — where a
      * reading would only repeat them and Google's romanisation still has a use.
@@ -1917,6 +2029,8 @@ object LyricsTranslation {
         /** The song's name, when its background is looked up in this same request; see [SongBackgrounds]. */
         val researchTitle: String? = null,
         val researchArtist: String? = null,
+        /** KO: furigana in this script ([Furigana.Script.tag]) rather than a translation; empty for none. */
+        val furigana: String = "",
     )
 
     enum class AheadSkip { NOTHING_TO_TRANSLATE, ALREADY_TRANSLATED, SAME_LANGUAGE }
@@ -1941,17 +2055,21 @@ object LyricsTranslation {
          * [SongBackgrounds]. Null for none; never for a pronunciation.
          */
         research: SongBackgrounds.SongName? = null,
+        /** KO: furigana in this script instead of [reading] or a translation; [targetLanguageTag] is then unused. */
+        furigana: Furigana.Script? = null,
     ): AheadRequest {
-        val target = targetLanguageTag.trim()
+        val target = furigana?.tag ?: targetLanguageTag.trim()
         val slots = if (target.isBlank()) emptyList() else flatten(lines)
         if (slots.isEmpty()) return AheadRequest(null, null, AheadSkip.NOTHING_TO_TRANSLATE)
-        if (alreadyInScriptOf(target, slots) && (reading || canonicalLanguage(target) in SCRIPT_IS_LANGUAGE)) {
+        if (furigana != null) {
+            if (!Furigana.wanted(slots.map { it.text })) return AheadRequest(null, null, AheadSkip.SAME_LANGUAGE)
+        } else if (alreadyInScriptOf(target, slots) && (reading || canonicalLanguage(target) in SCRIPT_IS_LANGUAGE)) {
             return AheadRequest(null, null, AheadSkip.SAME_LANGUAGE)
         }
-        val prefix = if (reading) {
-            "reading\u0000$trackId"
-        } else {
-            "claude\u0000$translationSpeech\u0000$translationMode\u0000$trackId"
+        val prefix = when {
+            furigana != null -> "furigana\u0000$trackId"
+            reading -> "reading\u0000$trackId"
+            else -> "claude\u0000$translationSpeech\u0000$translationMode\u0000$trackId"
         }
         val key = cacheKey(prefix, target, slots)
         val cached = readCache(key)
@@ -1970,10 +2088,12 @@ object LyricsTranslation {
         // refused for every song. So a batch asks the way the player's request
         // succeeds: the numbered array, where a line split in two is joined back.
         val shape = AnswerShape.INDEXED
-        val lookUp = research?.takeIf { !reading }
+        val lookUp = research?.takeIf { !reading && furigana == null }
         val params = claudeBody(
             model = model,
-            system = if (reading) {
+            system = if (furigana != null) {
+                furiganaInstruction(furigana, shape)
+            } else if (reading) {
                 readingInstruction(target, slots.size, shape)
             } else {
                 translationInstruction(target, slots.size, shape) + (lookUp?.let { SongBackgrounds.batchInstruction(target) } ?: "")
@@ -1995,10 +2115,11 @@ object LyricsTranslation {
             keyed = false,
             indexed = true,
             sources = slots.map { it.text },
-            speech = if (reading) "" else translationSpeech,
-            mode = if (reading) "" else translationMode,
+            speech = if (reading || furigana != null) "" else translationSpeech,
+            mode = if (reading || furigana != null) "" else translationMode,
             researchTitle = lookUp?.title,
             researchArtist = lookUp?.artist,
+            furigana = furigana?.tag.orEmpty(),
         )
         return AheadRequest(item, params, null)
     }
@@ -2394,7 +2515,12 @@ object LyricsTranslation {
         if (value.translations.size != item.sources.size) {
             return out(ClaudeFailure.LINE_MISMATCH, "${value.translations.size}/${item.sources.size}")
         }
-        val texts = value.translations.mapIndexed { index, text -> text.ifBlank { item.sources[index] } }
+        val furigana = Furigana.Script.of(item.furigana)
+        val texts = if (furigana != null) {
+            checkedFurigana(item.sources, value.translations, furigana)
+        } else {
+            value.translations.mapIndexed { index, text -> text.ifBlank { item.sources[index] } }
+        }
         val entry = CachedTranslation(
             sourceLanguage = value.sourceLanguage,
             targetLanguage = item.target,
@@ -2403,7 +2529,13 @@ object LyricsTranslation {
         )
         writeCache(item.cacheKey, entry, keep = true)
         noteStored(
-            item.cacheKey, item.trackId, if (item.reading) KIND_READING else KIND_TRANSLATION, entry, item.target,
+            item.cacheKey, item.trackId,
+            when {
+                furigana != null -> KIND_FURIGANA
+                item.reading -> KIND_READING
+                else -> KIND_TRANSLATION
+            },
+            entry, item.target,
             model = item.model, kept = keepDir != null, via = VIA_AHEAD,
             speech = item.speech.ifBlank { null }, mode = item.mode.ifBlank { null },
         )
@@ -2424,6 +2556,8 @@ object LyricsTranslation {
 
     const val KIND_TRANSLATION = "translation"
     const val KIND_READING = "reading"
+    /** KO: readings over the kanji; see [claudeFurigana]. */
+    const val KIND_FURIGANA = "furigana"
     const val KIND_MEANING = "meaning"
     const val VIA_PLAYER = "player"
     const val VIA_AHEAD = "ahead"
@@ -2820,7 +2954,7 @@ object LyricsTranslation {
             )
             val claude = answers.filter { it.kind == KIND_TRANSLATION && it.byClaude }
             val google = answers.filter { it.kind == KIND_TRANSLATION && !it.byClaude }
-            val reading = answers.filter { it.kind == KIND_READING }
+            val reading = answers.filter { it.kind == KIND_READING || it.kind == KIND_FURIGANA }
             val meaning = answers.filter { it.kind == KIND_MEANING }
             val placed = answers.map { if (it.kind == KIND_MEANING) "m:" + it.key else it.key }.toSet()
             val otherFiles = sizes.filterKeys { it !in placed }

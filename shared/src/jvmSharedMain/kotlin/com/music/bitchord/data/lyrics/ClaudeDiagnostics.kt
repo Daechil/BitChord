@@ -67,6 +67,8 @@ object ClaudeDiagnostics {
     /** A song's background, looked up on the web; see [SongBackgrounds]. */
     const val PURPOSE_BACKGROUND = "background"
     const val PURPOSE_QUEUE = "queue"
+    /** KO: readings over a Japanese line's kanji; see Furigana. */
+    const val PURPOSE_FURIGANA = "furigana"
 
     @Serializable
     data class Entry(

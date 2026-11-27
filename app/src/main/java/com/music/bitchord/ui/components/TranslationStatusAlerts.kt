@@ -104,6 +104,7 @@ private fun statusWords(): StatusWords {
             LyricsTranslation.KIND_TRANSLATION to stringResource(R.string.translation_kind_translation),
             LyricsTranslation.KIND_READING to stringResource(R.string.translation_kind_reading),
             LyricsTranslation.KIND_MEANING to stringResource(R.string.translation_kind_meaning),
+            LyricsTranslation.KIND_FURIGANA to stringResource(R.string.translation_kind_furigana),
         ),
         vias = mapOf(
             LyricsTranslation.VIA_PLAYER to stringResource(R.string.translation_via_player),
@@ -157,6 +158,7 @@ internal fun TranslationStatusRow(song: Song, accent: Color, onOpen: () -> Unit)
             now.translation?.let { add(if (it.kept) words.kept else words.cache) }
             if (now.reading != null) add(words.kinds[LyricsTranslation.KIND_READING] + " ✓")
             if (now.meaning != null) add(words.kinds[LyricsTranslation.KIND_MEANING] + " ✓")
+            if (now.furigana != null) add(words.kinds[LyricsTranslation.KIND_FURIGANA] + " ✓")
         }.joinToString(" · ").ifBlank { null }
     }
     ActionRow(
@@ -520,6 +522,7 @@ private fun ReleaseStatusWindow(hazeState: HazeState, release: AheadAsk, onDismi
                     status?.translation?.takeIf { status.covered || state == TranslationStatus.State.GOOGLE }
                         ?.let { if (it.kept) words.kept else words.cache },
                     status?.reading?.let { words.kinds[LyricsTranslation.KIND_READING] + " ✓" },
+                    status?.furigana?.let { words.kinds[LyricsTranslation.KIND_FURIGANA] + " ✓" },
                 ).joinToString(" · ")
                 WindowLine(
                     title = song.title,

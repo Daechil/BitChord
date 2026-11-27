@@ -556,6 +556,7 @@ private fun ClaudeLogWindow(onDismiss: () -> Unit) {
     val inOutLabel = stringResource(R.string.ko_tokens_in_out)
     val purposeBackground = stringResource(R.string.song_background_purpose)
     val purposeQueue = stringResource(R.string.queue_tidy_purpose)
+    val purposeFurigana = stringResource(R.string.translation_kind_furigana)
     val searchesLabel = stringResource(R.string.song_background_searches)
     val cacheReadLabel = stringResource(R.string.claude_cache_read_log)
     // The copy keeps the raw values, for a bug report; the screen says what they mean.
@@ -587,6 +588,7 @@ private fun ClaudeLogWindow(onDismiss: () -> Unit) {
             ClaudeDiagnostics.PURPOSE_RECOMMEND -> purposeRecommend
             ClaudeDiagnostics.PURPOSE_BACKGROUND -> purposeBackground
             ClaudeDiagnostics.PURPOSE_QUEUE -> purposeQueue
+            ClaudeDiagnostics.PURPOSE_FURIGANA -> purposeFurigana
             else -> entry.purpose
         }
         val model = when (entry.model) {

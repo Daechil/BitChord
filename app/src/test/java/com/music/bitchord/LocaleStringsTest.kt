@@ -54,6 +54,68 @@ class LocaleStringsTest(private val tag: String) {
         }
 
         /**
+         * KO: strings upstream BitChord 1.10 added in English and has not yet
+         * translated into any of these languages (its own copies of the
+         * language files lack them too) — they show in English there, as
+         * upstream ships them. Named one by one, so any other key missing still
+         * fails; when upstream translates one, it simply stops being missing.
+         * KO's own strings are in strings_ko.xml, English and Korean only, and
+         * are not checked here.
+         */
+        private val UPSTREAM_UNTRANSLATED = setOf(
+            "automix_art_transition",
+            "automix_art_transition_subtitle",
+            "automix_mini_art_transition",
+            "automix_mini_art_transition_subtitle",
+            "replay_year_albums",
+            "replay_year_albums_word",
+            "replay_year_all_day",
+            "replay_year_all_day_detail",
+            "replay_year_artist_start",
+            "replay_year_artists_word",
+            "replay_year_building",
+            "replay_year_busiest_minutes",
+            "replay_year_busiest_song",
+            "replay_year_busiest_start",
+            "replay_year_clock_start",
+            "replay_year_daytime",
+            "replay_year_daytime_detail",
+            "replay_year_discovery_start",
+            "replay_year_early_bird",
+            "replay_year_early_bird_detail",
+            "replay_year_genres_start",
+            "replay_year_golden_hour",
+            "replay_year_golden_hour_detail",
+            "replay_year_minutes_days_end",
+            "replay_year_minutes_days_start",
+            "replay_year_minutes_days_value",
+            "replay_year_minutes_hours_value",
+            "replay_year_minutes_start",
+            "replay_year_minutes_together",
+            "replay_year_minutes_word",
+            "replay_year_months",
+            "replay_year_mute",
+            "replay_year_night_owl",
+            "replay_year_night_owl_detail",
+            "replay_year_open",
+            "replay_year_opener_detail",
+            "replay_year_opener_end",
+            "replay_year_opener_start",
+            "replay_year_played_times",
+            "replay_year_song_start",
+            "replay_year_songs_word",
+            "replay_year_summary_artists",
+            "replay_year_summary_minutes",
+            "replay_year_summary_songs",
+            "replay_year_summary_title",
+            "replay_year_top_artists",
+            "replay_year_top_songs",
+            "replay_year_unmute",
+            "show_best_part",
+            "show_best_part_subtitle",
+        )
+
+        /**
          * App language tags are BCP-47 (`zh-CN` / `zh-TW`) while Android
          * resource directories use `-r` regions (`values-zh`, `values-zh-rTW`).
          * Mirrors what Android resolves at runtime: Simplified is the bare
@@ -72,7 +134,7 @@ class LocaleStringsTest(private val tag: String) {
         val localeFile = File(resDir, "values-$qualifier/strings.xml")
         assertTrue("values-$qualifier/strings.xml must exist (for language tag $tag)", localeFile.exists())
 
-        val missingKeys = baseKeys - translatableKeys(parse(localeFile))
+        val missingKeys = baseKeys - translatableKeys(parse(localeFile)) - UPSTREAM_UNTRANSLATED
         assertTrue(
             "values-$qualifier/strings.xml (language $tag) is missing ${missingKeys.size} keys from values/strings.xml: $missingKeys",
             missingKeys.isEmpty(),

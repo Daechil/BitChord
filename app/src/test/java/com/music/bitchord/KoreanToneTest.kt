@@ -14,6 +14,7 @@ class KoreanToneTest {
 
     private val files = listOf(
         "src/main/res/values-ko/strings.xml",
+        "src/main/res/values-ko/strings_ko.xml",
         "../sharedUi/src/commonMain/composeResources/values-ko/strings.xml",
     )
 

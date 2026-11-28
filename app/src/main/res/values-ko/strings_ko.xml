@@ -645,4 +645,6 @@
     <string name="spotify_error_busy">Spotify가 지금 응답하지 않아요. 잠시 뒤 다시 시도해 주세요.</string>
     <string name="spotify_error_other">Spotify에서 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.</string>
     <string name="claude_model_gone_notice">이 버전이 쓰는 Claude 모델이 종료됐어요. 지금은 Google 번역을 써요. 앱을 업데이트해 주세요.</string>
+    <string name="auto_claude_translation">자동 번역 (Claude)</string>
+    <string name="auto_claude_translation_subtitle">번역을 켜 둔 채 다음 곡으로 넘어가면, 저장된 번역이 없을 때 Claude가 자동으로 번역해요. 이미 같은 언어인 곡은 건너뛰어요. 곡마다 비용이 들고, 월 한도 안에서만 해요.</string>
 </resources>

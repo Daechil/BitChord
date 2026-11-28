@@ -3438,10 +3438,10 @@ internal fun rememberLyricsTranslation(
     val translationScope = rememberCoroutineScope()
     val retranslatingMessage = stringResource(Res.string.lyrics_retranslating)
     val rereadingMessage = stringResource(Res.string.lyrics_rereading_with_claude)
-    fun requestTranslation(fresh: Boolean) {
+    fun requestTranslation(fresh: Boolean, quiet: Boolean = false) {
         val source = lyrics.orEmpty()
         if (source.isEmpty()) return
-        haptics.play(Haptic.Tap)
+        if (!quiet) haptics.play(Haptic.Tap)
         translationState = LyricsTranslationUiState.Loading
         translationJob?.cancel()
         translationJob = translationScope.launch {
@@ -3458,15 +3458,15 @@ internal fun rememberLyricsTranslation(
                     wantTranslation = true
                     LyricsViewMemory.translation.value = true
                     translationTransition++
-                    haptics.play(Haptic.ToggleOn)
+                    if (!quiet) haptics.play(Haptic.ToggleOn)
                 }
                 is LyricsTranslationResult.SameLanguage -> {
                     translationState = LyricsTranslationUiState.SameLanguage
-                    PlayerPlatform.host.showMessage(alreadyInLanguageMessage)
+                    if (!quiet) PlayerPlatform.host.showMessage(alreadyInLanguageMessage)
                 }
                 LyricsTranslationResult.Unavailable -> {
                     translationState = LyricsTranslationUiState.Idle
-                    PlayerPlatform.host.showMessage(translationUnavailableMessage)
+                    if (!quiet) PlayerPlatform.host.showMessage(translationUnavailableMessage)
                 }
             }
         }
@@ -3567,7 +3567,21 @@ internal fun rememberLyricsTranslation(
                 targetLanguageTag = translationLanguage,
                 cacheOnly = true,
             )
-            if (result !is LyricsTranslationResult.Translated) return@launch
+            if (result !is LyricsTranslationResult.Translated) {
+                // KO: Settings' "자동 번역 (Claude)": nothing stored, so it is asked for, quietly,
+                // as a tap would — not for a song already in the target language, and only
+                // while Claude would be the one asked (on, its key accepted, under the limit).
+                if (
+                    result == LyricsTranslationResult.Unavailable &&
+                    PlayerSettings.autoClaudeTranslation.value &&
+                    PlayerPlatform.host.claudeTranslationLive() &&
+                    !com.music.bitchord.data.lyrics.LyricsScript.looksAlreadyIn(source.map { it.text }, translationLanguage) &&
+                    translationState == LyricsTranslationUiState.Idle
+                ) {
+                    requestTranslation(fresh = false, quiet = true)
+                }
+                return@launch
+            }
             if (!LyricsViewMemory.autoShowAccepts(result.byClaude, result.claudeFellBack, result.aheadPending)) return@launch
             if (translationState != LyricsTranslationUiState.Idle) return@launch
             translationState = result.toUiState()

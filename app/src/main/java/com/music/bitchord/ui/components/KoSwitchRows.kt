@@ -339,3 +339,26 @@ fun SpotifyClaudeMatchRow(title: String) {
         onClick = { com.music.bitchord.data.settings.AppSettings.setSpotifyClaudeMatch(!on) },
     )
 }
+
+/**
+ * Settings' "자동 번역 (Claude)": with the translation left on, a song with nothing stored
+ * is translated on its own. Greyed out while AI translation is off.
+ */
+@androidx.compose.runtime.Composable
+fun AutoClaudeTranslationRow(title: String) {
+    val claude by com.music.bitchord.data.settings.AppSettings.claudeTranslation.collectAsStateWithLifecycle()
+    val on by com.music.bitchord.data.settings.AppSettings.autoClaudeTranslation.collectAsStateWithLifecycle()
+    com.music.bitchord.ui.screens.SettingsRow(
+        icon = com.music.bitchord.ui.icons.SfIcons.Translate,
+        title = title,
+        subtitle = androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.auto_claude_translation_subtitle),
+        enabled = claude,
+        trailing = {
+            IosSwitch(
+                checked = on && claude,
+                onCheckedChange = if (claude) com.music.bitchord.data.settings.AppSettings::setAutoClaudeTranslation else null,
+            )
+        },
+        onClick = { if (claude) com.music.bitchord.data.settings.AppSettings.setAutoClaudeTranslation(!on) },
+    )
+}

@@ -646,4 +646,6 @@ Adding: %4$s
     <string name="spotify_error_busy">Spotify isn’t answering right now. Try again in a moment.</string>
     <string name="spotify_error_other">Couldn’t read this from Spotify. Try again in a moment.</string>
     <string name="claude_model_gone_notice">The Claude model this version uses has been retired, so translations use Google for now. Please update the app.</string>
+    <string name="auto_claude_translation">Auto-translate (Claude)</string>
+    <string name="auto_claude_translation_subtitle">With the translation left on, the next song is translated by Claude when nothing is stored. Songs already in your language are skipped. Each song is a paid request, within the monthly limit.</string>
 </resources>

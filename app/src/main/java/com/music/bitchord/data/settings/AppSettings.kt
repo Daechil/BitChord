@@ -585,6 +585,13 @@ object AppSettings {
     /** Translate lyrics with Claude instead of Google Translate. See [LyricsTranslation.claudeEnabled]. */
     val claudeTranslation = MutableStateFlow(false)
 
+    /**
+     * KO: with the translation left on, a song with nothing stored is translated by Claude
+     * on its own, as a tap would — songs already in the target language skipped. Off by
+     * default: each one is a paid request.
+     */
+    val autoClaudeTranslation = MutableStateFlow(false)
+
     /** The user's own Claude API key from the Anthropic Console. Stays on this device. */
     val claudeApiKey = MutableStateFlow("")
 
@@ -1531,6 +1538,7 @@ object AppSettings {
         translationLanguage.value = prefs.getString(KEY_TRANSLATION_LANGUAGE, "").orEmpty()
         claudeApiKey.value = secrets.getString(KEY_CLAUDE_API_KEY, "").orEmpty()
         claudeTranslation.value = prefs.getBoolean(KEY_CLAUDE_TRANSLATION, false)
+        autoClaudeTranslation.value = prefs.getBoolean(KEY_AUTO_CLAUDE_TRANSLATION, false)
         com.music.bitchord.data.lyrics.LyricsTranslation.claudeApiKey = claudeApiKey.value
         com.music.bitchord.data.lyrics.LyricsTranslation.claudeEnabled = claudeTranslation.value
         claudeModel.value = prefs.getString(KEY_CLAUDE_MODEL, null)
@@ -2221,6 +2229,11 @@ object AppSettings {
     fun setTranslationLanguage(value: String) {
         translationLanguage.value = value
         prefs.edit().putString(KEY_TRANSLATION_LANGUAGE, value).apply()
+    }
+
+    fun setAutoClaudeTranslation(value: Boolean) {
+        autoClaudeTranslation.value = value
+        prefs.edit().putBoolean(KEY_AUTO_CLAUDE_TRANSLATION, value).apply()
     }
 
     fun setClaudeTranslation(value: Boolean) {
@@ -3522,6 +3535,7 @@ object AppSettings {
     private const val KEY_TRANSLATION_LANGUAGE = "translation_language"
     private const val KEY_CLAUDE_API_KEY = "claude_api_key"
     private const val KEY_CLAUDE_TRANSLATION = "claude_translation"
+    private const val KEY_AUTO_CLAUDE_TRANSLATION = "ko_auto_claude_translation"
     private const val KEY_CLAUDE_MODEL = "claude_model"
     private const val KEY_CLAUDE_SPEECH = "claude_speech"
     private const val KEY_CLAUDE_MODE = "claude_mode"

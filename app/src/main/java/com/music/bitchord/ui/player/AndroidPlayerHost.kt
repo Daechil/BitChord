@@ -77,6 +77,9 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
     override val supportsAutoMixCanvas: Boolean get() = true
 
 
+    override fun claudeTranslationLive(): Boolean =
+        AppSettings.claudeTranslation.value && LyricsTranslation.claudeKeyUsable && !LyricsTranslation.claudeOverBudget()
+
     override val settings: PlayerSettingsSource = object : PlayerSettingsSource {
         override val animatedCanvas get() = AppSettings.animatedCanvas
         override val audioQualityCellular get() = AppSettings.audioQualityCellular
@@ -109,6 +112,7 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
         override val automixDetail get() = AppSettings.automixDetail
         override val automixSummary get() = AppSettings.automixSummary
         override val lyricsHintsSeen get() = AppSettings.lyricsHintsSeen
+        override val autoClaudeTranslation get() = AppSettings.autoClaudeTranslation
         override fun markLyricsHintSeen(key: String) = AppSettings.markLyricsHintSeen(key)
         override val smartFadeEnabled get() = AppSettings.smartFadeEnabled
         override val autoMixArtwork get() = AppSettings.autoMixArtwork

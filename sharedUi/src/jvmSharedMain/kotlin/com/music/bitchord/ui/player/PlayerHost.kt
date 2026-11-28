@@ -34,6 +34,12 @@ import kotlinx.coroutines.flow.StateFlow
  * [PlayerPlatform.install] before the player is first drawn.
  */
 interface PlayerHost {
+    /**
+     * KO: whether a translation asked for now would go to Claude — on in Settings, a key it
+     * has not refused, under the monthly limit. Translating on its own waits for this.
+     */
+    fun claudeTranslationLive(): Boolean = false
+
     val settings: PlayerSettingsSource
 
     /** Optional in-process feed; platforms without AutoMix leave it absent. */
@@ -381,6 +387,9 @@ interface PlayerSettingsSource {
 
     /** KO: the lyrics discs whose first-use hint this device has shown; see [LyricsHints]. */
     val lyricsHintsSeen: StateFlow<Set<String>> get() = noHintsSeen
+
+    /** KO: Settings' "자동 번역 (Claude)"; see [PlayerHost.claudeTranslationLive]. */
+    val autoClaudeTranslation: StateFlow<Boolean> get() = noAutoTranslation
     fun markLyricsHintSeen(key: String) = Unit
 }
 
@@ -390,6 +399,7 @@ internal val PlayerSettings: PlayerSettingsSource
 
 private val noAutomixSummary: StateFlow<com.music.bitchord.playback.smart.AutomixSummary?> = MutableStateFlow(null)
 private val noHintsSeen: StateFlow<Set<String>> = MutableStateFlow(emptySet())
+private val noAutoTranslation: StateFlow<Boolean> = MutableStateFlow(false)
 private val defaultAutoMixArtwork: StateFlow<AutoMixArtworkPreferences> = MutableStateFlow(AutoMixArtworkPreferences())
 
 /** The lyric offset sheet's range, in milliseconds either way. */

@@ -758,6 +758,10 @@ fun SettingsScreen(
                 }
             }
             if (claudeApiKey.isNotBlank()) {
+                val autoTranslationTitle = stringResource(R.string.auto_claude_translation)
+                row(autoTranslationTitle, "claude", "translate", "auto", "자동", "번역") {
+                    com.music.bitchord.ui.components.AutoClaudeTranslationRow(autoTranslationTitle)
+                }
                 val claudeModelTitle = stringResource(R.string.claude_model)
                 row(claudeModelTitle, "claude", "model", "haiku", "sonnet", "ai") {
                     SettingsRow(

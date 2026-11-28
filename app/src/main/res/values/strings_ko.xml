@@ -632,4 +632,8 @@ Adding: %4$s
     <string name="update_kind_improved">Improved</string>
     <string name="update_kind_fixed">Fixed</string>
     <string name="update_kind_other">Other</string>
+    <string name="spotify_preview_listening">Playing</string>
+    <string name="spotify_preview_hint">Tap a song to hear it, then Choose.</string>
+    <string name="spotify_pick_choose">Choose</string>
+    <string name="spotify_preview_party">Previews are off in a listening party.</string>
 </resources>

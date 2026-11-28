@@ -631,4 +631,8 @@
     <string name="update_kind_improved">개선</string>
     <string name="update_kind_fixed">수정</string>
     <string name="update_kind_other">그 밖에</string>
+    <string name="spotify_preview_listening">듣는 중</string>
+    <string name="spotify_preview_hint">곡을 누르면 미리 들어 볼 수 있어요. 맞으면 선택을 눌러 주세요.</string>
+    <string name="spotify_pick_choose">선택</string>
+    <string name="spotify_preview_party">함께 듣기 중에는 미리 들을 수 없어요.</string>
 </resources>

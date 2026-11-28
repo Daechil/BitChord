@@ -84,7 +84,7 @@ object SpotifyClaudeMatch {
     private val json = Json { ignoreUnknownKeys = true }
 
     @Serializable
-    internal class Answer(
+    class Answer(
         val choice: Int = -1,
         val relation: String = NONE,
         val searches: List<String> = emptyList(),
@@ -98,6 +98,9 @@ object SpotifyClaudeMatch {
         searchVideos: suspend (String) -> List<Song> = ::searchVideoRows,
         /** The tracks of YouTube Music's albums found for an album name and performer. */
         searchAlbumTracks: suspend (album: String, performer: String) -> List<Song> = ::albumTracks,
+        /** Claude's answer for the candidates (tests stand in for it); null when it cannot answer. */
+        askClaude: suspend (List<Song>, askForSearches: Boolean, fromAlbum: Set<String>) -> Answer? =
+            { candidates, searches, fromAlbum -> ask(track, candidates, searches, fromAlbum) },
     ): Outcome {
         val target = TrackMatcher.Target(
             title = track.title,
@@ -126,6 +129,8 @@ object SpotifyClaudeMatch {
         var performerClose: List<Song> = emptyList()
         // The track's own album's songs of its length — how a listener finds such a song by hand.
         var albumClose: List<Song> = emptyList()
+        var albumTried = false
+        var videosTried = false
         // Nothing of the track's length among them: the performer's own songs, searched by name
         // alone — Spotify's English title ("Karma") may never bring up the original ("염라").
         // Those of the right length go first, so the 12 shown to Claude keep them.
@@ -142,6 +147,7 @@ object SpotifyClaudeMatch {
         val album = track.album?.takeIf { it.isNotBlank() }
         if (track.durationMs > 0 && album != null && candidates.none { closeInLength(it, track) }) {
             val performer = track.artist.split(",").first().trim()
+            albumTried = true
             albumClose = runCatching { searchAlbumTracks(album, performer) }.getOrDefault(emptyList())
                 .filter { closeInLength(it, track) }
             if (albumClose.isNotEmpty()) candidates = merged(albumClose, candidates)
@@ -151,10 +157,15 @@ object SpotifyClaudeMatch {
         // Claude takes one only as the performer's own video, and only when no song matches.
         if (track.durationMs > 0 && candidates.none { closeInLength(it, track) }) {
             val query = listOf(track.title, track.artist).filter { it.isNotBlank() }.joinToString(" ")
+            videosTried = true
             val videos = runCatching { searchVideos(query) }.getOrDefault(emptyList())
                 .filter { closeInLength(it, track) }.take(MAX_VIDEOS)
             if (videos.isNotEmpty()) candidates = (videos + candidates).distinctBy { it.videoId }.take(MAX_CANDIDATES)
         }
+        // The same title, the same performer, the same length: that is the recording, whatever album
+        // it sits on. Claude once called "September" on a "Greatest Hits" another version.
+        candidates.firstOrNull { !it.isVideo && sameTitle(it, track) && plainlySame(track, it) && closeInLength(it, track) }
+            ?.let { return Outcome(it, How.RULES, 0, candidates.size) }
         // Nothing to choose from: no call. Searches turned away are worth trying again;
         // two that answered with nothing are the answer.
         if (candidates.isEmpty()) return Outcome(null, How.NONE, 0, 0, settled = refused == 0, miss = unfound())
@@ -174,16 +185,34 @@ object SpotifyClaudeMatch {
             )
         }
         val fromAlbum = albumClose.map { it.videoId }.toSet()
-        val answer = ask(track, candidates, fromAlbum = fromAlbum) ?: return fallback(1)
+        val answer = askClaude(candidates, true, fromAlbum) ?: return fallback(1)
         accepted(answer, candidates, track)?.let { return Outcome(it, How.CLAUDE, 1, candidates.size) }
         val firstMiss = whyNot(answer, candidates, track)
 
-        // None among these: Claude's own searches, once.
+        // None among these: Claude's own searches, once — and the album and the music videos, when
+        // the first round did not look. A song of about the right length but another title
+        // ("Sunlight" for "Rise Up") kept them away, and the video was the only upload there was.
         val refusedBefore = refused
         val more = answer.searches.take(2).flatMap { query -> searched(query) }
-        if (more.isEmpty()) return Outcome(null, How.NONE, 1, candidates.size, settled = refused == refusedBefore, miss = firstMiss)
-        candidates = merged(candidates, more)
-        val second = ask(track, candidates, askForSearches = false, fromAlbum = fromAlbum) ?: return fallback(2)
+        val extra = mutableListOf<Song>()
+        if (track.durationMs > 0) {
+            if (!albumTried && album != null) {
+                albumClose = runCatching { searchAlbumTracks(album, track.artist.split(",").first().trim()) }
+                    .getOrDefault(emptyList()).filter { closeInLength(it, track) }
+                extra += albumClose
+            }
+            if (!videosTried) {
+                val query = listOf(track.title, track.artist).filter { it.isNotBlank() }.joinToString(" ")
+                extra += runCatching { searchVideos(query) }.getOrDefault(emptyList())
+                    .filter { closeInLength(it, track) }.take(MAX_VIDEOS)
+            }
+        }
+        val fresh = (extra + more).filterNot { song -> candidates.any { it.videoId == song.videoId } }
+        if (fresh.isEmpty()) return Outcome(null, How.NONE, 1, candidates.size, settled = refused == refusedBefore, miss = firstMiss)
+        // The likeliest first — album tracks and videos of the right length — then the rest.
+        candidates = (extra + candidates + more.filterNot { it.isVideo }).distinctBy { it.videoId }.take(MAX_CANDIDATES)
+        val secondFromAlbum = albumClose.map { it.videoId }.toSet()
+        val second = askClaude(candidates, false, secondFromAlbum) ?: return fallback(2)
         val chosen = accepted(second, candidates, track)
         // The more telling of the two answers: "only other versions" beats a later "none".
         val miss = if (chosen != null) null else whyNot(second, candidates, track).takeUnless {
@@ -207,7 +236,12 @@ object SpotifyClaudeMatch {
             runCatching { albumTracks(album, track.artist.split(",").first().trim()) }.getOrDefault(emptyList())
                 .filter { closeInLength(it, track) }
         }.orEmpty()
-        return (fromAlbum + merged(first, safe(plainTitle(track.title))) + videos).distinctBy { it.videoId }
+        val all = (fromAlbum + merged(first, safe(plainTitle(track.title))) + videos).distinctBy { it.videoId }
+        // Closest to the track's length first, so the likely ones are at the top, songs and videos
+        // alike — a video at the bottom of twenty songs went unseen. Unknown lengths last.
+        if (track.durationMs <= 0) return all
+        val expected = track.durationMs / 1000
+        return all.sortedBy { song -> song.durationMillis().takeIf { it > 0 }?.let { abs(it / 1000 - expected) } ?: Long.MAX_VALUE }
     }
 
     /** The tracks of the first [MAX_ALBUMS] YouTube Music albums found for [album] by [performer]. */
@@ -284,6 +318,13 @@ object SpotifyClaudeMatch {
     private fun names(artist: String): List<String> = artist.split(",", "&", " x ", " X ", " feat", " with ")
         .map { it.lowercase().filter(Char::isLetterOrDigit) }
         .filter { it.length >= 2 }
+
+    /** The titles alike once Spotify's and YouTube's trimmings (" - Remastered", "(feat. …)", case, marks) are off. */
+    internal fun sameTitle(song: Song, track: SpotifyTrack): Boolean {
+        fun norm(title: String) = plainTitle(title).lowercase().filter { it.isLetterOrDigit() }
+        val a = norm(song.title)
+        return a.isNotEmpty() && a == norm(track.title)
+    }
 
     /** Within [FALLBACK_LENGTH_GAP_SEC] of the track's length; false when either is unknown. */
     private fun closeInLength(song: Song, track: SpotifyTrack): Boolean {

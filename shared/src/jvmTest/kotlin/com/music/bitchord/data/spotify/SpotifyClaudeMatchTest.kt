@@ -172,4 +172,43 @@ class SpotifyClaudeMatchTest {
         // No key in tests: Claude is refused, and the album's one track of that length stands in.
         assertEquals("ヒバナ -Reloaded-", outcome.song?.title)
     }
+
+    @Test
+    fun `a song of the right length but another title does not keep the videos away`() = kotlinx.coroutines.runBlocking {
+        val video = Song(videoId = "mv", title = "TheFatRat - Rise Up", artist = "TheFatRat", thumbnailUrl = null, durationText = "2:49", isVideo = true)
+        val outcome = SpotifyClaudeMatch.match(
+            track("Rise Up", "TheFatRat", 169),
+            useClaude = true,
+            // "Sunlight" is the right length, so the first round looks no further.
+            search = { listOf(song("Sunlight", "TheFatRat, Phaera", "2:50")) },
+            searchVideos = { listOf(video) },
+            searchAlbumTracks = { _, _ -> emptyList() },
+            // Claude says none to Sunlight; offered the video, it takes it.
+            askClaude = { candidates, _, _ ->
+                val i = candidates.indexOfFirst { it.isVideo }
+                if (i < 0) SpotifyClaudeMatch.Answer(choice = -1, relation = "none")
+                else SpotifyClaudeMatch.Answer(choice = i, relation = "same recording, another upload")
+            },
+        )
+        assertEquals("mv", outcome.song?.videoId)
+        assertEquals(2, outcome.claudeCalls)
+    }
+
+    @Test
+    fun `same title, performer and length need no Claude`() = kotlinx.coroutines.runBlocking {
+        var asked = 0
+        val outcome = SpotifyClaudeMatch.match(
+            track("September", "Earth, Wind & Fire", 215),
+            useClaude = true,
+            search = {
+                listOf(
+                    song("September (Made Popular By Earth, Wind & Fire) [Vocal Version]", "Party Tyme Karaoke", "3:38"),
+                    song("September", "Earth, Wind & Fire", "3:35"),
+                )
+            },
+            askClaude = { _, _, _ -> asked++; SpotifyClaudeMatch.Answer(choice = -1, relation = "another version") },
+        )
+        assertEquals("Earth, Wind & Fire", outcome.song?.artist)
+        assertEquals(0, asked)
+    }
 }

@@ -762,11 +762,11 @@ object InnertubeParser {
             }
         // On the "All" tab the first segment is the row type ("Song", "Video"),
         // not the artist — skip those so the subtitle reads like a credit.
-        val rowType = parts.firstOrNull { it.lowercase(Locale.ROOT) in TYPE_WORDS }?.lowercase(Locale.ROOT)
+        val rowType = parts.firstNotNullOfOrNull { typeOf(it) }
         // A track row on an album lists its play count where a search row
         // lists the artist, so a segment that reads as a tally is no credit.
         val artist = parts.firstOrNull {
-            !it.matches(DURATION) && it.lowercase(Locale.ROOT) !in TYPE_WORDS && !it.matches(TALLY)
+            !it.matches(DURATION) && typeOf(it) == null && !it.matches(TALLY)
         }
 
         // The artist/album names in the subtitle carry browse endpoints; pull
@@ -911,12 +911,12 @@ object InnertubeParser {
         val subtitle = subtitleRuns.joinToString("") { it.s("text").orEmpty() }
         val parts = subtitle.split(" • ").filter { it.isNotBlank() }
         val duration = parts.lastOrNull()?.takeIf { it.matches(DURATION) }
-        val rowType = parts.firstOrNull { it.lowercase(Locale.ROOT) in TYPE_WORDS }
+        val rowType = parts.firstNotNullOfOrNull { typeOf(it) }
             ?.lowercase(Locale.ROOT)
         val credits = creditsOf(subtitleRuns)
         val creditedArtists = artistNamesFromRuns(subtitleRuns)
         val artist = parts.firstOrNull {
-            !it.matches(DURATION) && it.lowercase(Locale.ROOT) !in TYPE_WORDS && !it.matches(TALLY)
+            !it.matches(DURATION) && typeOf(it) == null && !it.matches(TALLY)
         }
         val thumbnails = renderer.o("thumbnail").o("musicThumbnailRenderer")
             .o("thumbnail").a("thumbnails")
@@ -1149,7 +1149,7 @@ object InnertubeParser {
         // An artist YouTube has no page for is named in the same line without
         // a link to follow, leaving the name as the only thing to go on.
         val name = parts.firstOrNull {
-            it.isNotBlank() && it.lowercase(Locale.ROOT) !in TYPE_WORDS && !it.matches(TALLY) &&
+            it.isNotBlank() && typeOf(it) == null && !it.matches(TALLY) &&
                 !it.matches(YEAR) && !it.matches(DURATION)
         }
         return credits.copy(artistName = name)
@@ -1753,7 +1753,7 @@ object InnertubeParser {
     fun artistFromSubtitle(subtitle: String): String {
         val parts = subtitle.split(" • ").map(String::trim).filter { it.isNotBlank() }
         return parts.firstOrNull {
-            it.lowercase() !in TYPE_WORDS && !it.matches(TALLY) && !it.matches(DURATION)
+            typeOf(it) == null && !it.matches(TALLY) && !it.matches(DURATION)
         } ?: subtitle
     }
 
@@ -1798,10 +1798,25 @@ object InnertubeParser {
     )
     /** Header lines that name the artist, in either header shape. */
     private val HEADER_CREDIT_LINES = listOf("straplineTextOne", "subtitle")
-    private val TYPE_WORDS = setOf(
-        "song", "video", "album", "single", "ep", "artist",
-        "playlist", "podcast", "episode",
-    )
+    /**
+     * The row-type words a subtitle can start with, by the English word the code checks.
+     * KO: YouTube Music writes them in the request's language, so a Korean phone gets
+     * "노래 • 3:30" — read as the artist "노래", which then sent every lyrics provider
+     * looking for "HOPE" by "노래". Korean and Japanese are listed beside English.
+     */
+    private val TYPE_NAMES: Map<String, String> = buildMap {
+        listOf("song", "video", "album", "single", "ep", "artist", "playlist", "podcast", "episode")
+            .forEach { put(it, it) }
+        mapOf(
+            "노래" to "song", "동영상" to "video", "앨범" to "album", "싱글" to "single",
+            "아티스트" to "artist", "재생목록" to "playlist", "팟캐스트" to "podcast", "에피소드" to "episode",
+            "曲" to "song", "動画" to "video", "アルバム" to "album", "シングル" to "single",
+            "アーティスト" to "artist", "再生リスト" to "playlist", "ポッドキャスト" to "podcast", "エピソード" to "episode",
+        ).forEach { (word, type) -> put(word, type) }
+    }
+
+    /** The row type a subtitle segment names ("song", "video", …), in English, or null. */
+    private fun typeOf(segment: String): String? = TYPE_NAMES[segment.trim().lowercase(Locale.ROOT)]
     /**
      * Flags a browse card as video content: "50 videos" in a subtitle
      * (instead of "50 songs"), or the word right in a title like

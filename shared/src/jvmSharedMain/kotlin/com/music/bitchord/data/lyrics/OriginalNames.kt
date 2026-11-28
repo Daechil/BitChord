@@ -64,17 +64,19 @@ object OriginalNames {
 
     suspend fun fromClaude(title: String, artist: String): Name? {
         val key = key(title, artist)
-        entry(key)?.takeIf { it.aiChecked }?.let { return it.ai() }
+        // An answer kept from before Korean songs' English names were asked for: a found
+        // original stands; a "none" is asked once more, under the wider question.
+        entry(key)?.takeIf { it.aiChecked && (it.aiTitle != null || it.aiVersion >= AI_VERSION) }?.let { return it.ai() }
         claudeFailedAt[key]?.let { at -> if (System.currentTimeMillis() - at < CLAUDE_RETRY_MS) return null }
         val asked = LyricsTranslation.claudeEnabled && LyricsTranslation.claudeKeyUsable
         return when (val answer = LyricsTranslation.nativeName(title, artist)) {
             is LyricsTranslation.NativeNameResult.Found -> {
                 val name = Name(answer.title, answer.artist)
-                update(key) { it.copy(aiChecked = true, aiTitle = name.title, aiArtist = name.artist) }
+                update(key) { it.copy(aiChecked = true, aiTitle = name.title, aiArtist = name.artist, aiVersion = AI_VERSION) }
                 name
             }
             LyricsTranslation.NativeNameResult.NotForeign -> {
-                update(key) { it.copy(aiChecked = true, aiTitle = null, aiArtist = null) }
+                update(key) { it.copy(aiChecked = true, aiTitle = null, aiArtist = null, aiVersion = AI_VERSION) }
                 null
             }
             LyricsTranslation.NativeNameResult.Unavailable -> {
@@ -84,6 +86,60 @@ object OriginalNames {
             }
         }
     }
+
+    private const val AI_VERSION = 2
+
+    // ---- The same video, in English ---------------------------------------------
+
+    /**
+     * KO: whether [fromYouTubeMusicInEnglish] can tell anything new: the app asks YouTube
+     * Music in another language than English, so names reach it in that language.
+     */
+    fun englishWorthTrying(videoId: String): Boolean =
+        VIDEO_ID.matches(videoId) && !Innertube.currentLanguage.lowercase().startsWith("en")
+
+    private val VIDEO_ID = Regex("[A-Za-z0-9_-]{11}")
+
+    /**
+     * KO: the playing video's own names as YouTube Music writes them in English — a Korean
+     * phone is told "밤편지 · 아이유(IU)", while the lyrics catalogues file the song as
+     * "Through the Night · IU". Asked by video id, so it is this very recording, not a search
+     * that could land on another. Null when English says nothing new. Free; kept per video.
+     */
+    suspend fun fromYouTubeMusicInEnglish(videoId: String, title: String, artist: String): Name? {
+        val key = "v\u0000$videoId"
+        entry(key)?.takeIf { it.youtubeChecked }?.let { return it.youtube() }
+        val song = try {
+            InnertubeParser.parseWatchQueue(Innertube.next(videoId, language = "en"))
+                .firstOrNull { it.videoId == videoId }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            return null
+        }
+        val found = song?.let { englishName(it.title, it.artist, title, artist) }
+        update(key) { it.copy(youtubeChecked = true, youtubeTitle = found?.title, youtubeArtist = found?.artist) }
+        return found
+    }
+
+    /**
+     * The English names, tidied for a lyrics search: a Hangul aside in brackets goes
+     * ("Through the Night (밤편지)" → "Through the Night"), the first artist is kept.
+     * Null when they come to the names already tried.
+     */
+    internal fun englishName(foundTitle: String, foundArtist: String, title: String, artist: String): Name? {
+        val tidyTitle = foundTitle
+            .replace(Regex("""\s*[(\[（【]([^)\]）】]*)[)\]）】]""")) { if (hasHangul(it.groupValues[1])) "" else it.value }
+            .trim()
+            .ifEmpty { foundTitle.trim() }
+        // The first named artist, as written: TrackMatcher's own primary artist is lower-cased.
+        val tidyArtist = foundArtist.split(ARTIST_JOINS).firstOrNull { it.isNotBlank() }?.trim() ?: foundArtist.trim()
+        if (tidyTitle.isEmpty()) return null
+        if (compact(tidyTitle) == compact(title) && compact(tidyArtist) == compact(artist)) return null
+        return Name(tidyTitle, tidyArtist.ifEmpty { artist })
+    }
+
+    private val ARTIST_JOINS = Regex("""\s*(,|&|\bx\b|\bfeat\.?|\bft\.?)\s*""", RegexOption.IGNORE_CASE)
 
     // ---- YouTube Music ---------------------------------------------------------
 
@@ -133,6 +189,8 @@ object OriginalNames {
         val aiChecked: Boolean = false,
         val aiTitle: String? = null,
         val aiArtist: String? = null,
+        /** KO: 2 once Claude was also asked for a Korean song's English name (see [fromClaude]). */
+        val aiVersion: Int = 1,
     ) {
         fun youtube(): Name? = youtubeTitle?.let { Name(it, youtubeArtist.orEmpty()) }
         fun ai(): Name? = aiTitle?.let { Name(it, aiArtist.orEmpty()) }

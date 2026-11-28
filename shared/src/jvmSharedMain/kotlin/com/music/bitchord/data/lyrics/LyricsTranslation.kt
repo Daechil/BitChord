@@ -3501,7 +3501,8 @@ object LyricsTranslation {
         You identify songs for a lyrics search. The input is a song title and artist as a Korean listener wrote them, usually in Hangul.
         Often the song is not Korean: it is a Japanese, Chinese or English song (J-pop, Vocaloid, anime, C-pop, Western pop) whose names were transliterated or translated into Hangul, for example a Korean cover of it.
         If you are confident which original song this is, return found=true with "title" and "artist" exactly as the original release writes them, in the original script (kanji/kana, Chinese characters, Latin letters). Example: {"title":"발묘","artist":"나나호시 관현악단"} -> {"found":true,"title":"抜錨","artist":"ナナホシ管弦楽団"}.
-        If the song is originally Korean, or you are not confident, return found=false with empty strings. Never guess.
+        If the song is originally Korean but international lyrics catalogues list it under its official English or romanized title, return that title and the artist's international name instead, for example {"title":"밤편지","artist":"아이유(IU)"} -> {"found":true,"title":"Through the Night","artist":"IU"}.
+        If the song is Korean with no such official name, or you are not confident, return found=false with empty strings. Never guess or translate a title yourself.
     """.trimIndent()
 
     // ---- Small answers kept as plain files ----------------------------------------

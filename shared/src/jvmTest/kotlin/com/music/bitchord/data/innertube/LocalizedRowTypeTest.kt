@@ -76,4 +76,25 @@ class LocalizedRowTypeTest {
         assertEquals(listOf("es1", "de1", "ru1", "zh1", "tr1"), songs.map { it.videoId })
         assertTrue(songs.all { it.artist == "NF" })
     }
+
+    @Test
+    fun aDateOrAPlayCountIsNoArtist() {
+        val songs = parse(
+            row("d1", "Spring day", "노래", "2017. 12. 29.", "4:40"),
+            row("d2", "Spring day", "노래", "2017년 12월 29일", "4:40"),
+            row("d3", "Spring day", "Song", "Dec 29, 2017", "4:40"),
+            row("t1", "Spring day", "노래", "조회수 120만회", "4:40"),
+            row("t2", "Spring day", "曲", "1.2億回再生", "4:40"),
+        )
+        assertEquals(5, songs.size)
+        songs.forEach { song ->
+            assertTrue(song.artist.none { it.isDigit() }, "read as artist: ${song.artist}")
+        }
+    }
+
+    @Test
+    fun anArtistWithDigitsStaysAnArtist() {
+        val songs = parse(row("a1", "Cheer Up", "노래", "TWICE", "3:28"), row("a2", "봄이 좋냐??", "노래", "10cm", "3:33"))
+        assertEquals(listOf("TWICE", "10cm"), songs.map { it.artist })
+    }
 }

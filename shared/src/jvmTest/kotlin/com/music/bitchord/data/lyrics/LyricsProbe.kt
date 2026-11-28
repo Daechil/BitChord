@@ -91,6 +91,12 @@ class LyricsProbe {
         val title = song.title.forLyricsSearch()
         val artist = song.artist.artistForLyricsSearch()
         val ms = song.durationMillis()
+        // KO: the whole lookup the app makes, its second tries under other names included
+        // (the same video's English names, the original's, Claude's when a key is set).
+        val whole = withTimeoutOrNull(180_000) {
+            runCatching { LyricsRepository.lyrics(song.videoId, song.title, song.artist, ms, song.albumName) }.getOrNull()
+        }
+        out.append("- whole lookup, as the app: ${whole?.let { "${it.source} · ${it.lines.size} lines" } ?: "none"}\n")
         out.append("- YouTube Music: `${song.title}` — `${song.artist}` · ${ms / 1000.0}s · ${song.videoId}\n")
         out.append("- asked as: `$title` — `$artist`\n\n")
 

@@ -118,7 +118,11 @@ object LyricsRepository {
         // YouTube Music first, Claude only if that doesn't do it. The sources
         // keyed on the video rather than on a name were already asked: they do
         // not change with the name the search is made under.
-        if (!OriginalNames.worthTrying(title, artist)) return null
+        // KO: and in a language other than English, the names may only be that language's —
+        // "밤편지 · 아이유(IU)" for what the catalogues file as "Through the Night · IU".
+        val hangul = OriginalNames.worthTrying(title, artist)
+        val english = OriginalNames.englishWorthTrying(videoId)
+        if (!hangul && !english) return null
         val byName = sources - KEYED_ON_VIDEO
         if (byName.isEmpty()) return null
         val tried = mutableSetOf(title to artist)
@@ -138,6 +142,13 @@ object LyricsRepository {
         } catch (_: Exception) {
             null
         }
+        // The same video's English names first: free, and it is this very recording.
+        if (english) {
+            attempt { OriginalNames.fromYouTubeMusicInEnglish(videoId, title, artist) }?.let { name ->
+                retry(name)?.let { return it }
+            }
+        }
+        if (!hangul) return null
         attempt { OriginalNames.fromYouTubeMusic(title, artist, durationMs) }?.let { name ->
             retry(name)?.let { return it }
         }

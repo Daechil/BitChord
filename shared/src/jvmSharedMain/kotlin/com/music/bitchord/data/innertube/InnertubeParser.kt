@@ -766,7 +766,7 @@ object InnertubeParser {
         // A track row on an album lists its play count where a search row
         // lists the artist, so a segment that reads as a tally is no credit.
         val artist = parts.firstOrNull {
-            !it.matches(DURATION) && typeOf(it) == null && !it.matches(TALLY)
+            !it.matches(DURATION) && typeOf(it) == null && !it.isTallyOrDate()
         }
 
         // The artist/album names in the subtitle carry browse endpoints; pull
@@ -916,7 +916,7 @@ object InnertubeParser {
         val credits = creditsOf(subtitleRuns)
         val creditedArtists = artistNamesFromRuns(subtitleRuns)
         val artist = parts.firstOrNull {
-            !it.matches(DURATION) && typeOf(it) == null && !it.matches(TALLY)
+            !it.matches(DURATION) && typeOf(it) == null && !it.isTallyOrDate()
         }
         val thumbnails = renderer.o("thumbnail").o("musicThumbnailRenderer")
             .o("thumbnail").a("thumbnails")
@@ -1149,7 +1149,7 @@ object InnertubeParser {
         // An artist YouTube has no page for is named in the same line without
         // a link to follow, leaving the name as the only thing to go on.
         val name = parts.firstOrNull {
-            it.isNotBlank() && typeOf(it) == null && !it.matches(TALLY) &&
+            it.isNotBlank() && typeOf(it) == null && !it.isTallyOrDate() &&
                 !it.matches(YEAR) && !it.matches(DURATION)
         }
         return credits.copy(artistName = name)
@@ -1753,7 +1753,7 @@ object InnertubeParser {
     fun artistFromSubtitle(subtitle: String): String {
         val parts = subtitle.split(" • ").map(String::trim).filter { it.isNotBlank() }
         return parts.firstOrNull {
-            typeOf(it) == null && !it.matches(TALLY) && !it.matches(DURATION)
+            typeOf(it) == null && !it.isTallyOrDate() && !it.matches(DURATION)
         } ?: subtitle
     }
 
@@ -1785,6 +1785,31 @@ object InnertubeParser {
      * and "50 Cent" alone, so a number only disqualifies a segment when it is
      * counting one of the words YouTube counts with.
      */
+    /**
+     * KO: a play count or a date is no credit, in any language the app asks in.
+     * [TALLY] reads English ("216M plays"); a Korean phone gets "조회수 120만회" and
+     * "2017. 12. 29." — the date of a broadcast clip was read as its artist, and its
+     * lyrics were looked up for "2017. 12. 29.".
+     */
+    private fun String.isTallyOrDate(): Boolean {
+        val text = trim()
+        return text.matches(TALLY) || text.matches(TALLY_CJK) || text.matches(DATE)
+    }
+
+    private val TALLY_CJK = Regex(
+        """(조회수|재생|구독자|再生回数|視聴回数|チャンネル登録者数|播放次数|观看次数|觀看次數)?\s*[\d.,]+\s*(천|만|억|万|億|萬)?\s*""" +
+            """(회|명|곡|回|曲|人|首|次)(\s*(재생|조회|시청|視聴|再生|播放|观看|觀看))?\.?""",
+    )
+
+    private val DATE = Regex(
+        """\d{4}\s*[./-]\s*\d{1,2}\s*[./-]\s*\d{1,2}\.?|""" +
+            """\d{4}\s*년\s*\d{1,2}\s*월\s*\d{1,2}\s*일|""" +
+            """\d{4}\s*年\s*\d{1,2}\s*月\s*\d{1,2}\s*日|""" +
+            """\d{1,2}[./-]\d{1,2}[./-]\d{4}|""" +
+            """[A-Za-z]{3,9}\.?\s+\d{1,2},\s*\d{4}|""" +
+            """\d{1,2}\s+[A-Za-z]{3,9}\.?\s+\d{4}""",
+    )
+
     private val TALLY = Regex(
         """[\d.,]+\s*[KMB]?\s+(plays|views|likes|songs|tracks|subscribers|""" +
             """hours?|minutes?|seconds?)\b.*""",

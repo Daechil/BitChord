@@ -309,7 +309,7 @@ object SpotifyClaudeMatch {
         Choose the result that is the same recording as the Spotify track:
         - The same song by the same performer, the same version. Titles and artist names may be written differently: in another script (アイドル / Idol / 아이돌), romanised (夜に駆ける / Yoru ni Kakeru), translated (밤편지 / Through the Night), with or without "feat." credits, a remaster note or an "Official" tag.
         - Lengths usually agree within a few seconds.
-        - Spotify often shows Korean, Japanese and Chinese performers under a romanised or English name (Dareharu for 달의하루, BOL4 for 볼빨간사춘기) and songs under an English title that is not a translation of the original one (Galaxy for 우주를 줄게). When the performer is the same and the lengths agree within 2 seconds, it is the same recording even though the titles share no word. If several of that performer's results have the length, the album decides; if nothing decides, choose -1.
+        - Spotify often shows Korean, Japanese and Chinese performers under a romanised or English name (Dareharu for 달의하루, BOL4 for 볼빨간사춘기) and songs under an English title that is not a translation of the original one (Galaxy for 우주를 줄게). When the performer is the same and the lengths agree within 3 seconds, it is the same recording even though the titles share no word. If several of that performer's results have the length, the album decides; if nothing decides, choose -1.
         - Not a cover by someone else, a live recording, a remix, an acoustic, instrumental, karaoke, sped-up or TV-size version, nor another language's version of the song, unless the Spotify track is that version.
 
         Answer:

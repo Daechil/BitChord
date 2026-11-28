@@ -601,4 +601,21 @@ Adding: %4$s
     <string name="spotify_pick_loading">Searching YouTube Music…</string>
     <string name="spotify_pick_none">No results. Try “Look again” later.</string>
     <string name="spotify_pick_done">Added. Tap it to play.</string>
+    <string name="spotify_port_title">Save to YouTube Music</string>
+    <string name="spotify_port_counts">%1$d songs to save · %2$d not found</string>
+    <string name="spotify_port_pending">%1$d songs are still being looked for. Save once they are done.</string>
+    <string name="spotify_port_private">Save as private</string>
+    <string name="spotify_port_unlisted">Save as unlisted</string>
+    <string name="spotify_port_footer">Saved under this playlist’s name, in its order. Grey songs you pick later are added too.</string>
+    <string name="spotify_port_linked">Saved before as “%1$s”.</string>
+    <string name="spotify_port_sync">Add the %1$d new songs</string>
+    <string name="spotify_port_up_to_date">Everything found is already in it.</string>
+    <string name="spotify_port_saving">Saving…</string>
+    <string name="spotify_port_saved">Saved %1$d songs to “%2$s”.</string>
+    <string name="spotify_port_synced">Added %1$d songs to “%2$s”.</string>
+    <string name="spotify_port_missing_note">%1$d not found were left out.</string>
+    <string name="spotify_port_failed_note">%1$d couldn’t be added; save again later.</string>
+    <string name="spotify_port_failed">Couldn’t create the playlist. Try again later.</string>
+    <string name="spotify_port_sign_in">Sign in to YouTube Music to save playlists.</string>
+    <string name="spotify_port_gone">Couldn’t add to “%1$s” — it may have been deleted. Save again to make a new playlist.</string>
 </resources>

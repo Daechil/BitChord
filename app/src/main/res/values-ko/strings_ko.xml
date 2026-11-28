@@ -600,4 +600,21 @@
     <string name="spotify_pick_loading">YouTube Music에서 찾는 중이에요…</string>
     <string name="spotify_pick_none">검색 결과가 없어요. 나중에 다시 찾기를 눌러 보세요.</string>
     <string name="spotify_pick_done">넣었어요. 누르면 재생해요.</string>
+    <string name="spotify_port_title">YouTube Music 재생목록으로 저장</string>
+    <string name="spotify_port_counts">저장할 곡 %1$d곡 · 못 찾은 곡 %2$d곡</string>
+    <string name="spotify_port_pending">아직 찾는 중인 곡이 %1$d곡 있어요. 다 찾은 뒤에 저장할 수 있어요.</string>
+    <string name="spotify_port_private">비공개로 저장</string>
+    <string name="spotify_port_unlisted">일부 공개로 저장(링크가 있는 사람만)</string>
+    <string name="spotify_port_footer">이 재생목록 이름과 순서 그대로 저장해요. 나중에 회색 곡을 직접 고르면 그 곡도 추가돼요.</string>
+    <string name="spotify_port_linked">전에 “%1$s” 재생목록으로 저장했어요.</string>
+    <string name="spotify_port_sync">새로 추가된 곡 %1$d곡 넣기</string>
+    <string name="spotify_port_up_to_date">찾은 곡은 모두 들어가 있어요.</string>
+    <string name="spotify_port_saving">저장하는 중이에요…</string>
+    <string name="spotify_port_saved">“%2$s”에 %1$d곡을 저장했어요.</string>
+    <string name="spotify_port_synced">“%2$s”에 %1$d곡을 추가했어요.</string>
+    <string name="spotify_port_missing_note">못 찾은 %1$d곡은 빠졌어요.</string>
+    <string name="spotify_port_failed_note">%1$d곡은 넣지 못했어요. 나중에 다시 저장해 주세요.</string>
+    <string name="spotify_port_failed">재생목록을 만들지 못했어요. 나중에 다시 시도해 주세요.</string>
+    <string name="spotify_port_sign_in">YouTube Music에 로그인해야 저장할 수 있어요.</string>
+    <string name="spotify_port_gone">“%1$s”에 넣지 못했어요. 지워진 것 같아요. 다시 저장하면 새 재생목록을 만들어요.</string>
 </resources>

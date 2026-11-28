@@ -31,6 +31,7 @@ import kotlin.coroutines.cancellation.CancellationException
 import com.music.bitchord.data.model.SPOTIFY_MISSING_PREFIX
 import com.music.bitchord.data.model.SPOTIFY_PENDING_PREFIX
 import com.music.bitchord.data.spotify.SPOTIFY_PAGE_PREFIX
+import com.music.bitchord.data.model.isUnresolvedSpotify
 import com.music.bitchord.data.spotify.SpotifyImporter
 import com.music.bitchord.data.spotify.SpotifyLibrary
 import com.music.bitchord.data.spotify.SpotifyTrack
@@ -2781,6 +2782,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // KO: 4, not 6 — YouTube turned searches away when a long playlist asked six at a time.
         private const val SPOTIFY_MATCH_PARALLELISM = 4
         private const val SPOTIFY_RETRY_PARALLELISM = 2
+        private const val PORT_CHUNK = 50
+        private const val PORT_RETRY_MS = 2_000L
         private const val SPOTIFY_RETRY_DELAY_MS = 4_000L
 
         /**
@@ -3133,6 +3136,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 return@launch
             }
             tracks.forEach { spotifyTracks[it.id] = it }
+            com.music.bitchord.ui.components.SpotifyPort.attach(this@MainViewModel)
             // Tracks whose answer could not be had (searches turned away, a failed call):
             // shown as not found for now, and tried once more, slowly, once the rest are in.
             val unsettled = java.util.Collections.synchronizedList(mutableListOf<SpotifyTrack>())
@@ -3224,11 +3228,86 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun spotifyCandidates(track: SpotifyTrack): List<Song> =
         runCatching { com.music.bitchord.data.spotify.SpotifyClaudeMatch.candidates(track) }.getOrDefault(emptyList())
 
-    /** KO: [chosen] picked by hand for [track]: the row turns playable, and it is remembered for good. */
+    /**
+     * KO: [chosen] picked by hand for [track]: the row turns playable, and it is remembered for
+     * good — and when its playlist was saved to YouTube Music, the song is added there too.
+     */
     fun pickSpotifyRow(track: SpotifyTrack, chosen: Song) {
         com.music.bitchord.data.spotify.SpotifyMatchMemory.put(track.id, chosen, manual = true)
+        val ids = setOf(SPOTIFY_PENDING_PREFIX + track.id, SPOTIFY_MISSING_PREFIX + track.id)
+        val pages = _detailStack.value.filter { page ->
+            page.browseId.startsWith(SPOTIFY_PAGE_PREFIX) &&
+                (page.songs as? UiState.Success<List<Song>>)?.data?.any { it.videoId in ids } == true
+        }.map { it.browseId.removePrefix(SPOTIFY_PAGE_PREFIX) }
         setSpotifyRow(null, track, chosen)
+        for (spotifyId in pages) {
+            val link = com.music.bitchord.data.spotify.SpotifyPortLinks.get(spotifyId) ?: continue
+            if (chosen.videoId in link.videoIds) continue
+            viewModelScope.launch {
+                if (YtMusicRepository.addToPlaylist(link.playlistId, listOf(chosen.videoId)).isSuccess) {
+                    com.music.bitchord.data.spotify.SpotifyPortLinks.added(spotifyId, listOf(chosen.videoId))
+                }
+            }
+        }
     }
+
+    /**
+     * KO: a Spotify page's found songs saved as a YouTube Music playlist — in the page's order,
+     * hand-picked ones included, without searching again. Saved before: only the songs not yet
+     * in that playlist are added. [onDone] gets the sentence to show.
+     */
+    fun portSpotifyPage(browseId: String, privacy: PlaylistPrivacy, onDone: (String) -> Unit) {
+        val page = _detailStack.value.firstOrNull { it.browseId == browseId } ?: return
+        val songs = (page.songs as? UiState.Success<List<Song>>)?.data.orEmpty()
+        val found = songs.filterNot { it.isUnresolvedSpotify }.map { it.videoId }.distinct()
+        val missing = songs.count { it.videoId.startsWith(SPOTIFY_MISSING_PREFIX) }
+        val spotifyId = browseId.removePrefix(SPOTIFY_PAGE_PREFIX)
+        val app = getApplication<Application>()
+        if (!authStore.isSignedIn) return onDone(app.getString(R.string.spotify_port_sign_in))
+        viewModelScope.launch {
+            val link = com.music.bitchord.data.spotify.SpotifyPortLinks.get(spotifyId)
+            if (link != null) {
+                val fresh = found.filterNot { it in link.videoIds }
+                val failed = addInChunks(link.playlistId, fresh) { com.music.bitchord.data.spotify.SpotifyPortLinks.added(spotifyId, it) }
+                // Nothing went in: the playlist was most likely deleted on YouTube Music. Forget
+                // it, so the next save makes a new one rather than failing against it forever.
+                if (fresh.isNotEmpty() && failed == fresh.size) {
+                    com.music.bitchord.data.spotify.SpotifyPortLinks.forget(spotifyId)
+                    onDone(app.getString(R.string.spotify_port_gone, link.title))
+                    return@launch
+                }
+                libraryStale = true
+                onDone(app.getString(R.string.spotify_port_synced, fresh.size - failed, link.title) + failedNote(failed))
+                return@launch
+            }
+            val title = page.title.ifBlank { text(R.string.new_playlist) }
+            val created = YtMusicRepository.createPlaylist(title = title, privacy = privacy, videoIds = found.take(PORT_CHUNK))
+            val playlistId = created.getOrNull() ?: return@launch onDone(app.getString(R.string.spotify_port_failed))
+            com.music.bitchord.data.spotify.SpotifyPortLinks.put(
+                spotifyId,
+                com.music.bitchord.data.spotify.SpotifyPortLinks.Link(playlistId, title, found.take(PORT_CHUNK).toSet()),
+            )
+            val failed = addInChunks(playlistId, found.drop(PORT_CHUNK)) { com.music.bitchord.data.spotify.SpotifyPortLinks.added(spotifyId, it) }
+            setPlaylistOwned("VL$playlistId", true)
+            libraryStale = true
+            onDone(app.getString(R.string.spotify_port_saved, found.size - failed, title) +
+                (if (missing > 0) " " + app.getString(R.string.spotify_port_missing_note, missing) else "") + failedNote(failed))
+        }
+    }
+
+    /** Adds [videoIds] [PORT_CHUNK] at a time, a failed chunk tried once more; how many did not go in. */
+    private suspend fun addInChunks(playlistId: String, videoIds: List<String>, onAdded: (List<String>) -> Unit): Int {
+        var failed = 0
+        for (chunk in videoIds.chunked(PORT_CHUNK)) {
+            val ok = YtMusicRepository.addToPlaylist(playlistId, chunk).isSuccess ||
+                (delay(PORT_RETRY_MS).let { YtMusicRepository.addToPlaylist(playlistId, chunk).isSuccess })
+            if (ok) onAdded(chunk) else failed += chunk.size
+        }
+        return failed
+    }
+
+    private fun failedNote(failed: Int): String =
+        if (failed > 0) " " + getApplication<Application>().getString(R.string.spotify_port_failed_note, failed) else ""
 
     /** KO: the few words a grey row gives for not being found. */
     fun spotifyMissText(miss: com.music.bitchord.data.spotify.SpotifyClaudeMatch.Miss): String {

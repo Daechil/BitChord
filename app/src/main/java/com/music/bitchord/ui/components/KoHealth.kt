@@ -163,6 +163,7 @@ fun KoHealthAlerts(hazeState: HazeState) {
     // KO: what this build brought, once after updating to it.
     WhatsNewAlerts(hazeState)
     SpotifyPickWindow()
+    SpotifyPortWindow()
 
     val stopped by PlaybackTrouble.stopped.collectAsStateWithLifecycle()
     stopped?.let { trouble ->

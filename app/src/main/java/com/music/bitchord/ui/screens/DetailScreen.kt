@@ -125,6 +125,7 @@ import kotlinx.coroutines.delay
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Album
 import com.music.bitchord.data.LocalGroups
 import com.music.bitchord.data.OfflinePlaylists
@@ -1145,6 +1146,14 @@ private fun ReleaseHeader(
                         },
                         onClick = { onToggleLibrary?.invoke() },
                         haptic = if (library.saved) Haptic.ToggleOff else Haptic.ToggleOn,
+                        size = RELEASE_SIDE_BUTTON,
+                    )
+                } else if (page.browseId.startsWith(com.music.bitchord.data.spotify.SPOTIFY_PAGE_PREFIX)) {
+                    // KO: a Spotify playlist has no library to join; its + saves it to YouTube Music.
+                    CircleIconButton(
+                        icon = Icons.AutoMirrored.Rounded.PlaylistAdd,
+                        contentDescription = stringResource(R.string.spotify_port_title),
+                        onClick = { com.music.bitchord.ui.components.SpotifyPort.open(page.browseId) },
                         size = RELEASE_SIDE_BUTTON,
                     )
                 } else {

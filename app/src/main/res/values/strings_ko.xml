@@ -639,4 +639,11 @@ Adding: %4$s
     <string name="spotify_port_offline">Couldn’t reach “%1$s” right now. Check your connection and save again.</string>
     <string name="claude_key_not_claude">This doesn’t look like a Claude key. A Claude key starts with “sk-ant-” — copy it again from the Anthropic Console.</string>
     <string name="claude_key_rejected_notice">Claude turned the key down — it’s wrong, or the account is out of credit. Translations use Google for now. Check the key in Settings › BitChord KO features › Claude AI.</string>
+    <string name="spotify_miss_podcast">podcast, not looked for</string>
+    <string name="spotify_error_offline">Couldn’t reach Spotify. Check your internet connection.</string>
+    <string name="spotify_error_signed_out">Your Spotify sign-in has expired. Sign in again in Settings.</string>
+    <string name="spotify_error_unavailable">This playlist can’t be opened. It may be private or deleted.</string>
+    <string name="spotify_error_busy">Spotify isn’t answering right now. Try again in a moment.</string>
+    <string name="spotify_error_other">Couldn’t read this from Spotify. Try again in a moment.</string>
+    <string name="claude_model_gone_notice">The Claude model this version uses has been retired, so translations use Google for now. Please update the app.</string>
 </resources>

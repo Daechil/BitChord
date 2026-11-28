@@ -16,6 +16,7 @@ fun claudeFailureLabel(failure: ClaudeFailure?): String = stringResource(
         ClaudeFailure.OVERLOADED -> Res.string.claude_fail_overloaded
         ClaudeFailure.SERVER_ERROR -> Res.string.claude_fail_server_error
         ClaudeFailure.BAD_REQUEST -> Res.string.claude_fail_bad_request
+        ClaudeFailure.MODEL_GONE -> Res.string.claude_fail_model_gone
         ClaudeFailure.TIMEOUT -> Res.string.claude_fail_timeout
         ClaudeFailure.NETWORK -> Res.string.claude_fail_network
         ClaudeFailure.REFUSAL -> Res.string.claude_fail_refusal

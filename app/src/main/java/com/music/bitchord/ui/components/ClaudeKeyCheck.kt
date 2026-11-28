@@ -16,6 +16,7 @@ import com.music.bitchord.data.lyrics.LyricsTranslation
 internal object ClaudeKeyCheck {
     private const val PREFS = "ko_claude_key_notice"
     private const val TOLD = "rejected_told"
+    private const val MODEL_TOLD = "model_gone_told"
 
     /** "sk-ant-" and more, after the same cleaning the request does (spaces, invisible characters). */
     fun looksLikeClaudeKey(key: String): Boolean {
@@ -37,19 +38,36 @@ internal object ClaudeKeyCheck {
         KoNotice.show(context.getString(R.string.claude_key_rejected_notice))
     }
 
+    /**
+     * Says once per app version that the Claude model this build asks for is gone: no key
+     * or setting can fix that, only an update with a current model.
+     */
+    fun onModelGone(context: Context) {
+        val mark = com.music.bitchord.BuildConfig.VERSION_NAME + "|" + LyricsTranslation.claudeModel
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (prefs.getString(MODEL_TOLD, null) == mark) return
+        prefs.edit().putString(MODEL_TOLD, mark).apply()
+        KoNotice.show(context.getString(R.string.claude_model_gone_notice))
+    }
+
     /** "Check the key again": a refusal after it is news again. */
     fun forget(context: Context) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(TOLD).apply()
     }
 }
 
-/** Watches for Claude refusing the key, for [ClaudeKeyCheck.onRejected]. Hosted in [KoHealthAlerts]. */
+/** Watches for Claude refusing the key or the model, for [ClaudeKeyCheck]. Hosted in [KoHealthAlerts]. */
 @Composable
 internal fun ClaudeKeyRejectionWatch() {
     val context = LocalContext.current.applicationContext
     LaunchedEffect(Unit) {
         LyricsTranslation.claudeKeyRejected.collect { rejected ->
             if (rejected) ClaudeKeyCheck.onRejected(context)
+        }
+    }
+    LaunchedEffect(Unit) {
+        LyricsTranslation.claudeModelGone.collect { gone ->
+            if (gone) ClaudeKeyCheck.onModelGone(context)
         }
     }
 }

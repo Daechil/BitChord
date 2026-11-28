@@ -32,6 +32,8 @@ enum class ClaudeFailure {
     SERVER_ERROR,
     /** Any other 4xx: something about the request itself. */
     BAD_REQUEST,
+    /** KO: 404 naming the model: Anthropic retired the model this build asks for. */
+    MODEL_GONE,
     /** The call ran past its deadline. */
     TIMEOUT,
     /** No connection, DNS, TLS — the request never got an answer. */

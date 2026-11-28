@@ -82,4 +82,38 @@ class SpotifyLibraryTest {
         assertNull(SpotifyImporter.extractPlaylistId("https://open.spotify.com/playlist/short"))
         assertNull(SpotifyImporter.extractPlaylistId(""))
     }
+
+    @Test
+    fun localFilesOfOneLengthKeepTheirOwnIdsAndEpisodesAreMarked() {
+        val root = json.parseToJsonElement(
+            """
+            {"data":{"playlistV2":{"content":{"totalCount":4,"items":[
+              {"itemV2":{"data":{"name":"Song","uri":"spotify:track:t1"}}},
+              {"itemV2":{"data":{"name":"Mine A","uri":"spotify:local:Me:Demo:Mine+A:212"}}},
+              {"itemV2":{"data":{"name":"Mine B","uri":"spotify:local:Me:Demo:Mine+B:212"}}},
+              {"itemV2":{"data":{"name":"Talk","uri":"spotify:episode:e9"}}}
+            ]}}}}
+            """.trimIndent(),
+        ).jsonObject
+        val ids = parseTrackPage(root).first.map { it.id }
+        assertEquals(listOf("t1", "local:Me:Demo:Mine+A:212", "local:Me:Demo:Mine+B:212", "episode:e9"), ids)
+    }
+
+    @Test
+    fun aPrivateOrDeletedPlaylistSaysSo() {
+        val root = json.parseToJsonElement(
+            """{"data":{"playlistV2":{"__typename":"NotFound"}}}""",
+        ).jsonObject
+        val error = kotlin.runCatching { parseTrackPage(root) }.exceptionOrNull()
+        kotlin.test.assertIs<SpotifyUnavailableException>(error)
+        assertEquals(SpotifyErrors.Kind.UNAVAILABLE, SpotifyErrors.kind(error))
+    }
+
+    @Test
+    fun anImportLeavesEpisodesOut() {
+        kotlin.test.assertTrue(isEpisodeUri("spotify:episode:e9"))
+        kotlin.test.assertFalse(isEpisodeUri("spotify:track:t1"))
+        kotlin.test.assertFalse(isEpisodeUri("spotify:local:Me:Demo:Mine:212"))
+        kotlin.test.assertFalse(isEpisodeUri(null))
+    }
 }

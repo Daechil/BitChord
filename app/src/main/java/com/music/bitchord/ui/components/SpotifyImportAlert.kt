@@ -110,13 +110,17 @@ fun SpotifyImportAlert(
                 val (songs, missed) = SpotifyImporter.resolveToSongs(tracks, effectiveLanguage, useClaude = claude) { done, total ->
                     status = context.getString(R.string.spotify_import_matching, done, total)
                 }
-                if (songs.isEmpty()) error(context.getString(R.string.spotify_import_none))
-                onImported(name, privacy, songs)
-                if (missed.isEmpty()) onDismiss() else unmatched = missed
+                if (songs.isEmpty()) {
+                    status = context.getString(R.string.spotify_import_none)
+                    failed = true
+                } else {
+                    onImported(name, privacy, songs)
+                    if (missed.isEmpty()) onDismiss() else unmatched = missed
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                status = context.getString(R.string.spotify_import_failed, e.message.orEmpty())
+                status = context.getString(R.string.spotify_import_failed, spotifyErrorText(context, e))
                 failed = true
             }
             working = false

@@ -56,7 +56,7 @@ object SpotifyClaudeMatch {
     )
 
     /** KO: why a track was not matched — shown under its grey row. */
-    enum class MissKind { NO_RESULTS, OTHER_VERSION, LENGTH, NOT_THERE, UNREACHABLE }
+    enum class MissKind { NO_RESULTS, OTHER_VERSION, LENGTH, NOT_THERE, UNREACHABLE, PODCAST }
 
     /** [seconds]: for [MissKind.LENGTH], how far the closest same recording was from the track's length. */
     data class Miss(val kind: MissKind, val seconds: Int = 0)
@@ -102,6 +102,9 @@ object SpotifyClaudeMatch {
         askClaude: suspend (List<Song>, askForSearches: Boolean, fromAlbum: Set<String>) -> Answer? =
             { candidates, searches, fromAlbum -> ask(track, candidates, searches, fromAlbum) },
     ): Outcome {
+        // KO: a podcast episode in a playlist is no song: searched for as one, it brought back
+        // whatever song shared a word of its title — and that went into a saved playlist.
+        if (track.id.startsWith("episode:")) return Outcome(null, How.NONE, 0, 0, settled = true, miss = Miss(MissKind.PODCAST))
         val target = TrackMatcher.Target(
             title = track.title,
             artist = track.artist,

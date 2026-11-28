@@ -243,8 +243,11 @@ internal fun parsePlaylistPage(root: JsonObject): Triple<List<SpotifyPlaylist>, 
 
 /** The tracks kept, the playlist's total, and how many entries the page held before filtering. */
 internal fun parseTrackPage(root: JsonObject): Triple<List<SpotifyTrack>, Int, Int> {
-    val content = root.obj("data")?.obj("playlistV2")?.obj("content")
+    val playlist = root.obj("data")?.obj("playlistV2")
         ?: throw IllegalStateException("Spotify playlist response was empty")
+    // KO: a private or deleted playlist comes back as a playlist with no content ("NotFound").
+    val content = playlist.obj("content")
+        ?: throw SpotifyUnavailableException("Spotify playlist not found (${playlist.str("__typename")})")
     val rawItems = content.arr("items").orEmpty()
     val items = rawItems.mapNotNull { element ->
         val data = element.jsonObject.obj("itemV2")?.obj("data") ?: return@mapNotNull null
@@ -256,7 +259,7 @@ internal fun parseTrackPage(root: JsonObject): Triple<List<SpotifyTrack>, Int, I
         }.joinToString(", ")
         val album = data.obj("albumOfTrack")
         SpotifyTrack(
-            id = uri.substringAfterLast(":"),
+            id = spotifyTrackId(uri),
             title = title,
             artist = artist,
             album = album?.str("name"),
@@ -282,7 +285,7 @@ internal fun parseLikedPage(root: JsonObject): Triple<List<SpotifyTrack>, Int, I
         val uri = wrapper.str("_uri") ?: data.str("uri") ?: return@mapNotNull null
         val album = data.obj("albumOfTrack")
         SpotifyTrack(
-            id = uri.substringAfterLast(":"),
+            id = spotifyTrackId(uri),
             title = title,
             artist = data.obj("artists")?.arr("items").orEmpty().mapNotNull { artist ->
                 artist.jsonObject.obj("profile")?.str("name")?.takeIf { it.isNotBlank() }
@@ -325,3 +328,15 @@ private fun JsonObject.str(key: String): String? =
 
 private fun JsonObject.int(key: String): Int? =
     this[key]?.takeIf { it !is JsonNull }?.jsonPrimitive?.intOrNull
+
+/**
+ * KO: a playlist entry's id. A track's is its own; a local file's uri ends in its length
+ * ("spotify:local:artist:album:title:212"), so files of one length would share an id —
+ * and a song picked for one would turn up for the other — and is kept whole. An episode
+ * keeps an "episode:" mark, so it is not looked for as a song.
+ */
+internal fun spotifyTrackId(uri: String): String = when {
+    uri.startsWith("spotify:local:") -> "local:" + uri.removePrefix("spotify:local:")
+    uri.startsWith("spotify:episode:") -> "episode:" + uri.removePrefix("spotify:episode:")
+    else -> uri.substringAfterLast(":")
+}

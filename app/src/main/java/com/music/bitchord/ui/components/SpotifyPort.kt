@@ -11,6 +11,7 @@ import androidx.compose.ui.res.stringResource
 import com.music.bitchord.R
 import com.music.bitchord.data.model.PlaylistPrivacy
 import com.music.bitchord.data.model.Song
+import com.music.bitchord.data.model.isMatchPending
 import com.music.bitchord.data.model.isUnresolvedSpotify
 import com.music.bitchord.data.model.SPOTIFY_MISSING_PREFIX
 import com.music.bitchord.data.spotify.SPOTIFY_PAGE_PREFIX
@@ -56,8 +57,10 @@ internal fun SpotifyPortWindow() {
     }
     val songs = (page.songs as? UiState.Success<List<Song>>)?.data.orEmpty()
     val found = songs.filterNot { it.isUnresolvedSpotify }.map { it.videoId }.distinct()
-    val missing = songs.count { it.videoId.startsWith(SPOTIFY_MISSING_PREFIX) }
-    val pending = songs.count { it.isUnresolvedSpotify } - missing
+    val missing = songs.count { it.videoId.startsWith(SPOTIFY_MISSING_PREFIX) && !it.videoId.startsWith(SPOTIFY_MISSING_PREFIX + "episode:") }
+    // Still being looked for: counted by their own mark, not as "unresolved but not missing" —
+    // a podcast row is neither, and would hold the save back for good.
+    val pending = songs.count { it.isMatchPending }
     val link = remember(browseId, stack) { SpotifyPortLinks.get(browseId.removePrefix(SPOTIFY_PAGE_PREFIX)) }
     val fresh = link?.let { l -> found.count { it !in l.videoIds } }
     var saving by remember(browseId) { mutableStateOf(false) }

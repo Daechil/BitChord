@@ -112,6 +112,7 @@
     <string name="claude_fail_overloaded">서버 혼잡</string>
     <string name="claude_fail_server_error">서버 오류</string>
     <string name="claude_fail_bad_request">요청 오류</string>
+    <string name="claude_fail_model_gone">모델 종료됨, 앱 업데이트 필요</string>
     <string name="claude_fail_timeout">시간 초과</string>
     <string name="claude_fail_network">네트워크 오류</string>
     <string name="claude_fail_refusal">거절됨</string>

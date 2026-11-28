@@ -638,4 +638,11 @@
     <string name="spotify_port_offline">지금은 “%1$s”에 넣지 못했어요. 인터넷 연결을 확인하고 다시 저장해 주세요.</string>
     <string name="claude_key_not_claude">Claude 키가 아닌 것 같아요. Claude 키는 “sk-ant-”로 시작해요. Anthropic Console에서 다시 복사해 주세요.</string>
     <string name="claude_key_rejected_notice">Claude가 키를 받지 않았어요. 키가 틀렸거나 크레딧이 없어요. 지금은 Google 번역을 써요. 설정 › BitChord KO 기능 › Claude AI에서 키를 확인해 주세요.</string>
+    <string name="spotify_miss_podcast">팟캐스트라 찾지 않아요</string>
+    <string name="spotify_error_offline">Spotify에 연결하지 못했어요. 인터넷 연결을 확인해 주세요.</string>
+    <string name="spotify_error_signed_out">Spotify 로그인이 만료됐어요. 설정에서 다시 로그인해 주세요.</string>
+    <string name="spotify_error_unavailable">이 재생목록을 열 수 없어요. 비공개이거나 지워졌을 수 있어요.</string>
+    <string name="spotify_error_busy">Spotify가 지금 응답하지 않아요. 잠시 뒤 다시 시도해 주세요.</string>
+    <string name="spotify_error_other">Spotify에서 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.</string>
+    <string name="claude_model_gone_notice">이 버전이 쓰는 Claude 모델이 종료됐어요. 지금은 Google 번역을 써요. 앱을 업데이트해 주세요.</string>
 </resources>

@@ -3128,7 +3128,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     setSongs(UiState.Success(soFar.map { it.asPendingSong() }))
                 }
             }.getOrElse {
-                setSongs(UiState.Error(it.message ?: text(R.string.failed)))
+                setSongs(UiState.Error(com.music.bitchord.ui.components.spotifyErrorText(getApplication(), it)))
                 return@launch
             }
             if (tracks.isEmpty()) {
@@ -3183,6 +3183,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             ?.let { (it.songs as? UiState.Success<List<Song>>)?.data }.orEmpty()
             .filter { it.videoId.startsWith(SPOTIFY_MISSING_PREFIX) }
             .mapNotNull { spotifyTracks[it.videoId.removePrefix(SPOTIFY_MISSING_PREFIX)] }
+            // A podcast episode is grey by design: not counted as missing, nor looked for again.
+            .filterNot { it.id.startsWith("episode:") }
 
     /**
      * KO: every grey row on the page [browseId] looked for again — past remembered answers,
@@ -3308,7 +3310,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val page = _detailStack.value.firstOrNull { it.browseId == browseId } ?: return
         val songs = (page.songs as? UiState.Success<List<Song>>)?.data.orEmpty()
         val found = songs.filterNot { it.isUnresolvedSpotify }.map { it.videoId }.distinct()
-        val missing = songs.count { it.videoId.startsWith(SPOTIFY_MISSING_PREFIX) }
+        val missing = songs.count { it.videoId.startsWith(SPOTIFY_MISSING_PREFIX) && !it.videoId.startsWith(SPOTIFY_MISSING_PREFIX + "episode:") }
         val spotifyId = browseId.removePrefix(SPOTIFY_PAGE_PREFIX)
         val app = getApplication<Application>()
         if (!authStore.isSignedIn) return onDone(app.getString(R.string.spotify_port_sign_in))
@@ -3381,6 +3383,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             com.music.bitchord.data.spotify.SpotifyClaudeMatch.MissKind.LENGTH -> app.getString(R.string.spotify_miss_length, miss.seconds)
             com.music.bitchord.data.spotify.SpotifyClaudeMatch.MissKind.NOT_THERE -> app.getString(R.string.spotify_miss_not_there)
             com.music.bitchord.data.spotify.SpotifyClaudeMatch.MissKind.UNREACHABLE -> app.getString(R.string.spotify_miss_unreachable)
+            com.music.bitchord.data.spotify.SpotifyClaudeMatch.MissKind.PODCAST -> app.getString(R.string.spotify_miss_podcast)
         }
     }
 

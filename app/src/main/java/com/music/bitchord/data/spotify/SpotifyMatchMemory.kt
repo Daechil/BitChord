@@ -49,7 +49,7 @@ object SpotifyMatchMemory {
         if (raw.startsWith(NONE)) {
             val parts = raw.split('@')
             val at = parts.getOrNull(1)?.toLongOrNull() ?: return null
-            if (now - at >= NONE_TTL_MS) return null
+            if (expired(at, now, NONE_TTL_MS)) return null
             val miss = parts.getOrNull(2)?.let { why ->
                 val kind = runCatching { SpotifyClaudeMatch.MissKind.valueOf(why.substringBefore(':')) }.getOrNull()
                 kind?.let { SpotifyClaudeMatch.Miss(it, why.substringAfter(':', "0").toIntOrNull() ?: 0) }
@@ -59,7 +59,7 @@ object SpotifyMatchMemory {
         return runCatching {
             val o = JSONObject(raw)
             // A song picked by hand ("m") is the listener's answer, and kept for good.
-            if (!o.optBoolean("m", false) && now - o.optLong("at", 0L) >= FOUND_TTL_MS) return null
+            if (!o.optBoolean("m", false) && expired(o.optLong("at", 0L), now, FOUND_TTL_MS)) return null
             // KO: the first search result, taken with no Claude key: looked for again once
             // Claude can check it, so adding a key later is not undone by a month-old guess.
             if (o.optBoolean("g", false) && com.music.bitchord.data.settings.AppSettings.spotifyClaudeMatch.value &&
@@ -79,6 +79,15 @@ object SpotifyMatchMemory {
             )
         }.getOrNull()
     }
+
+    /**
+     * KO: past its [ttl] — or kept "in the future": saved while the phone's clock ran ahead,
+     * such an answer would otherwise never grow old once the clock was put right.
+     */
+    internal fun expired(at: Long, now: Long, ttl: Long): Boolean =
+        at > now + CLOCK_SLACK_MS || now - at >= ttl
+
+    private const val CLOCK_SLACK_MS = 60L * 60 * 1000
 
     /** Entries in the file, counted once and kept up to date, so a save need not read the file whole. */
     private var count = -1

@@ -63,6 +63,7 @@ fun SpotifyLibraryScreen(
     var playlists by remember { mutableStateOf<List<SpotifyPlaylist>>(emptyList()) }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     LaunchedEffect(cookie) {
         if (cookie.isBlank()) {
@@ -74,7 +75,7 @@ fun SpotifyLibraryScreen(
         error = null
         runCatching { SpotifyLibrary.playlists() }
             .onSuccess { playlists = it }
-            .onFailure { error = it.message }
+            .onFailure { error = com.music.bitchord.ui.components.spotifyErrorText(context, it) }
         loading = false
     }
 

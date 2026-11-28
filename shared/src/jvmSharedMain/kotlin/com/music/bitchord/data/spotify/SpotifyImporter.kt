@@ -120,6 +120,7 @@ object SpotifyImporter {
             val tracks = mutableListOf<SpotifyImportTrack>()
             for (element in trackListJson) {
                 val obj = element.jsonObject
+                if (isEpisodeUri(obj["uri"]?.jsonPrimitive?.content)) continue
                 val title = obj["title"]?.jsonPrimitive?.content
                     ?: obj["name"]?.jsonPrimitive?.content
                     ?: continue
@@ -216,6 +217,8 @@ object SpotifyImporter {
             val items = content["items"]?.jsonArray ?: break
             for (item in items) {
                 val data = item.jsonObject["itemV2"]?.jsonObject?.get("data")?.jsonObject ?: continue
+                // KO: a podcast episode is no song to look for (see [isEpisodeUri]).
+                if (isEpisodeUri(data["uri"]?.jsonPrimitive?.content)) continue
                 val title = data["name"]?.jsonPrimitive?.content?.trim().orEmpty()
                 if (title.isEmpty()) continue
                 val artist = data["artists"]?.jsonObject?.get("items")?.jsonArray
@@ -318,3 +321,9 @@ object SpotifyImporter {
         Pair(songs, unmatched)
     }
 }
+
+/**
+ * KO: a podcast episode in a playlist: searched for as a song it brings back whatever song
+ * shares a word of its title, so an import leaves it out.
+ */
+internal fun isEpisodeUri(uri: String?): Boolean = uri?.startsWith("spotify:episode:") == true

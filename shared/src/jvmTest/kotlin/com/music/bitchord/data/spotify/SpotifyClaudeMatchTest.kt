@@ -211,4 +211,21 @@ class SpotifyClaudeMatchTest {
         assertEquals("Earth, Wind & Fire", outcome.song?.artist)
         assertEquals(0, asked)
     }
+
+    @Test
+    fun `a podcast episode is not looked for as a song`() = kotlinx.coroutines.runBlocking {
+        val episode = SpotifyTrack(id = "episode:abc", title = "Ep. 12 - Lemon talk", artist = "", album = null, durationMs = 0, imageUrl = null)
+        val outcome = SpotifyClaudeMatch.match(
+            episode,
+            useClaude = true,
+            search = { error("searched for an episode") },
+            searchVideos = { error("searched videos for an episode") },
+            searchAlbumTracks = { _, _ -> error("opened albums for an episode") },
+            askClaude = { _, _, _ -> error("asked Claude about an episode") },
+        )
+        assertNull(outcome.song)
+        assertTrue(outcome.settled)
+        assertEquals(SpotifyClaudeMatch.MissKind.PODCAST, outcome.miss?.kind)
+        assertEquals(0, outcome.claudeCalls)
+    }
 }

@@ -492,6 +492,16 @@ object LyricsTranslation {
     /** True once Claude refused the current key (or its account has no credit), so Settings can say why. */
     val claudeKeyRejected = MutableStateFlow(false)
 
+    /**
+     * KO: true once Claude answered that the model this build asks for is not there — retired
+     * by Anthropic. Nothing the listener can fix but updating the app, so the app says that.
+     */
+    val claudeModelGone = MutableStateFlow(false)
+
+    /** A 404 whose error names the model ("model: claude-…"), not some other missing thing. */
+    internal fun modelGone(code: Int, text: String): Boolean =
+        code == 404 && text.contains("model", ignoreCase = true)
+
     /** Which Claude answers: [CLAUDE_HAIKU] by default, [CLAUDE_SONNET] for a better read at a higher price. */
     @Volatile
     var claudeModel: String = CLAUDE_HAIKU
@@ -1139,6 +1149,10 @@ object LyricsTranslation {
                 ClaudeFailure.OVERLOADED
             }
             code >= 500 -> ClaudeFailure.SERVER_ERROR
+            modelGone(code, text) -> {
+                claudeModelGone.value = true
+                ClaudeFailure.MODEL_GONE
+            }
             code in 400..499 -> ClaudeFailure.BAD_REQUEST
             else -> ClaudeFailure.ERROR
         }
@@ -2314,6 +2328,10 @@ object LyricsTranslation {
         code == 429 -> ClaudeFailure.RATE_LIMIT
         code == 529 -> ClaudeFailure.OVERLOADED
         code >= 500 -> ClaudeFailure.SERVER_ERROR
+        modelGone(code, text) -> {
+            claudeModelGone.value = true
+            ClaudeFailure.MODEL_GONE
+        }
         code in 400..499 -> ClaudeFailure.BAD_REQUEST
         else -> ClaudeFailure.ERROR
     }

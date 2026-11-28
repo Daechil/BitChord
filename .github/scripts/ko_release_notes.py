@@ -66,17 +66,6 @@ def with_unreleased(tag, notes, repo=()):
     return notes.strip() + "\n\n" + "\n\n".join(folded)
 
 
-KIND_COLOURS = {"새 기능": "#1B7F3B", "개선": "#1A66D0", "수정": "#B35A00"}
-
-
-def coloured(notes):
-    """"### [새 기능] 제목" as "### $\\color{#1B7F3B}{\\textsf{새 기능}}$ 제목": GitHub draws the word in colour."""
-    def paint(match):
-        word = match.group(2)
-        return "%s$\\color{%s}{\\textsf{%s}}$ " % (match.group(1), KIND_COLOURS[word], word)
-    return re.sub(r"^(### )\[(%s)\]\s*" % "|".join(KIND_COLOURS), paint, notes, flags=re.M)
-
-
 def body(tag, notes, commit, apk):
     version = tag[1:] if tag.startswith("v") else tag
     build = re.search(r"ko[.-](\d+)(?:-beta)?$", tag)
@@ -98,7 +87,12 @@ def body(tag, notes, commit, apk):
         if tag.endswith("-beta")
         else ""
     )
-    return "%s## 바뀐 내용\n\n%s\n\n---\n\n%s\n\n%s\n" % (beta, coloured(notes.strip()), " · ".join(facts), install)
+    if beta:
+        # The banner above says it already; the entry's own "베타예요." line said it twice.
+        notes = "\n".join(line for line in notes.splitlines() if not line.startswith("> 베타예요"))
+    # Kinds stay plain text ("[새 기능] 제목"): the app shows release bodies as they are, and an
+    # older app showed GitHub's colour markup ($\\color{..}) as code. The app colours them itself.
+    return "%s## 바뀐 내용\n\n%s\n\n---\n\n%s\n\n%s\n" % (beta, notes.strip(), " · ".join(facts), install)
 
 
 def gh(*args):

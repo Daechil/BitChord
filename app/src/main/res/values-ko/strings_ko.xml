@@ -668,7 +668,7 @@
     <string name="guide_lyrics_furigana_body">일본어 곡에서 한자 위에 읽는 법을 작게 달아요. Claude 키가 있어야 해요.</string>
     <string name="guide_lyrics_syllable_body">글자가 노래에 맞춰 차오르는 가사를 더 많이 찾아요. 한국 노래도 영어 제목으로 한 번 더 찾아요.</string>
     <string name="guide_p3_title">AI 번역 (Claude)</string>
-    <string name="guide_p3_intro">선택 기능이에요. 직접 발급한 Claude 키를 넣으면 번역이 훨씬 자연스러워요. 비용은 곡당 몇 원 정도이고 Anthropic에 직접 내요. 키가 없어도 나머지 기능은 다 쓸 수 있어요.</string>
+    <string name="guide_p3_intro">선택 기능이에요. 직접 발급한 Claude 키를 넣으면 번역이 훨씬 자연스러워요. 비용은 곡당 몇 원 정도이고 Anthropic에 직접 내요. 아래 기능들은 키를 넣으면 나타나요. 키가 없어도 나머지 기능은 다 쓸 수 있어요.</string>
     <string name="guide_claude_on_body">켜고 키를 넣으면 번역 버튼이 Claude로 번역해요.</string>
     <string name="guide_claude_auto_body">번역을 켜 둔 채 다음 곡으로 넘어가면 알아서 번역해요. 처음에는 꺼져 있어요.</string>
     <string name="guide_claude_ahead_body">앨범이나 재생목록을 통째로 미리 번역해 두면 들을 때 바로 나와요. 한꺼번에 보내서 한 곡씩 번역할 때보다 저렴해요.</string>
@@ -701,7 +701,7 @@
     <string name="guide_where_ko_cost">설정 › BitChord KO 기능 › 비용과 기록</string>
     <string name="guide_where_ko_playback">설정 › BitChord KO 기능 › 재생</string>
     <string name="guide_where_ko_queue">설정 › BitChord KO 기능 › 다음 곡 목록</string>
-    <string name="guide_where_spotify">설정 › 계정 및 스크로블 › Spotify</string>
+    <string name="guide_where_spotify">설정 › 계정 및 연동 › Spotify</string>
     <string name="guide_where_spotify_save">Spotify 재생목록 화면 › + 버튼</string>
     <string name="guide_where_party">설정 › 함께 듣기</string>
     <string name="guide_where_ko">설정 › BitChord KO 기능</string>

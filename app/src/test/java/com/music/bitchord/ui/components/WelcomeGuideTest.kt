@@ -40,7 +40,7 @@ class WelcomeGuideTest {
             "guide_where_ko_cost" to listOf("settings", "ko_features", "ko_group_cost"),
             "guide_where_ko_playback" to listOf("settings", "ko_features", "ko_features_playback"),
             "guide_where_ko_queue" to listOf("settings", "ko_features", "ko_group_queue"),
-            "guide_where_spotify" to listOf("settings", "account_scrobbling", "spotify"),
+            "guide_where_spotify" to listOf("settings", "account_integrations", "spotify"),
             "guide_where_party" to listOf("settings", "listen_together"),
             "guide_where_ko" to listOf("settings", "ko_features"),
             "guide_where_whats_new" to listOf("settings", "miscellaneous", "whats_new_row"),

@@ -669,7 +669,7 @@ Adding: %4$s
     <string name="guide_lyrics_furigana_body">On Japanese songs, small readings over the kanji. Needs a Claude key.</string>
     <string name="guide_lyrics_syllable_body">Finds more lyrics whose words fill in with the singing, Korean songs included.</string>
     <string name="guide_p3_title">AI translation (Claude)</string>
-    <string name="guide_p3_intro">Optional. With your own Claude key from Anthropic, translations read far more naturally. It costs a few won a song, paid to Anthropic. Everything else works without it.</string>
+    <string name="guide_p3_intro">Optional. With your own Claude key from Anthropic, translations read far more naturally. It costs a few won a song, paid to Anthropic. The features below appear once a key is added; everything else works without one.</string>
     <string name="guide_claude_on_body">Turn it on and add your key: the translate button then translates with Claude.</string>
     <string name="guide_claude_auto_body">With the translation left on, the next song is translated on its own. Off at first.</string>
     <string name="guide_claude_ahead_body">Translate a whole album or playlist ahead, so the lyrics are ready when you play. Sent together, it costs less than song by song.</string>
@@ -702,7 +702,7 @@ Adding: %4$s
     <string name="guide_where_ko_cost">Settings › BitChord KO features › Cost and log</string>
     <string name="guide_where_ko_playback">Settings › BitChord KO features › Playback</string>
     <string name="guide_where_ko_queue">Settings › BitChord KO features › Queue</string>
-    <string name="guide_where_spotify">Settings › Account &amp; scrobbling › Spotify</string>
+    <string name="guide_where_spotify">Settings › Account &amp; integrations › Spotify</string>
     <string name="guide_where_spotify_save">A Spotify playlist › + button</string>
     <string name="guide_where_party">Settings › Listen together</string>
     <string name="guide_where_ko">Settings › BitChord KO features</string>

@@ -15,6 +15,9 @@ An unofficial Korean fork of BitChord (upstream 1.10). Work happens on `ko-1.10`
 - Every beta needs an entry in `KO_CHANGELOG.md`: `## v1.10-ko.N-beta · date`, then `### ` sections
   (each becomes a page in the app's update window). An entry whose build never published is folded
   into the next release's notes by `.github/scripts/ko_release_notes.py`.
+- A stable entry sums up the betas since the last stable (its notes never fold beta entries).
+  Next stable must say: the player's five-second auto-hide was turned off for everyone in ko.92
+  (Settings › Spotify Canvas 설정 › 플레이어 제어 버튼 자동 숨김 to turn it back on).
 - `lyrics-check.yml` runs live probes on CI (e.g. `spotify` input; an entry `@ko-KR` searches as a
   Korean phone). CI logs are public.
 

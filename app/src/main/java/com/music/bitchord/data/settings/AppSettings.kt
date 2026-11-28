@@ -1645,6 +1645,12 @@ object AppSettings {
         // KO: never chosen — Canvas stays on for whoever already saved a token, off otherwise.
         disableSpotifyCanvas.value = prefs.getBoolean(KEY_DISABLE_SPOTIFY_CANVAS, secret(KEY_SPOTIFY_SPDC_TOKEN).isBlank())
         spotifyCanvasAutoHide.value = prefs.getBoolean(KEY_SPOTIFY_CANVAS_AUTO_HIDE, false)
+        // KO: turned off once for everyone with the update that made off the default (the
+        // update notes say so, and where to turn it back on); a later choice is kept.
+        if (!prefs.getBoolean(KEY_KO_CANVAS_AUTO_HIDE_RESET, false)) {
+            spotifyCanvasAutoHide.value = false
+            prefs.edit().putBoolean(KEY_SPOTIFY_CANVAS_AUTO_HIDE, false).putBoolean(KEY_KO_CANVAS_AUTO_HIDE_RESET, true).apply()
+        }
         prioritizeSpotifyCanvas.value = prefs.getBoolean(KEY_PRIORITIZE_SPOTIFY_CANVAS, false)
         updateEffectiveSpotifyCanvasSettings()
         signatureApiEnabled.value = prefs.getBoolean(KEY_SIGNATURE_API_ENABLED, false)
@@ -3584,6 +3590,7 @@ object AppSettings {
     private const val KEY_CANVAS_OVER_CELLULAR = "canvas_over_cellular"
     private const val KEY_DISABLE_SPOTIFY_CANVAS = "disable_spotify_canvas"
     private const val KEY_SPOTIFY_CANVAS_AUTO_HIDE = "spotify_canvas_auto_hide"
+    private const val KEY_KO_CANVAS_AUTO_HIDE_RESET = "ko_canvas_auto_hide_reset_v1"
     private const val KEY_PRIORITIZE_SPOTIFY_CANVAS = "prioritize_spotify_canvas"
     private const val KEY_SIGNATURE_API_ENABLED = "signature_api_enabled"
     private const val KEY_SIGNATURE_API_URL = "signature_api_url"

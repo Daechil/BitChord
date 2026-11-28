@@ -623,4 +623,13 @@ Adding: %4$s
     <string name="spotify_retry_all_done">Looked again and found all %1$d.</string>
     <string name="spotify_retry_all_partial">Looked again: found %1$d, %2$d still not found.</string>
     <string name="spotify_pick_video">Music video</string>
+    <string name="update_news_title">What’s new</string>
+    <string name="update_news_highlights">Highlights</string>
+    <string name="update_news_all">All</string>
+    <string name="update_news_view_all">See all %1$d changes</string>
+    <string name="update_news_close">Close</string>
+    <string name="update_kind_new">New</string>
+    <string name="update_kind_improved">Improved</string>
+    <string name="update_kind_fixed">Fixed</string>
+    <string name="update_kind_other">Other</string>
 </resources>

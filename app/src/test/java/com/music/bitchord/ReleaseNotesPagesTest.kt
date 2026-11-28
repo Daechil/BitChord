@@ -81,4 +81,18 @@ class ReleaseNotesPagesTest {
         assertTrue(notes.intro.contains("베타 버전이에요"))
         assertEquals(1, Regex("베타 버전이에요").findAll(notes.intro).count())
     }
+
+    @Test
+    fun `a tag in front of a title says what kind of change it is`() {
+        val notes = ReleaseNotesPages.split(
+            "### [새 기능] 일본어 후리가나\n- 가\n\n### [수정] 꺼지던 문제\n- 나\n\n### [개선] 줄바꿈\n- 다\n\n### 태그 없음\n- 라",
+        )
+        assertEquals(
+            listOf(ReleaseNotesPages.Kind.NEW, ReleaseNotesPages.Kind.FIXED, ReleaseNotesPages.Kind.IMPROVED, null),
+            notes.pages.map { it.kind },
+        )
+        assertEquals(listOf("일본어 후리가나", "꺼지던 문제", "줄바꿈", "태그 없음"), notes.pages.map { it.title })
+        // Brackets that are not a known tag are part of the title.
+        assertEquals(null to "[베타] 무엇", ReleaseNotesPages.kindOf("[베타] 무엇"))
+    }
 }

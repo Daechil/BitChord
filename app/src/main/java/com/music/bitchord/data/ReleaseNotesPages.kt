@@ -18,7 +18,23 @@ package com.music.bitchord.data
  */
 object ReleaseNotesPages {
 
-    data class Page(val title: String?, val markdown: String, val version: String? = null)
+    /** What a section is, from "[새 기능]", "[개선]" or "[수정]" in front of its title. */
+    enum class Kind { NEW, IMPROVED, FIXED }
+
+    data class Page(val title: String?, val markdown: String, val version: String? = null, val kind: Kind? = null)
+
+    private val KIND_TAGS = mapOf(
+        "새 기능" to Kind.NEW, "new" to Kind.NEW,
+        "개선" to Kind.IMPROVED, "improved" to Kind.IMPROVED,
+        "수정" to Kind.FIXED, "fixed" to Kind.FIXED,
+    )
+
+    /** "[새 기능] 일본어 후리가나" → (NEW, "일본어 후리가나"); a title without a tag stays as it is. */
+    fun kindOf(title: String): Pair<Kind?, String> {
+        val tag = Regex("^\\[([^\\]]+)]\\s*").find(title) ?: return null to title
+        val kind = KIND_TAGS[tag.groupValues[1].trim().lowercase()] ?: return null to title
+        return kind to title.substring(tag.range.last + 1).trim()
+    }
 
     data class Notes(val intro: String, val pages: List<Page>)
 
@@ -36,7 +52,10 @@ object ReleaseNotesPages {
         var skippingLead = false
         fun close() {
             val content = current?.toString()?.trim() ?: return
-            if (content.isNotEmpty() || title != null) pages += Page(title, content, version)
+            if (content.isNotEmpty() || title != null) {
+                val (kind, plain) = title?.let(::kindOf) ?: (null to null)
+                pages += Page(plain ?: title, content, version, kind)
+            }
         }
         for (line in text.lines()) {
             when {

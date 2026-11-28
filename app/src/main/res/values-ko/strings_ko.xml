@@ -622,4 +622,13 @@
     <string name="spotify_retry_all_done">다시 찾아서 %1$d곡을 모두 찾았어요.</string>
     <string name="spotify_retry_all_partial">다시 찾아서 %1$d곡을 찾았어요. %2$d곡은 아직 못 찾았어요.</string>
     <string name="spotify_pick_video">뮤직비디오</string>
+    <string name="update_news_title">업데이트 소식</string>
+    <string name="update_news_highlights">이번 업데이트 핵심</string>
+    <string name="update_news_all">전체</string>
+    <string name="update_news_view_all">업데이트 내역 전체 보기 (%1$d개)</string>
+    <string name="update_news_close">닫기</string>
+    <string name="update_kind_new">새 기능</string>
+    <string name="update_kind_improved">개선</string>
+    <string name="update_kind_fixed">수정</string>
+    <string name="update_kind_other">그 밖에</string>
 </resources>

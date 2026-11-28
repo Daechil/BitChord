@@ -1,5 +1,7 @@
 package com.music.bitchord.ui.components
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -221,8 +223,20 @@ fun UpdateAvailableDialog(
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         textAlign = TextAlign.Start,
                     )
-                    // KO: a page per section, rather than the whole changelog in one scrolling box.
-                    ReleaseNotesPager(notes = notes, modifier = Modifier.padding(top = 4.dp))
+                    // KO: the few changes that matter most here; the whole list on its own screen,
+                    // which this window — busy with downloading and installing — has no room for.
+                    var showAll by remember { mutableStateOf(false) }
+                    UpdateNewsHighlights(notes = notes, onShowAll = { showAll = true }, modifier = Modifier.padding(top = 4.dp))
+                    if (showAll) {
+                        UpdateNewsWindow(
+                            title = stringResource(R.string.update_news_title),
+                            subtitle = version,
+                            notes = notes,
+                            onClose = { showAll = false },
+                        ) {
+                            AlertAction(label = stringResource(R.string.update_news_close), emphasised = true, onClick = { showAll = false })
+                        }
+                    }
                 }
             }
 

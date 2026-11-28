@@ -75,43 +75,21 @@ internal fun WhatsNewAlerts(hazeState: HazeState) {
         if (never) AppSettings.setWhatsNewNever(true)
         notes = null
     }
-    Dialog(
-        onDismissRequest = close,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    // KO: the whole screen, not an alert: a release's notes run long, and an alert showed a few lines.
+    UpdateNewsWindow(
+        title = stringResource(R.string.whats_new_title),
+        subtitle = stringResource(R.string.whats_new_updated_to, BuildConfig.VERSION_NAME),
+        notes = shown,
+        onClose = close,
     ) {
-        val window = (LocalView.current.parent as? DialogWindowProvider)?.window
-        SideEffect { window?.setDimAmount(0f) }
-        AlertScaffold(hazeState = hazeState, onDismiss = close, frosted = false) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 19.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    text = stringResource(R.string.whats_new_title),
-                    style = MaterialTheme.typography.bodyLarge.copy(fontSize = 17.sp, fontWeight = FontWeight.W600),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center,
-                )
-                Text(
-                    text = stringResource(R.string.whats_new_updated_to, BuildConfig.VERSION_NAME),
-                    modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                    textAlign = TextAlign.Center,
-                )
-                ReleaseNotesPager(notes = shown, pageHeight = 320.dp)
-            }
-            AlertRule()
-            AheadOptionRow(
-                label = stringResource(R.string.whats_new_never),
-                detail = stringResource(R.string.whats_new_never_detail),
-                checked = never,
-                checkbox = true,
-                onClick = { never = !never },
-            )
-            AlertRule()
-            AlertAction(label = stringResource(R.string.whats_new_ok), emphasised = true, onClick = close)
-        }
+        AheadOptionRow(
+            label = stringResource(R.string.whats_new_never),
+            detail = stringResource(R.string.whats_new_never_detail),
+            checked = never,
+            checkbox = true,
+            onClick = { never = !never },
+        )
+        AlertAction(label = stringResource(R.string.whats_new_ok), emphasised = true, onClick = close)
     }
 }
 

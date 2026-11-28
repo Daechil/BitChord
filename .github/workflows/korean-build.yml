@@ -74,6 +74,9 @@ jobs:
           echo "Building $VERSION"
 
       - name: Build
+        env:
+          # KO: the Korean build's own listen-together server (backend/, on Vultr Seoul).
+          LISTEN_TOGETHER_SERVER: https://jam.kobitchord.org
         run: |
           chmod +x gradlew
           ./gradlew :app:assembleProdRelease -Pbitchord.arm64Only=true \

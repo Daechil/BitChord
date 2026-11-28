@@ -636,4 +636,5 @@ Adding: %4$s
     <string name="spotify_preview_hint">Tap a song to hear it, then Choose.</string>
     <string name="spotify_pick_choose">Choose</string>
     <string name="spotify_preview_party">Previews are off in a listening party.</string>
+    <string name="spotify_port_offline">Couldn’t reach “%1$s” right now. Check your connection and save again.</string>
 </resources>

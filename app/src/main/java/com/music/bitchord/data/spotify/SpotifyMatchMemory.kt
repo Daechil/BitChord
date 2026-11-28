@@ -28,6 +28,8 @@ object SpotifyMatchMemory {
     private const val NONE_TTL_MS = 7L * 24 * 60 * 60 * 1000
 
     private var prefs: SharedPreferences? = null
+    private val AT = Regex("\"at\":(\\d+)")
+    private const val MANUAL = "\"m\":true"
 
     fun init(context: Context) {
         prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -74,6 +76,10 @@ object SpotifyMatchMemory {
         }.getOrNull()
     }
 
+    /** Entries in the file, counted once and kept up to date, so a save need not read the file whole. */
+    private var count = -1
+
+    @Synchronized
     fun put(trackId: String, song: Song?, miss: SpotifyClaudeMatch.Miss? = null, manual: Boolean = false) {
         val p = prefs ?: return
         if (trackId.isBlank()) return
@@ -87,11 +93,32 @@ object SpotifyMatchMemory {
                 .put("m", manual)
                 .toString()
         } ?: ("$NONE@${System.currentTimeMillis()}" + (miss?.let { "@${it.kind.name}:${it.seconds}" } ?: ""))
+        if (count < 0) count = p.all.size
+        if (!p.contains(trackId)) count++
         val editor = p.edit().putString(trackId, value)
-        // Past the limit, some go: a SharedPreferences file is read whole at launch.
-        // (getAll copies the whole map, so it is asked once.)
-        val all = p.all
-        if (all.size >= MAX_ENTRIES) all.keys.take(all.size - MAX_ENTRIES + 1).forEach(editor::remove)
+        // Past the limit, some go: a SharedPreferences file is read whole at launch. Down to
+        // nine in ten at once, so this happens seldom.
+        if (count > MAX_ENTRIES) {
+            val gone = evictionOrder(p.all.filterKeys { it != trackId }.mapValues { it.value as? String })
+                .take(count - MAX_ENTRIES * 9 / 10)
+            gone.forEach(editor::remove)
+            count -= gone.size
+        }
         editor.apply()
     }
+
+    /**
+     * KO: the keys to let go first when the file is full: the oldest first, by when each
+     * was found; songs picked by hand last of all, being the listener's own answers.
+     */
+    internal fun evictionOrder(entries: Map<String, String?>): List<String> =
+        entries.entries
+            .map { (key, raw) ->
+                // Read by pattern, not parsed: thousands of entries, and only two fields wanted.
+                val found = raw?.startsWith("{") == true
+                val at = if (found) AT.find(raw!!)?.groupValues?.get(1)?.toLongOrNull() else raw?.split('@')?.getOrNull(1)?.toLongOrNull()
+                Triple(key, found && MANUAL in raw!!, at ?: 0L)
+            }
+            .sortedWith(compareBy<Triple<String, Boolean, Long>> { it.second }.thenBy { it.third })
+            .map { it.first }
 }

@@ -3317,11 +3317,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (link != null) {
                 val fresh = found.filterNot { it in link.videoIds }
                 val failed = addInChunks(link.playlistId, fresh) { com.music.bitchord.data.spotify.SpotifyPortLinks.added(spotifyId, it) }
-                // Nothing went in: the playlist was most likely deleted on YouTube Music. Forget
-                // it, so the next save makes a new one rather than failing against it forever.
+                // Nothing went in: deleted on YouTube Music, or no connection. Forgotten only when
+                // the playlist itself is gone, so a dropped connection never makes a second copy.
                 if (fresh.isNotEmpty() && failed == fresh.size) {
-                    com.music.bitchord.data.spotify.SpotifyPortLinks.forget(spotifyId)
-                    onDone(app.getString(R.string.spotify_port_gone, link.title))
+                    if (spotifyPortGone(link.playlistId)) {
+                        com.music.bitchord.data.spotify.SpotifyPortLinks.forget(spotifyId)
+                        onDone(app.getString(R.string.spotify_port_gone, link.title))
+                    } else {
+                        onDone(app.getString(R.string.spotify_port_offline, link.title))
+                    }
                     return@launch
                 }
                 libraryStale = true
@@ -3352,6 +3356,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (ok) onAdded(chunk) else failed += chunk.size
         }
         return failed
+    }
+
+    /**
+     * KO: whether a saved playlist is gone from YouTube Music: it cannot be opened for a
+     * reason other than the connection, or opens with nothing in it. A connection that is
+     * down counts as not gone.
+     */
+    private suspend fun spotifyPortGone(playlistId: String): Boolean {
+        val page = YtMusicRepository.browseSongs("VL$playlistId")
+        val failure = page.exceptionOrNull()
+        return if (failure != null) failure !is java.io.IOException else page.getOrNull()?.songs.isNullOrEmpty()
     }
 
     private fun failedNote(failed: Int): String =

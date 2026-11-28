@@ -635,4 +635,5 @@
     <string name="spotify_preview_hint">곡을 누르면 미리 들어 볼 수 있어요. 맞으면 선택을 눌러 주세요.</string>
     <string name="spotify_pick_choose">선택</string>
     <string name="spotify_preview_party">함께 듣기 중에는 미리 들을 수 없어요.</string>
+    <string name="spotify_port_offline">지금은 “%1$s”에 넣지 못했어요. 인터넷 연결을 확인하고 다시 저장해 주세요.</string>
 </resources>

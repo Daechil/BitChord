@@ -34,4 +34,20 @@ class AppUpdateBetaTest {
         assertEquals("v1.9.1-ko.70-beta", AppUpdateChecker.newestOf(releases)?.get("tag_name")?.jsonPrimitive?.content)
         assertEquals(null, AppUpdateChecker.newestOf(JsonArray(emptyList())))
     }
+
+    @Test
+    fun `a stable release's notes stand alone, the betas before it left out`() {
+        val releases = Json.parseToJsonElement(
+            """[
+              {"tag_name":"v1.10-ko.91","draft":false,"body":"stable summary"},
+              {"tag_name":"v1.10-ko.90-beta","draft":false,"body":"beta 90"},
+              {"tag_name":"v1.10-ko.89-beta","draft":false,"body":"beta 89"}
+            ]"""
+        ) as JsonArray
+        // From an older beta straight to the stable: its summary, not the betas again.
+        assertEquals("stable summary", AppUpdateChecker.notesBetween(releases, "1.10-ko.85-beta", "1.10-ko.91", includeBeta = true))
+        // Between betas, every skipped one still shows.
+        val betas = AppUpdateChecker.notesBetween(releases, "1.10-ko.88-beta", "1.10-ko.90-beta", includeBeta = true).orEmpty()
+        assertTrue("beta 89" in betas && "beta 90" in betas)
+    }
 }

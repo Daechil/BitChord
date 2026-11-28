@@ -136,6 +136,7 @@ internal object SpotifyPreview {
     val playing = MutableStateFlow<String?>(null)
 
     private var inserted: String? = null
+    private var insertedAt = -1
     private var returnIndex = -1
     private var returnPositionMs = 0L
     private var wasPlaying = false
@@ -157,6 +158,7 @@ internal object SpotifyPreview {
         controller.seekTo(at, if (length > 0) length / 3 else 30_000L)
         controller.play()
         inserted = song.videoId
+        insertedAt = at
         playing.value = song.videoId
     }
 
@@ -165,7 +167,10 @@ internal object SpotifyPreview {
         inserted = null
         playing.value = null
         val controller = com.music.bitchord.playback.PlayingRowTap.controller ?: return
-        val index = (0 until controller.mediaItemCount).firstOrNull { controller.getMediaItemAt(it).mediaId == id }
+        // Where it was put, when it is still there: the same song may also sit elsewhere in the
+        // queue, and that copy is the listener's own.
+        val index = insertedAt.takeIf { it in 0 until controller.mediaItemCount && controller.getMediaItemAt(it).mediaId == id }
+            ?: (0 until controller.mediaItemCount).firstOrNull { controller.getMediaItemAt(it).mediaId == id }
         if (index != null) controller.removeMediaItem(index)
         if (returnIndex >= 0 && returnIndex < controller.mediaItemCount) {
             controller.seekTo(returnIndex, returnPositionMs)

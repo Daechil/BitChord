@@ -176,7 +176,8 @@ object AppUpdateChecker {
     /**
      * The bodies of [releases] newer than [after] and up to [upTo], newest first,
      * each under a "## v<version>" line (see ReleaseNotesPages); betas only when
-     * [includeBeta]. At most [MAX_COMBINED] releases. Null when none qualifies.
+     * [includeBeta], and never under a stable [upTo], whose notes sum them up.
+     * At most [MAX_COMBINED] releases. Null when none qualifies.
      */
     internal fun notesBetween(
         releases: kotlinx.serialization.json.JsonArray,
@@ -191,7 +192,9 @@ object AppUpdateChecker {
                 val body = release["body"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
                 (version to body).takeIf {
                     isNewer(version, after) && !isNewer(version, upTo) &&
-                        (includeBeta || !version.endsWith("-beta") || version == upTo)
+                        (includeBeta || !version.endsWith("-beta") || version == upTo) &&
+                        // A stable release's notes already sum up the betas before it.
+                        (upTo.endsWith("-beta") || !version.endsWith("-beta"))
                 }
             }
             .sortedWith { a, b -> if (isNewer(a.first, b.first)) -1 else if (isNewer(b.first, a.first)) 1 else 0 }

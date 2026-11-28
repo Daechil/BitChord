@@ -64,9 +64,11 @@ object WhatsNew {
 internal fun WhatsNewAlerts(hazeState: HazeState) {
     val context = LocalContext.current
     val onboarded by AppSettings.onboardingComplete.collectAsStateWithLifecycle()
+    // KO: and after the first-use guide, which a new install sees first; the two never stack.
+    val guide by AppSettings.welcomeGuideState.collectAsStateWithLifecycle()
     var notes by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(onboarded) {
-        if (onboarded) notes = WhatsNew.pending(context)
+    LaunchedEffect(onboarded, guide) {
+        if (onboarded && guide == WelcomeGuide.DONE) notes = WhatsNew.pending(context)
     }
     val shown = notes ?: return
     var never by remember { mutableStateOf(false) }

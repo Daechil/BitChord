@@ -160,7 +160,8 @@ fun KoHealthAlerts(hazeState: HazeState) {
         )
     }
 
-    // KO: what this build brought, once after updating to it.
+    // KO: the first-use guide for a new install, then what this build brought after an update.
+    WelcomeGuideHost()
     WhatsNewAlerts(hazeState)
     SpotifyPickWindow()
     SpotifyPortWindow()

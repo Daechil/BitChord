@@ -27,8 +27,19 @@ def read(path):
         return f.read()
 
 
+def escape(value):
+    """As Android reads a string resource: &, < escaped; a straight apostrophe or quote backslashed."""
+    return value.replace("&", "&amp;").replace("<", "&lt;").replace("'", "\\'").replace('"', '\\"')
+
+
 def add(path):
     entries = json.load(open(path, encoding="utf-8"))
+    # Both files are checked before either is written, so a bad entry leaves neither half-done.
+    for loc, idx in (("values", 1), ("values-ko", 2)):
+        taken = names(read(f"{RES}/{loc}/strings_ko.xml")) | names(read(f"{RES}/{loc}/strings.xml"))
+        dup = [e[0] for e in entries if e[0] in taken]
+        if dup:
+            sys.exit(f"already defined in {loc}: {dup}")
     for loc, idx in (("values", 1), ("values-ko", 2)):
         ko = f"{RES}/{loc}/strings_ko.xml"
         text = read(ko)
@@ -36,7 +47,7 @@ def add(path):
         dup = [e[0] for e in entries if e[0] in taken]
         if dup:
             sys.exit(f"already defined in {loc}: {dup}")
-        block = "".join(f'    <string name="{e[0]}">{e[idx]}</string>\n' for e in entries)
+        block = "".join(f'    <string name="{e[0]}">{escape(e[idx])}</string>\n' for e in entries)
         i = text.rindex("</resources>")
         with open(ko, "w", encoding="utf-8") as f:
             f.write(text[:i] + block + text[i:])

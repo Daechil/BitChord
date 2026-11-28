@@ -2316,6 +2316,10 @@ fun SettingsScreen(
             row(whatsNewTitle, "update", "what's new", "changelog", "업데이트", "새 기능", "변경 내역") {
                 com.music.bitchord.ui.components.WhatsNewRow(whatsNewTitle)
             }
+            val guideTitle = stringResource(R.string.guide_replay_row)
+            row(guideTitle, "guide", "tutorial", "help", "안내", "가이드", "튜토리얼", "처음", "도움말") {
+                com.music.bitchord.ui.components.WelcomeGuideReplayRow(guideTitle)
+            }
             val lyricsHintsTitle = stringResource(R.string.lyrics_hints_reset)
             row(lyricsHintsTitle, "hint", "tip", "lyrics", "안내", "도움말", "가사", "버튼") {
                 com.music.bitchord.ui.components.LyricsHintsResetRow(lyricsHintsTitle)

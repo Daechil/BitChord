@@ -592,6 +592,12 @@ object AppSettings {
      */
     val autoClaudeTranslation = MutableStateFlow(false)
 
+    /**
+     * KO: the first-use guide — 0 not yet decided, 1 still to be shown (a new install, shown
+     * once onboarding is done), 2 shown or not needed. See WelcomeGuide.
+     */
+    val welcomeGuideState = MutableStateFlow(0)
+
     /** The user's own Claude API key from the Anthropic Console. Stays on this device. */
     val claudeApiKey = MutableStateFlow("")
 
@@ -1539,6 +1545,7 @@ object AppSettings {
         claudeApiKey.value = secrets.getString(KEY_CLAUDE_API_KEY, "").orEmpty()
         claudeTranslation.value = prefs.getBoolean(KEY_CLAUDE_TRANSLATION, false)
         autoClaudeTranslation.value = prefs.getBoolean(KEY_AUTO_CLAUDE_TRANSLATION, false)
+        welcomeGuideState.value = prefs.getInt(KEY_WELCOME_GUIDE_STATE, 0)
         com.music.bitchord.data.lyrics.LyricsTranslation.claudeApiKey = claudeApiKey.value
         com.music.bitchord.data.lyrics.LyricsTranslation.claudeEnabled = claudeTranslation.value
         claudeModel.value = prefs.getString(KEY_CLAUDE_MODEL, null)
@@ -2229,6 +2236,11 @@ object AppSettings {
     fun setTranslationLanguage(value: String) {
         translationLanguage.value = value
         prefs.edit().putString(KEY_TRANSLATION_LANGUAGE, value).apply()
+    }
+
+    fun setWelcomeGuideState(value: Int) {
+        welcomeGuideState.value = value
+        prefs.edit().putInt(KEY_WELCOME_GUIDE_STATE, value).apply()
     }
 
     fun setAutoClaudeTranslation(value: Boolean) {
@@ -3536,6 +3548,7 @@ object AppSettings {
     private const val KEY_CLAUDE_API_KEY = "claude_api_key"
     private const val KEY_CLAUDE_TRANSLATION = "claude_translation"
     private const val KEY_AUTO_CLAUDE_TRANSLATION = "ko_auto_claude_translation"
+    private const val KEY_WELCOME_GUIDE_STATE = "ko_welcome_guide_state"
     private const val KEY_CLAUDE_MODEL = "claude_model"
     private const val KEY_CLAUDE_SPEECH = "claude_speech"
     private const val KEY_CLAUDE_MODE = "claude_mode"

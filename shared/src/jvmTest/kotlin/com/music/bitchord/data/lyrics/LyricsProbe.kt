@@ -180,7 +180,10 @@ class LyricsProbe {
             val text = when {
                 result == null -> "timed out"
                 result.isFailure -> "error ${result.exceptionOrNull()?.javaClass?.simpleName}"
-                else -> result.getOrNull()?.size?.let { "$it lines" } ?: "none"
+                else -> result.getOrNull()?.let { lines ->
+                    val worded = lines.count { it.words.isNotEmpty() }
+                    "${lines.size} lines" + if (worded > 0) " · word-timed" else ""
+                } ?: "none"
             }
             out.append("- $name: $text\n")
         }

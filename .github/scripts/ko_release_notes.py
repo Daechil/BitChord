@@ -49,12 +49,17 @@ def sections_only(notes):
 def with_unreleased(tag, notes, repo=()):
     """[notes] and, after them, the entries just below [tag] that never became a
     release (a build cancelled by the next one): their changes ship in this one,
-    so its notes say so, each section headed with its own version."""
+    so its notes say so, each section headed with its own version. A stable
+    release folds only stable entries: its own entry sums up the betas."""
     tags = list(sections().keys())  # newest first, as the changelog is written
     if tag not in tags:
         return notes
     folded = []
+    stable = not tag.endswith("-beta")
     for older in tags[tags.index(tag) + 1:]:
+        # A stable release's own entry already sums up the betas before it.
+        if stable and older.endswith("-beta"):
+            continue
         if released(older, repo):
             break
         entry = sections_only(sections()[older])

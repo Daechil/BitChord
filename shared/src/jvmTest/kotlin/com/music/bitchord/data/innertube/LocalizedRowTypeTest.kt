@@ -85,8 +85,10 @@ class LocalizedRowTypeTest {
             row("d3", "Spring day", "Song", "Dec 29, 2017", "4:40"),
             row("t1", "Spring day", "노래", "조회수 120만회", "4:40"),
             row("t2", "Spring day", "曲", "1.2億回再生", "4:40"),
+            row("t3", "Good day", "노래", "901K", "4:40"),
+            row("t4", "Good day", "노래", "조회수 1.2M회", "4:40"),
         )
-        assertEquals(5, songs.size)
+        assertEquals(7, songs.size)
         songs.forEach { song ->
             assertTrue(song.artist.none { it.isDigit() }, "read as artist: ${song.artist}")
         }
@@ -94,7 +96,7 @@ class LocalizedRowTypeTest {
 
     @Test
     fun anArtistWithDigitsStaysAnArtist() {
-        val songs = parse(row("a1", "Cheer Up", "노래", "TWICE", "3:28"), row("a2", "봄이 좋냐??", "노래", "10cm", "3:33"))
-        assertEquals(listOf("TWICE", "10cm"), songs.map { it.artist })
+        val songs = parse(row("a1", "Cheer Up", "노래", "TWICE", "3:28"), row("a2", "봄이 좋냐??", "노래", "10cm", "3:33"), row("a3", "Gangnam Style", "노래", "PSY", "3:39"), row("a4", "Mic Drop", "노래", "B.A.P", "3:30"))
+        assertEquals(listOf("TWICE", "10cm", "PSY", "B.A.P"), songs.map { it.artist })
     }
 }

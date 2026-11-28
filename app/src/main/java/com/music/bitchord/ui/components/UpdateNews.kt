@@ -123,7 +123,9 @@ internal fun UpdateNewsWindow(
             if (filter != null && kind != filter) continue
             val pages = split.pages.filter { it.kind == kind }
             if (pages.isEmpty()) continue
-            windowCard(rows = pages, header = "${groupNames.getValue(kind)} ${pages.size}") { page ->
+            // One mark per group, none per item: enough to find a group at a glance.
+            val mark = when (kind) { Kind.NEW -> "✨ "; Kind.IMPROVED -> "💡 "; Kind.FIXED -> "🔧 "; null -> "" }
+            windowCard(rows = pages, header = "$mark${groupNames.getValue(kind)} ${pages.size}") { page ->
                 NewsRow(page, groupNames, labelled)
             }
         }

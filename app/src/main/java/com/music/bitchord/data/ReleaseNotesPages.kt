@@ -31,7 +31,10 @@ object ReleaseNotesPages {
 
     /** "[새 기능] 일본어 후리가나" → (NEW, "일본어 후리가나"); a title without a tag stays as it is. */
     fun kindOf(title: String): Pair<Kind?, String> {
-        val tag = Regex("^\\[([^\\]]+)]\\s*").find(title) ?: return null to title
+        // The GitHub page writes the tag in colour: $\color{#1B7F3B}{\textsf{새 기능}}$ 제목.
+        val tag = Regex("^\\[([^\\]]+)]\\s*").find(title)
+            ?: Regex("^\\$\\\\color\\{[^}]*}\\{\\\\textsf\\{([^}]+)}}\\$\\s*").find(title)
+            ?: return null to title
         val kind = KIND_TAGS[tag.groupValues[1].trim().lowercase()] ?: return null to title
         return kind to title.substring(tag.range.last + 1).trim()
     }

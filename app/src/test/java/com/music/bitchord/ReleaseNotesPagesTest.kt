@@ -92,6 +92,11 @@ class ReleaseNotesPagesTest {
             notes.pages.map { it.kind },
         )
         assertEquals(listOf("일본어 후리가나", "꺼지던 문제", "줄바꿈", "태그 없음"), notes.pages.map { it.title })
+        // The GitHub page's coloured form reads the same.
+        assertEquals(
+            ReleaseNotesPages.Kind.FIXED to "꺼지던 문제",
+            ReleaseNotesPages.kindOf("\$\\color{#B35A00}{\\textsf{수정}}\$ 꺼지던 문제"),
+        )
         // Brackets that are not a known tag are part of the title.
         assertEquals(null to "[베타] 무엇", ReleaseNotesPages.kindOf("[베타] 무엇"))
     }

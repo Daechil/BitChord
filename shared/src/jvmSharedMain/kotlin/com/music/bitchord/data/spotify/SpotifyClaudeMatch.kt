@@ -194,9 +194,9 @@ object SpotifyClaudeMatch {
             // Anonymous first, as before; then signed in, as the search tab asks. A phone that
             // had looked up a long playlist got empty anonymous answers back for hours, while
             // the signed-in search went on working — the whole playlist stayed grey.
-            val anonymous = YtMusicRepository.search(query, SearchFilter.SONGS)
+            val anonymous = YtMusicRepository.search(searchable(query), SearchFilter.SONGS)
             anonymous.getOrNull()?.songs()?.takeIf { it.isNotEmpty() }?.let { return it }
-            val signedIn = YtMusicRepository.searchPage(query, SearchFilter.SONGS, anonymous = false)
+            val signedIn = YtMusicRepository.searchPage(searchable(query), SearchFilter.SONGS, anonymous = false)
             signedIn.getOrNull()?.rows?.songs()?.let { found ->
                 if (found.isNotEmpty() || anonymous.isSuccess) return found
             }
@@ -246,6 +246,14 @@ object SpotifyClaudeMatch {
     }
 
     /** The title without what Spotify adds to it: " - Remastered 2011", "(feat. …)". */
+    /**
+     * [query] as YouTube's search box should get it: a word with a "-" in front means "leave out
+     * results with this word" there, so Spotify's "ヒバナ -Reloaded-" searched for everything but
+     * the Reloaded version. The dash is dropped; the word stays.
+     */
+    internal fun searchable(query: String): String =
+        query.replace(Regex("(^|\\s)-+(?=\\S)"), "$1").replace(Regex("\\s+"), " ").trim()
+
     internal fun plainTitle(title: String): String =
         title.substringBefore(" - ").replace(Regex("""\s*[(\[](feat|ft|with)\.?\s[^)\]]*[)\]]""", RegexOption.IGNORE_CASE), "").trim()
             .ifBlank { title }

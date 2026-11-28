@@ -123,4 +123,13 @@ class SpotifyClaudeMatchTest {
         // No key in tests: Claude is refused, and the fallback finds the right-length song.
         assertEquals("우주를 줄게", withClaude.song?.title)
     }
+
+    @Test
+    fun `a dash in front of a word does not leave that word out of the search`() {
+        assertEquals("ヒバナ Reloaded- DECO*27", SpotifyClaudeMatch.searchable("ヒバナ -Reloaded- DECO*27"))
+        assertEquals("初音ミクの消失 DEAD END-", SpotifyClaudeMatch.searchable("初音ミクの消失 -DEAD END-"))
+        // A dash inside a word, or standing alone, is left as it is.
+        assertEquals("Spider-Man - Remastered", SpotifyClaudeMatch.searchable("Spider-Man - Remastered"))
+        assertEquals("Song", SpotifyClaudeMatch.searchable("--Song"))
+    }
 }

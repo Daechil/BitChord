@@ -3143,9 +3143,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         launch {
                             gate.withPermit {
                                 if (!open()) return@withPermit
-                                val (match, settled) = runCatching { matchSpotify(track) }.getOrElse { null to false }
-                                if (!settled) unsettled += track
-                                setSpotifyRow(browseId, track, match)
+                                val answer = runCatching { matchSpotify(track) }
+                                    .getOrElse { SpotifyAnswer(null, settled = false, miss = null) }
+                                if (!answer.settled) unsettled += track
+                                setSpotifyRow(browseId, track, answer.song, answer.miss)
                             }
                         }
                     }
@@ -3174,10 +3175,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** KO: every Spotify track listed on an open page, by id — for a grey row tapped to try again. */
     private val spotifyTracks = java.util.concurrent.ConcurrentHashMap<String, SpotifyTrack>()
 
-    /** Puts [match] (or "not found") in [track]'s row on the page [browseId], wherever that row now is. */
-    private fun setSpotifyRow(browseId: String?, track: SpotifyTrack, match: Song?) {
+    /** KO: a Spotify track's answer — its version, whether that is final, and why there is none. */
+    private class SpotifyAnswer(val song: Song?, val settled: Boolean, val miss: com.music.bitchord.data.spotify.SpotifyClaudeMatch.Miss?)
+
+    /**
+     * Puts [match] (or "not found") in [track]'s row on the page [browseId], wherever that row
+     * now is. A grey row says why under its title — "PinocchioP · 다른 버전만 있어요" — from [miss].
+     */
+    private fun setSpotifyRow(browseId: String?, track: SpotifyTrack, match: Song?, miss: com.music.bitchord.data.spotify.SpotifyClaudeMatch.Miss? = null) {
         val found = match?.copy(thumbnailUrl = match.thumbnailUrl ?: track.imageUrl)
-            ?: track.asPendingSong().copy(videoId = SPOTIFY_MISSING_PREFIX + track.id)
+            ?: track.asPendingSong().let { row ->
+                val why = miss?.let(::spotifyMissText)
+                row.copy(videoId = SPOTIFY_MISSING_PREFIX + track.id, artist = listOfNotNull(row.artist.ifBlank { null }, why).joinToString(" · "))
+            }
         val ids = setOf(SPOTIFY_PENDING_PREFIX + track.id, SPOTIFY_MISSING_PREFIX + track.id)
         _detailStack.value = _detailStack.value.map { page ->
             val list = (page.songs as? UiState.Success<List<Song>>)?.data
@@ -3201,9 +3211,35 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } else page
         }
         // Tapped to try again: past a remembered "none" too, or the tap could never help.
-        val match = runCatching { matchSpotify(track, fresh = true).first }.getOrNull()
-        setSpotifyRow(null, track, match)
-        return match?.copy(thumbnailUrl = match.thumbnailUrl ?: track.imageUrl)
+        val answer = runCatching { matchSpotify(track, fresh = true) }.getOrNull()
+        setSpotifyRow(null, track, answer?.song, answer?.miss)
+        return answer?.song?.let { it.copy(thumbnailUrl = it.thumbnailUrl ?: track.imageUrl) }
+    }
+
+    /** KO: the Spotify track behind a grey row, for the pick window. */
+    fun spotifyTrackFor(song: Song): SpotifyTrack? =
+        spotifyTracks[song.videoId.removePrefix(SPOTIFY_MISSING_PREFIX).removePrefix(SPOTIFY_PENDING_PREFIX)]
+
+    /** KO: YouTube Music songs the listener can pick for [track] by hand. */
+    suspend fun spotifyCandidates(track: SpotifyTrack): List<Song> =
+        runCatching { com.music.bitchord.data.spotify.SpotifyClaudeMatch.candidates(track) }.getOrDefault(emptyList())
+
+    /** KO: [chosen] picked by hand for [track]: the row turns playable, and it is remembered for good. */
+    fun pickSpotifyRow(track: SpotifyTrack, chosen: Song) {
+        com.music.bitchord.data.spotify.SpotifyMatchMemory.put(track.id, chosen, manual = true)
+        setSpotifyRow(null, track, chosen)
+    }
+
+    /** KO: the few words a grey row gives for not being found. */
+    fun spotifyMissText(miss: com.music.bitchord.data.spotify.SpotifyClaudeMatch.Miss): String {
+        val app = getApplication<Application>()
+        return when (miss.kind) {
+            com.music.bitchord.data.spotify.SpotifyClaudeMatch.MissKind.NO_RESULTS -> app.getString(R.string.spotify_miss_no_results)
+            com.music.bitchord.data.spotify.SpotifyClaudeMatch.MissKind.OTHER_VERSION -> app.getString(R.string.spotify_miss_other_version)
+            com.music.bitchord.data.spotify.SpotifyClaudeMatch.MissKind.LENGTH -> app.getString(R.string.spotify_miss_length, miss.seconds)
+            com.music.bitchord.data.spotify.SpotifyClaudeMatch.MissKind.NOT_THERE -> app.getString(R.string.spotify_miss_not_there)
+            com.music.bitchord.data.spotify.SpotifyClaudeMatch.MissKind.UNREACHABLE -> app.getString(R.string.spotify_miss_unreachable)
+        }
     }
 
     /**
@@ -3211,8 +3247,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * [SpotifyClaudeMatch] — the rules, and Claude where they find no plain
      * match, when Settings allows and a key is set — and Claude's answer kept.
      */
-    private suspend fun matchSpotify(track: SpotifyTrack, fresh: Boolean = false): Pair<Song?, Boolean> {
-        if (!fresh) com.music.bitchord.data.spotify.SpotifyMatchMemory.get(track.id)?.let { return it.song to true }
+    private suspend fun matchSpotify(track: SpotifyTrack, fresh: Boolean = false): SpotifyAnswer {
+        if (!fresh) com.music.bitchord.data.spotify.SpotifyMatchMemory.get(track.id)?.let { return SpotifyAnswer(it.song, true, it.miss) }
         val useClaude = com.music.bitchord.data.settings.AppSettings.spotifyClaudeMatch.value &&
             com.music.bitchord.data.lyrics.LyricsTranslation.claudeKeyUsable
         val outcome = com.music.bitchord.data.spotify.SpotifyClaudeMatch.match(track, useClaude = useClaude)
@@ -3220,9 +3256,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // playlist does not search YouTube Music again; "none" only when Claude said so.
         // A failed call or searches turned away say nothing, and are never kept.
         if (outcome.settled && (outcome.song != null || outcome.claudeCalls > 0)) {
-            com.music.bitchord.data.spotify.SpotifyMatchMemory.put(track.id, outcome.song)
+            com.music.bitchord.data.spotify.SpotifyMatchMemory.put(track.id, outcome.song, outcome.miss)
         }
-        return outcome.song to outcome.settled
+        return SpotifyAnswer(outcome.song, outcome.settled, outcome.miss)
     }
 
     private fun SpotifyTrack.asPendingSong() = Song(

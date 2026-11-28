@@ -85,4 +85,23 @@ class SpotifyClaudeMatchTest {
         assertEquals("ピノキオピー", outcome.song?.artist)
         assertFalse(outcome.settled) // not remembered: Claude is asked again next time
     }
+
+    @Test
+    fun `a grey row says why`() {
+        val track = track("Hibana", "DECO*27", 200)
+        val songs = listOf(song("ヒバナ", "DECO*27", "4:00"), song("Hibana (Live)", "DECO*27", "3:21"))
+        fun answer(choice: Int, relation: String) = SpotifyClaudeMatch.Answer(choice = choice, relation = relation)
+        assertEquals(SpotifyClaudeMatch.MissKind.OTHER_VERSION, SpotifyClaudeMatch.whyNot(answer(1, "another version"), songs, track).kind)
+        // The same recording, 40 seconds longer: the length is why.
+        assertEquals(SpotifyClaudeMatch.Miss(SpotifyClaudeMatch.MissKind.LENGTH, 40), SpotifyClaudeMatch.whyNot(answer(0, "same recording"), songs, track))
+        assertEquals(SpotifyClaudeMatch.MissKind.NOT_THERE, SpotifyClaudeMatch.whyNot(answer(-1, "none"), songs, track).kind)
+    }
+
+    @Test
+    fun `no results and refused searches say so`() = kotlinx.coroutines.runBlocking {
+        val empty = SpotifyClaudeMatch.match(track("Nothing", "Nobody", 200), useClaude = true, search = { emptyList() })
+        assertEquals(SpotifyClaudeMatch.MissKind.NO_RESULTS, empty.miss?.kind)
+        val refused = SpotifyClaudeMatch.match(track("Nothing", "Nobody", 200), useClaude = true, search = { throw SpotifyClaudeMatch.SearchRefused(it) })
+        assertEquals(SpotifyClaudeMatch.MissKind.UNREACHABLE, refused.miss?.kind)
+    }
 }

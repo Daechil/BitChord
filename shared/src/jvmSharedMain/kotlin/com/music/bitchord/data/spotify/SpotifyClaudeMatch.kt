@@ -45,7 +45,21 @@ object SpotifyClaudeMatch {
      * searches away, or Claude's call failed — so "not found" here means "try
      * again later", and is never to be remembered as the track's answer.
      */
-    class Outcome(val song: Song?, val how: How, val claudeCalls: Int, val candidates: Int, val settled: Boolean = true)
+    class Outcome(
+        val song: Song?,
+        val how: How,
+        val claudeCalls: Int,
+        val candidates: Int,
+        val settled: Boolean = true,
+        /** Why [song] is null, for the grey row to say; null when a song was found. */
+        val miss: Miss? = null,
+    )
+
+    /** KO: why a track was not matched — shown under its grey row. */
+    enum class MissKind { NO_RESULTS, OTHER_VERSION, LENGTH, NOT_THERE, UNREACHABLE }
+
+    /** [seconds]: for [MissKind.LENGTH], how far the closest same recording was from the track's length. */
+    data class Miss(val kind: MissKind, val seconds: Int = 0)
 
     /** Every attempt at a YouTube Music search was turned away (not: it found nothing). */
     class SearchRefused(query: String) : Exception("search refused: ${query.take(40)}")
@@ -90,32 +104,68 @@ object SpotifyClaudeMatch {
         // The rules' pick stands only when it is plainly the track: its performer, its version.
         // A cover by someone else or the original of a "Twin Ver." got past them on a title alone.
         if (ruled != null && plainlySame(track, ruled)) return Outcome(ruled, How.RULES, 0, first.size)
-        if (!useClaude) return Outcome(ruled ?: first.firstOrNull(), How.NONE, 0, first.size, settled = refused == 0)
+        fun unfound() = Miss(if (refused > 0) MissKind.UNREACHABLE else MissKind.NO_RESULTS)
+        if (!useClaude) {
+            val song = ruled ?: first.firstOrNull()
+            return Outcome(song, How.NONE, 0, first.size, settled = refused == 0, miss = if (song == null) unfound() else null)
+        }
 
         val titleOnly = searched(plainTitle(track.title))
         var candidates = merged(first, titleOnly)
         // Nothing to choose from: no call. Searches turned away are worth trying again;
         // two that answered with nothing are the answer.
-        if (candidates.isEmpty()) return Outcome(null, How.NONE, 0, 0, settled = refused == 0)
+        if (candidates.isEmpty()) return Outcome(null, How.NONE, 0, 0, settled = refused == 0, miss = unfound())
 
         // Claude could not answer (a limit reached, resting after a rate limit, the key refused):
         // the rules' own pick rather than nothing, so the song still plays — not remembered,
         // and asked again next time the playlist opens.
-        fun fallback(calls: Int) = Outcome(
-            ruled ?: first.firstOrNull { closeInLength(it, track) },
-            How.RULES, calls, candidates.size, settled = false,
-        )
+        fun fallback(calls: Int): Outcome {
+            val song = ruled ?: first.firstOrNull { closeInLength(it, track) }
+            return Outcome(
+                song, How.RULES, calls, candidates.size, settled = false,
+                miss = if (song == null) Miss(MissKind.UNREACHABLE) else null,
+            )
+        }
         val answer = ask(track, candidates) ?: return fallback(1)
         accepted(answer, candidates, track)?.let { return Outcome(it, How.CLAUDE, 1, candidates.size) }
+        val firstMiss = whyNot(answer, candidates, track)
 
         // None among these: Claude's own searches, once.
         val refusedBefore = refused
         val more = answer.searches.take(2).flatMap { query -> searched(query) }
-        if (more.isEmpty()) return Outcome(null, How.NONE, 1, candidates.size, settled = refused == refusedBefore)
+        if (more.isEmpty()) return Outcome(null, How.NONE, 1, candidates.size, settled = refused == refusedBefore, miss = firstMiss)
         candidates = merged(candidates, more)
         val second = ask(track, candidates, askForSearches = false) ?: return fallback(2)
         val chosen = accepted(second, candidates, track)
-        return Outcome(chosen, if (chosen != null) How.CLAUDE_SECOND_SEARCH else How.NONE, 2, candidates.size)
+        // The more telling of the two answers: "only other versions" beats a later "none".
+        val miss = if (chosen != null) null else whyNot(second, candidates, track).takeUnless {
+            it.kind == MissKind.NOT_THERE && firstMiss.kind != MissKind.NOT_THERE
+        } ?: firstMiss
+        return Outcome(chosen, if (chosen != null) How.CLAUDE_SECOND_SEARCH else How.NONE, 2, candidates.size, miss = miss)
+    }
+
+    /**
+     * KO: the YouTube Music songs a grey row's track could be — from its title and
+     * artist and from its title alone — for the listener to pick from by hand.
+     */
+    suspend fun candidates(track: SpotifyTrack): List<Song> {
+        suspend fun safe(query: String) = runCatching { searchSongs(query) }.getOrDefault(emptyList())
+        val first = safe(listOf(track.title, track.artist).filter { it.isNotBlank() }.joinToString(" "))
+        return merged(first, safe(plainTitle(track.title)))
+    }
+
+    /** Why Claude's [answer] gave no song: another version, the length, or nothing there. */
+    internal fun whyNot(answer: Answer, candidates: List<Song>, track: SpotifyTrack): Miss {
+        val song = candidates.getOrNull(answer.choice)
+        return when {
+            answer.relation == OTHER_VERSION -> Miss(MissKind.OTHER_VERSION)
+            (answer.relation == SAME_RECORDING || answer.relation == SAME_SONG_OTHER_UPLOAD) && song != null -> {
+                val expected = track.durationMs.takeIf { it > 0 }?.div(1000)
+                val actual = song.durationMillis().takeIf { it > 0 }?.div(1000)
+                if (expected != null && actual != null) Miss(MissKind.LENGTH, abs(expected - actual).toInt()) else Miss(MissKind.NOT_THERE)
+            }
+            else -> Miss(MissKind.NOT_THERE)
+        }
     }
 
     /**

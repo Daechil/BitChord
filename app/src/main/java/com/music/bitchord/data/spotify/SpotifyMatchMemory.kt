@@ -34,20 +34,30 @@ object SpotifyMatchMemory {
         runCatching { context.applicationContext.deleteSharedPreferences(OLD_PREFS) }
     }
 
-    /** Null when never asked; [Remembered.song] null when Claude found the song is not there. */
-    class Remembered(val song: Song?)
+    /**
+     * Null when never asked; [Remembered.song] null when Claude found the song is not there,
+     * and then [miss] says why, when that was kept.
+     */
+    class Remembered(val song: Song?, val miss: SpotifyClaudeMatch.Miss? = null)
 
     fun get(trackId: String): Remembered? {
         val raw = prefs?.getString(trackId, null) ?: return null
         val now = System.currentTimeMillis()
-        // "none@<time>"; a bare "none" is from before times were kept, and is let go.
+        // "none@<time>[@<why>:<seconds>]"; a bare "none" is from before times were kept, and is let go.
         if (raw.startsWith(NONE)) {
-            val at = raw.substringAfter('@', "").toLongOrNull() ?: return null
-            return if (now - at < NONE_TTL_MS) Remembered(null) else null
+            val parts = raw.split('@')
+            val at = parts.getOrNull(1)?.toLongOrNull() ?: return null
+            if (now - at >= NONE_TTL_MS) return null
+            val miss = parts.getOrNull(2)?.let { why ->
+                val kind = runCatching { SpotifyClaudeMatch.MissKind.valueOf(why.substringBefore(':')) }.getOrNull()
+                kind?.let { SpotifyClaudeMatch.Miss(it, why.substringAfter(':', "0").toIntOrNull() ?: 0) }
+            }
+            return Remembered(null, miss)
         }
         return runCatching {
             val o = JSONObject(raw)
-            if (now - o.optLong("at", 0L) >= FOUND_TTL_MS) return null
+            // A song picked by hand ("m") is the listener's answer, and kept for good.
+            if (!o.optBoolean("m", false) && now - o.optLong("at", 0L) >= FOUND_TTL_MS) return null
             Remembered(
                 Song(
                     videoId = o.getString("v"),
@@ -63,7 +73,7 @@ object SpotifyMatchMemory {
         }.getOrNull()
     }
 
-    fun put(trackId: String, song: Song?) {
+    fun put(trackId: String, song: Song?, miss: SpotifyClaudeMatch.Miss? = null, manual: Boolean = false) {
         val p = prefs ?: return
         if (trackId.isBlank()) return
         val value = song?.let {
@@ -72,8 +82,9 @@ object SpotifyMatchMemory {
                 .put("th", it.thumbnailUrl.orEmpty()).put("d", it.durationText.orEmpty())
                 .put("al", it.albumName.orEmpty()).put("ai", it.albumId.orEmpty()).put("ar", it.artistId.orEmpty())
                 .put("at", System.currentTimeMillis())
+                .put("m", manual)
                 .toString()
-        } ?: "$NONE@${System.currentTimeMillis()}"
+        } ?: ("$NONE@${System.currentTimeMillis()}" + (miss?.let { "@${it.kind.name}:${it.seconds}" } ?: ""))
         val editor = p.edit().putString(trackId, value)
         // Past the limit, some go: a SharedPreferences file is read whole at launch.
         // (getAll copies the whole map, so it is asked once.)

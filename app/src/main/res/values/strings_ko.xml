@@ -589,4 +589,16 @@ Adding: %4$s
     <string name="lock_screen_lyrics_next">Next</string>
     <string name="lock_screen_lyrics_play">Play</string>
     <string name="lock_screen_lyrics_pause">Pause</string>
+    <string name="spotify_miss_no_results">No results on YouTube Music</string>
+    <string name="spotify_miss_other_version">Only other versions</string>
+    <string name="spotify_miss_length">Length off by %1$d s</string>
+    <string name="spotify_miss_not_there">Not on YouTube Music, it seems</string>
+    <string name="spotify_miss_unreachable">Couldn’t search · try again</string>
+    <string name="spotify_pick_title">Find this song</string>
+    <string name="spotify_pick_retry">Look again</string>
+    <string name="spotify_pick_header">Pick it yourself · Spotify %1$s</string>
+    <string name="spotify_pick_footer">The song you pick is remembered and plays from then on.</string>
+    <string name="spotify_pick_loading">Searching YouTube Music…</string>
+    <string name="spotify_pick_none">No results. Try “Look again” later.</string>
+    <string name="spotify_pick_done">Added. Tap it to play.</string>
 </resources>

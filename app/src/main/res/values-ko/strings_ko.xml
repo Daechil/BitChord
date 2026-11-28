@@ -588,4 +588,16 @@
     <string name="lock_screen_lyrics_next">다음</string>
     <string name="lock_screen_lyrics_play">재생</string>
     <string name="lock_screen_lyrics_pause">일시정지</string>
+    <string name="spotify_miss_no_results">검색 결과가 없어요</string>
+    <string name="spotify_miss_other_version">다른 버전만 있어요</string>
+    <string name="spotify_miss_length">길이가 %1$d초 달라요</string>
+    <string name="spotify_miss_not_there">YouTube Music에 없는 것 같아요</string>
+    <string name="spotify_miss_unreachable">검색이 안 됐어요 · 다시 시도해 주세요</string>
+    <string name="spotify_pick_title">곡 찾기</string>
+    <string name="spotify_pick_retry">다시 찾기</string>
+    <string name="spotify_pick_header">직접 고르기 · Spotify 길이 %1$s</string>
+    <string name="spotify_pick_footer">고른 곡은 기억해서 다음부터 바로 재생돼요.</string>
+    <string name="spotify_pick_loading">YouTube Music에서 찾는 중이에요…</string>
+    <string name="spotify_pick_none">검색 결과가 없어요. 나중에 다시 찾기를 눌러 보세요.</string>
+    <string name="spotify_pick_done">넣었어요. 누르면 재생해요.</string>
 </resources>

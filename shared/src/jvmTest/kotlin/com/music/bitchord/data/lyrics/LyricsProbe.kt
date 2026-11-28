@@ -96,7 +96,22 @@ class LyricsProbe {
         val whole = withTimeoutOrNull(180_000) {
             runCatching { LyricsRepository.lyrics(song.videoId, song.title, song.artist, ms, song.albumName) }.getOrNull()
         }
-        out.append("- whole lookup, as the app: ${whole?.let { "${it.source} · ${it.lines.size} lines" } ?: "none"}\n")
+        fun described(found: LyricsRepository.Result?) = found?.let { r ->
+            val timed = r.lines.count { it.timeMs > 0 }
+            val worded = r.lines.count { it.words.isNotEmpty() }
+            "${r.source} · ${r.lines.size} lines · ${if (timed > 1) "timed" else "untimed"}${if (worded > 0) " · word-timed" else ""}"
+        } ?: "none"
+        out.append("- whole lookup, as the app: ${described(whole)}\n")
+        // KO: the same without the sources keyed on the video (YouTube's own lyrics and
+        // transcripts), so the second tries under other names are what is seen.
+        val byNameOnly = LyricsSource.entries.toSet() -
+            setOf(LyricsSource.YOUTUBE_MUSIC, LyricsSource.YOUTUBE_TRANSCRIPT, LyricsSource.SIMP_MUSIC)
+        val named = withTimeoutOrNull(180_000) {
+            runCatching {
+                LyricsRepository.lyrics(song.videoId, song.title, song.artist, ms, song.albumName, sources = byNameOnly)
+            }.getOrNull()
+        }
+        out.append("- by name only (other names tried): ${described(named)}\n")
         out.append("- YouTube Music: `${song.title}` — `${song.artist}` · ${ms / 1000.0}s · ${song.videoId}\n")
         out.append("- asked as: `$title` — `$artist`\n\n")
 

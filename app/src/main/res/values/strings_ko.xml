@@ -622,4 +622,5 @@ Adding: %4$s
     <string name="spotify_retry_all">Look for all again</string>
     <string name="spotify_retry_all_done">Looked again and found all %1$d.</string>
     <string name="spotify_retry_all_partial">Looked again: found %1$d, %2$d still not found.</string>
+    <string name="spotify_pick_video">Music video</string>
 </resources>

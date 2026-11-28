@@ -64,6 +64,9 @@ object SpotifyClaudeMatch {
     /** Every attempt at a YouTube Music search was turned away (not: it found nothing). */
     class SearchRefused(query: String) : Exception("search refused: ${query.take(40)}")
 
+    /** Music videos offered at most, when no song has the track's length. */
+    private const val MAX_VIDEOS = 3
+
     /** Candidates shown to Claude at most. */
     private const val MAX_CANDIDATES = 12
 
@@ -88,6 +91,8 @@ object SpotifyClaudeMatch {
         track: SpotifyTrack,
         useClaude: Boolean = LyricsTranslation.claudeKeyUsable,
         search: suspend (String) -> List<Song> = ::searchSongs,
+        /** YouTube Music's videos for a query — a last look when no song has the track's length. */
+        searchVideos: suspend (String) -> List<Song> = ::searchVideoRows,
     ): Outcome {
         val target = TrackMatcher.Target(
             title = track.title,
@@ -124,6 +129,15 @@ object SpotifyClaudeMatch {
                 performerClose = byPerformer.filter { closeInLength(it, track) }
                 candidates = merged(performerClose, candidates + byPerformer)
             }
+        }
+        // Still nothing of that length: some songs are on YouTube Music only as a music video
+        // (common for Vocaloid producers). Videos of the right length join, first in line;
+        // Claude takes one only as the performer's own video, and only when no song matches.
+        if (track.durationMs > 0 && candidates.none { closeInLength(it, track) }) {
+            val query = listOf(track.title, track.artist).filter { it.isNotBlank() }.joinToString(" ")
+            val videos = runCatching { searchVideos(query) }.getOrDefault(emptyList())
+                .filter { closeInLength(it, track) }.take(MAX_VIDEOS)
+            if (videos.isNotEmpty()) candidates = (videos + candidates).distinctBy { it.videoId }.take(MAX_CANDIDATES)
         }
         // Nothing to choose from: no call. Searches turned away are worth trying again;
         // two that answered with nothing are the answer.
@@ -165,8 +179,19 @@ object SpotifyClaudeMatch {
      */
     suspend fun candidates(track: SpotifyTrack): List<Song> {
         suspend fun safe(query: String) = runCatching { searchSongs(query) }.getOrDefault(emptyList())
-        val first = safe(listOf(track.title, track.artist).filter { it.isNotBlank() }.joinToString(" "))
-        return merged(first, safe(plainTitle(track.title)))
+        val query = listOf(track.title, track.artist).filter { it.isNotBlank() }.joinToString(" ")
+        val first = safe(query)
+        // The songs, then a few music videos — some songs are on YouTube Music only as one.
+        val videos = runCatching { searchVideoRows(query) }.getOrDefault(emptyList()).take(MAX_VIDEOS)
+        return (merged(first, safe(plainTitle(track.title))) + videos).distinctBy { it.videoId }
+    }
+
+    /** YouTube Music's videos for [query], anonymous then signed in, as [searchSongs]. */
+    private suspend fun searchVideoRows(query: String): List<Song> {
+        val anonymous = YtMusicRepository.search(searchable(query), SearchFilter.VIDEOS)
+        anonymous.getOrNull()?.songs()?.filter { it.isVideo }?.takeIf { it.isNotEmpty() }?.let { return it }
+        return YtMusicRepository.searchPage(searchable(query), SearchFilter.VIDEOS, anonymous = false)
+            .getOrNull()?.rows?.songs()?.filter { it.isVideo }.orEmpty()
     }
 
     /** Why Claude's [answer] gave no song: another version, the length, or nothing there. */
@@ -287,6 +312,7 @@ object SpotifyClaudeMatch {
                         put("artist", song.artist)
                         song.albumName?.let { put("album", it) }
                         song.durationMillis().takeIf { it > 0 }?.let { put("seconds", it / 1000) }
+                        if (song.isVideo) put("music_video", true)
                     })
                 }
             }
@@ -318,6 +344,7 @@ object SpotifyClaudeMatch {
         - The same song by the same performer, the same version. Titles and artist names may be written differently: in another script (アイドル / Idol / 아이돌), romanised (夜に駆ける / Yoru ni Kakeru), translated (밤편지 / Through the Night), with or without "feat." credits, a remaster note or an "Official" tag.
         - Lengths usually agree within a few seconds.
         - Spotify often shows Korean, Japanese and Chinese performers under a romanised or English name (Dareharu for 달의하루, BOL4 for 볼빨간사춘기) and songs under an English title that is not a translation of the original one (Galaxy for 우주를 줄게). When the performer is the same and the lengths agree within 3 seconds, it is the same recording even though the titles share no word. If several of that performer's results have the length, the album decides; if nothing decides, choose -1.
+        - A result with "music_video": true is a video, not a song. Choose it only when no song result is the recording, it is the performer's own video (their name or channel), and the lengths agree within 3 seconds; its relation is "$SAME_SONG_OTHER_UPLOAD".
         - Not a cover by someone else, a live recording, a remix, an acoustic, instrumental, karaoke, sped-up or TV-size version, nor another language's version of the song, unless the Spotify track is that version.
 
         Answer:

@@ -125,6 +125,7 @@ internal fun SpotifyPickWindow() {
     val footer = stringResource(R.string.spotify_pick_footer)
     val loading = stringResource(R.string.spotify_pick_loading)
     val none = stringResource(R.string.spotify_pick_none)
+    val videoLabel = stringResource(R.string.spotify_pick_video)
     KoWindow(title = stringResource(R.string.spotify_pick_title), onBack = { SpotifyRowTap.picking.value = null }) {
         // The song, and why it is grey (the row's own words: "PinocchioP · 다른 버전만 있어요").
         windowText("${pick.song.title}\n${pick.song.artist}")
@@ -136,7 +137,11 @@ internal fun SpotifyPickWindow() {
             else -> windowCard(rows = found, header = header, footer = footer) { song ->
                 WindowLine(
                     title = song.title,
-                    detail = listOfNotNull(song.artist.ifBlank { null }, song.albumName?.ifBlank { null }).joinToString(" · "),
+                    detail = listOfNotNull(
+                        videoLabel.takeIf { song.isVideo },
+                        song.artist.ifBlank { null },
+                        song.albumName?.ifBlank { null },
+                    ).joinToString(" · "),
                     value = song.durationText,
                     onClick = { SpotifyRowTap.pick(pick, song) },
                 )

@@ -68,6 +68,7 @@ object SpotifyMatchMemory {
                     albumName = o.optString("al").ifBlank { null },
                     albumId = o.optString("ai").ifBlank { null },
                     artistId = o.optString("ar").ifBlank { null },
+                    isVideo = o.optBoolean("iv", false),
                 ),
             )
         }.getOrNull()
@@ -81,6 +82,7 @@ object SpotifyMatchMemory {
                 .put("v", it.videoId).put("t", it.title).put("a", it.artist)
                 .put("th", it.thumbnailUrl.orEmpty()).put("d", it.durationText.orEmpty())
                 .put("al", it.albumName.orEmpty()).put("ai", it.albumId.orEmpty()).put("ar", it.artistId.orEmpty())
+                .put("iv", it.isVideo)
                 .put("at", System.currentTimeMillis())
                 .put("m", manual)
                 .toString()

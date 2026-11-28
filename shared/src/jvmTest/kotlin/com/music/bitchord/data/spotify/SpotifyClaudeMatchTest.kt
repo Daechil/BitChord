@@ -132,4 +132,25 @@ class SpotifyClaudeMatchTest {
         assertEquals("Spider-Man - Remastered", SpotifyClaudeMatch.searchable("Spider-Man - Remastered"))
         assertEquals("Song", SpotifyClaudeMatch.searchable("--Song"))
     }
+
+    @Test
+    fun `music videos are looked at only when no song has the length`() = kotlinx.coroutines.runBlocking {
+        var videoSearches = 0
+        val video = Song(videoId = "mv", title = "シックマン", artist = "Chinozo", thumbnailUrl = null, durationText = "2:58", isVideo = true)
+        SpotifyClaudeMatch.match(
+            track("シックマン", "Chinozo, GANMI", 177),
+            useClaude = true,
+            search = { listOf(song("シェーマ", "Chinozo", "3:28")) },
+            searchVideos = { videoSearches++; listOf(video) },
+        )
+        assertEquals(1, videoSearches)
+        // A song of the right length found: no video search at all.
+        SpotifyClaudeMatch.match(
+            track("Lemon", "Kenshi Yonezu", 255),
+            useClaude = true,
+            search = { listOf(song("Lemon", "Kenshi Yonezu", "4:16")) },
+            searchVideos = { videoSearches++; emptyList() },
+        )
+        assertEquals(1, videoSearches)
+    }
 }

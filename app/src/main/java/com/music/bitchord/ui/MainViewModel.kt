@@ -3398,7 +3398,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // playlist does not search YouTube Music again; "none" only when Claude said so.
         // A failed call or searches turned away say nothing, and are never kept.
         if (outcome.settled && (outcome.song != null || outcome.claudeCalls > 0)) {
-            com.music.bitchord.data.spotify.SpotifyMatchMemory.put(track.id, outcome.song, outcome.miss)
+            // Taken unchecked (no Claude): kept as a guess, looked for again once Claude can check.
+            val guess = outcome.song != null && outcome.how == com.music.bitchord.data.spotify.SpotifyClaudeMatch.How.NONE
+            com.music.bitchord.data.spotify.SpotifyMatchMemory.put(track.id, outcome.song, outcome.miss, guess = guess)
         }
         return SpotifyAnswer(outcome.song, outcome.settled, outcome.miss)
     }

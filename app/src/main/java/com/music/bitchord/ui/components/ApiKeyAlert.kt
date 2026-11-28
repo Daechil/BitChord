@@ -39,6 +39,7 @@ fun ApiKeyAlert(
     onSave: () -> Unit,
     onRemove: () -> Unit,
     onDismiss: () -> Unit,
+    error: String? = null,
 ) {
     val title = stringResource(titleRes)
     AlertScaffold(hazeState = hazeState, onDismiss = onDismiss) {
@@ -69,6 +70,16 @@ fun ApiKeyAlert(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { onSave() }),
             )
+            // KO: why the key was not saved, under the field it is about.
+            if (error != null) {
+                Text(
+                    text = error,
+                    modifier = Modifier.padding(top = 8.dp),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp, lineHeight = 17.sp),
+                    color = MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center,
+                )
+            }
         }
         AlertRule()
         AlertAction(

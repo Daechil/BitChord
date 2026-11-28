@@ -230,16 +230,23 @@ fun ClaudeAlerts(
         BackHandler { onDismissKey() }
         val savedKey by AppSettings.claudeApiKey.collectAsStateWithLifecycle()
         var keyInput by remember { mutableStateOf(savedKey) }
+        var keyError by remember { mutableStateOf<String?>(null) }
+        val notClaudeKey = stringResource(R.string.claude_key_not_claude)
         ApiKeyAlert(
             hazeState = hazeState,
             titleRes = R.string.claude_api_key,
             descriptionRes = R.string.claude_api_key_description,
             value = keyInput,
-            onValueChange = { keyInput = it },
+            onValueChange = { keyInput = it; keyError = null },
             hasSavedKey = savedKey.isNotBlank(),
+            error = keyError,
             onSave = {
                 val key = keyInput.trim()
-                if (key.isNotEmpty()) {
+                // Checked here, nothing sent: another service's key or stray text would only be
+                // refused later, with the translation quietly falling back to Google meanwhile.
+                if (key.isNotEmpty() && !ClaudeKeyCheck.looksLikeClaudeKey(key)) {
+                    keyError = notClaudeKey
+                } else if (key.isNotEmpty()) {
                     AppSettings.setClaudeApiKey(key)
                     AppSettings.setClaudeTranslation(true)
                     onDismissKey()

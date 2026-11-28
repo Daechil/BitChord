@@ -164,6 +164,7 @@ fun KoHealthAlerts(hazeState: HazeState) {
     WhatsNewAlerts(hazeState)
     SpotifyPickWindow()
     SpotifyPortWindow()
+    ClaudeKeyRejectionWatch()
     KoNoticeHost()
 
     val stopped by PlaybackTrouble.stopped.collectAsStateWithLifecycle()

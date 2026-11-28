@@ -60,6 +60,10 @@ object SpotifyMatchMemory {
             val o = JSONObject(raw)
             // A song picked by hand ("m") is the listener's answer, and kept for good.
             if (!o.optBoolean("m", false) && now - o.optLong("at", 0L) >= FOUND_TTL_MS) return null
+            // KO: the first search result, taken with no Claude key: looked for again once
+            // Claude can check it, so adding a key later is not undone by a month-old guess.
+            if (o.optBoolean("g", false) && com.music.bitchord.data.settings.AppSettings.spotifyClaudeMatch.value &&
+                com.music.bitchord.data.lyrics.LyricsTranslation.claudeKeyUsable) return null
             Remembered(
                 Song(
                     videoId = o.getString("v"),
@@ -80,7 +84,7 @@ object SpotifyMatchMemory {
     private var count = -1
 
     @Synchronized
-    fun put(trackId: String, song: Song?, miss: SpotifyClaudeMatch.Miss? = null, manual: Boolean = false) {
+    fun put(trackId: String, song: Song?, miss: SpotifyClaudeMatch.Miss? = null, manual: Boolean = false, guess: Boolean = false) {
         val p = prefs ?: return
         if (trackId.isBlank()) return
         val value = song?.let {
@@ -91,6 +95,7 @@ object SpotifyMatchMemory {
                 .put("iv", it.isVideo)
                 .put("at", System.currentTimeMillis())
                 .put("m", manual)
+                .put("g", guess)
                 .toString()
         } ?: ("$NONE@${System.currentTimeMillis()}" + (miss?.let { "@${it.kind.name}:${it.seconds}" } ?: ""))
         if (count < 0) count = p.all.size

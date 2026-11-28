@@ -103,6 +103,7 @@ fun ClaudeKeyRecheckRow(title: String) {
         subtitle = androidx.compose.ui.res.stringResource(com.music.bitchord.R.string.claude_key_recheck_subtitle),
         onClick = {
             com.music.bitchord.data.lyrics.LyricsTranslation.clearClaudeKeyRejection()
+            ClaudeKeyCheck.forget(context)
             android.widget.Toast.makeText(
                 context,
                 context.getString(com.music.bitchord.R.string.claude_key_recheck_done),

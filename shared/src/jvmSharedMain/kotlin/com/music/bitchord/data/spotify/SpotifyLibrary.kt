@@ -260,7 +260,9 @@ internal fun parseTrackPage(root: JsonObject): Triple<List<SpotifyTrack>, Int, I
             title = title,
             artist = artist,
             album = album?.str("name"),
-            durationMs = data.obj("duration")?.int("totalMilliseconds") ?: 0,
+            // KO: Spotify's playlist items carry "trackDuration" now (Liked Songs already read it);
+            // reading only "duration" left every playlist track at 0, and matching without lengths.
+            durationMs = (data.obj("trackDuration") ?: data.obj("duration"))?.int("totalMilliseconds") ?: 0,
             imageUrl = album?.obj("coverArt")?.arr("sources")?.lastUrl(),
         )
     }

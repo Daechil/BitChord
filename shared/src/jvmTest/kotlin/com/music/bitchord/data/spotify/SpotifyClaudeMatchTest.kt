@@ -104,4 +104,23 @@ class SpotifyClaudeMatchTest {
         val refused = SpotifyClaudeMatch.match(track("Nothing", "Nobody", 200), useClaude = true, search = { throw SpotifyClaudeMatch.SearchRefused(it) })
         assertEquals(SpotifyClaudeMatch.MissKind.UNREACHABLE, refused.miss?.kind)
     }
+
+    @Test
+    fun `with nothing of the right length, the performer's own songs are searched`() = kotlinx.coroutines.runBlocking {
+        val asked = mutableListOf<String>()
+        SpotifyClaudeMatch.match(
+            track("Galaxy", "BOL4", 210),
+            useClaude = false,
+            search = { q -> asked += q; if (q == "BOL4") listOf(song("우주를 줄게", "볼빨간사춘기", "3:31")) else listOf(song("Galaxy", "Someone", "2:40")) },
+        )
+        // Without Claude the rules' path stops early; with it, the performer search follows.
+        val withClaude = SpotifyClaudeMatch.match(
+            track("Galaxy", "BOL4", 210),
+            useClaude = true,
+            search = { q -> asked += q; if (q == "BOL4") listOf(song("우주를 줄게", "볼빨간사춘기", "3:31")) else listOf(song("Galaxy", "Someone", "2:40")) },
+        )
+        assertTrue("BOL4" in asked)
+        // No key in tests: Claude is refused, and the fallback finds the right-length song.
+        assertEquals("우주를 줄게", withClaude.song?.title)
+    }
 }

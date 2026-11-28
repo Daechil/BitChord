@@ -30,6 +30,23 @@ class SpotifyLibraryTest {
     }
 
     @Test
+    fun tracksReadTrackDuration() {
+        // KO: playlist items now carry "trackDuration"; reading only "duration" gave 0.
+        val root = json.parseToJsonElement(
+            """
+            {"data":{"playlistV2":{"content":{"totalCount":1,"items":[
+              {"itemV2":{"data":{
+                "name":"Song","uri":"spotify:track:t1",
+                "artists":{"items":[{"uri":"spotify:artist:a","profile":{"name":"Artist"}}]},
+                "trackDuration":{"totalMilliseconds":272000}
+              }}}
+            ]}}}}
+            """.trimIndent(),
+        ).jsonObject
+        assertEquals(272000, parseTrackPage(root).first.single().durationMs)
+    }
+
+    @Test
     fun tracksReadTitleArtistAndDuration() {
         val root = json.parseToJsonElement(
             """

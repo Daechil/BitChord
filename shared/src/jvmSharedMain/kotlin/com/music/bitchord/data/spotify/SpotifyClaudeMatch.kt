@@ -112,6 +112,19 @@ object SpotifyClaudeMatch {
 
         val titleOnly = searched(plainTitle(track.title))
         var candidates = merged(first, titleOnly)
+        // The performer's songs of the track's length, if they had to be searched for (below).
+        var performerClose: List<Song> = emptyList()
+        // Nothing of the track's length among them: the performer's own songs, searched by name
+        // alone — Spotify's English title ("Karma") may never bring up the original ("염라").
+        // Those of the right length go first, so the 12 shown to Claude keep them.
+        if (track.durationMs > 0 && candidates.none { closeInLength(it, track) }) {
+            val performer = track.artist.split(",").first().trim()
+            if (performer.isNotBlank()) {
+                val byPerformer = searched(performer)
+                performerClose = byPerformer.filter { closeInLength(it, track) }
+                candidates = merged(performerClose, candidates + byPerformer)
+            }
+        }
         // Nothing to choose from: no call. Searches turned away are worth trying again;
         // two that answered with nothing are the answer.
         if (candidates.isEmpty()) return Outcome(null, How.NONE, 0, 0, settled = refused == 0, miss = unfound())
@@ -120,7 +133,9 @@ object SpotifyClaudeMatch {
         // the rules' own pick rather than nothing, so the song still plays — not remembered,
         // and asked again next time the playlist opens.
         fun fallback(calls: Int): Outcome {
-            val song = ruled ?: first.firstOrNull { closeInLength(it, track) }
+            // Searched by the performer's name, a song of the right length is theirs as surely as
+            // the title search's first row of that length is the title's.
+            val song = ruled ?: first.firstOrNull { closeInLength(it, track) } ?: performerClose.firstOrNull()
             return Outcome(
                 song, How.RULES, calls, candidates.size, settled = false,
                 miss = if (song == null) Miss(MissKind.UNREACHABLE) else null,
@@ -294,6 +309,7 @@ object SpotifyClaudeMatch {
         Choose the result that is the same recording as the Spotify track:
         - The same song by the same performer, the same version. Titles and artist names may be written differently: in another script (アイドル / Idol / 아이돌), romanised (夜に駆ける / Yoru ni Kakeru), translated (밤편지 / Through the Night), with or without "feat." credits, a remaster note or an "Official" tag.
         - Lengths usually agree within a few seconds.
+        - Spotify often shows Korean, Japanese and Chinese performers under a romanised or English name (Dareharu for 달의하루, BOL4 for 볼빨간사춘기) and songs under an English title that is not a translation of the original one (Galaxy for 우주를 줄게). When the performer is the same and the lengths agree within 2 seconds, it is the same recording even though the titles share no word. If several of that performer's results have the length, the album decides; if nothing decides, choose -1.
         - Not a cover by someone else, a live recording, a remix, an acoustic, instrumental, karaoke, sped-up or TV-size version, nor another language's version of the song, unless the Spotify track is that version.
 
         Answer:

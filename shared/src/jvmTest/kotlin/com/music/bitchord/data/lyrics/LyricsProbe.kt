@@ -22,9 +22,16 @@ class LyricsProbe {
 
     @Test
     fun probe() {
-        val queries = System.getenv("LIVE_PROBE")?.split(';')?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
+        val all = System.getenv("LIVE_PROBE")?.split(';')?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
+        // KO: "@ko-KR" among the entries: search as a phone set to that language does (hl, gl) —
+        // where YouTube Music writes a row's type ("노래") in that language.
+        all.firstOrNull { it.startsWith("@") }?.removePrefix("@")?.let { tag ->
+            com.music.bitchord.data.innertube.Innertube.appLanguage = { tag }
+        }
+        val queries = all.filterNot { it.startsWith("@") }
         if (queries.isEmpty()) return
         val out = StringBuilder("# Lyrics probe\n\n")
+        out.append("locale: ${com.music.bitchord.data.innertube.Innertube.currentLocaleTag}\n\n")
         queries.forEach { query -> runBlocking(Dispatchers.IO) { probeOne(query, out) } }
         val file = File(System.getenv("LIVE_LYRICS_REPORT") ?: "build/live-lyrics.md")
         file.parentFile?.mkdirs()
@@ -35,8 +42,11 @@ class LyricsProbe {
     private suspend fun probeOne(query: String, out: StringBuilder) {
         out.append("## ").append(query).append("\n\n")
         // "query#N": the Nth song YouTube Music lists, for a song uploaded more than once.
-        val pick = query.substringAfterLast('#', "").toIntOrNull()?.coerceAtLeast(1) ?: 1
-        val asked = if (query.contains('#')) query.substringBeforeLast('#').trim() else query
+        // KO: "query!all": the song as the "All" tab lists it, the way a typed search plays it.
+        val fromAll = query.endsWith("!all")
+        val q = query.removeSuffix("!all").trim()
+        val pick = q.substringAfterLast('#', "").toIntOrNull()?.coerceAtLeast(1) ?: 1
+        val asked = if (q.contains('#')) q.substringBeforeLast('#').trim() else q
         val songs = runCatching {
             YtMusicRepository.search(asked, SearchFilter.SONGS).getOrNull().orEmpty()
                 .mapNotNull { (it as? SearchResult.Track)?.song ?: (it as? SearchResult.TopTrack)?.song }
@@ -46,7 +56,16 @@ class LyricsProbe {
             out.append(songs.take(6).joinToString(" · ") { "`${cell(it.title)}` — `${cell(it.artist)}` (${it.durationMillis() / 1000}s)" })
             out.append("\n\n")
         }
-        val song = songs.getOrNull(pick - 1)
+        // KO: the "All" tab too, the one a typed search shows: its rows start with their type
+        // ("노래 • …"), which is where an artist read as "노래" came from.
+        val allTab = runCatching {
+            YtMusicRepository.search(asked, SearchFilter.ALL).getOrNull().orEmpty()
+                .mapNotNull { (it as? SearchResult.Track)?.song ?: (it as? SearchResult.TopTrack)?.song }
+        }.getOrDefault(emptyList())
+        out.append("All tab: ")
+        out.append(allTab.take(6).joinToString(" · ") { "`${cell(it.title)}` — `${cell(it.artist)}`" }.ifEmpty { "nothing" })
+        out.append("\n\n")
+        val song = (if (fromAll) allTab else songs).getOrNull(pick - 1)
         if (song == null) {
             out.append("YouTube Music search failed\n\n")
             return

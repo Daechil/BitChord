@@ -3166,13 +3166,61 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // KO: once every row has its answer, say how many stayed grey and what a tap does —
             // a long playlist's last rows are far below the fold, and a silent grey reads as broken.
             if (!open()) return@launch
-            val missing = _detailStack.value.firstOrNull { it.browseId == browseId }
-                ?.let { (it.songs as? UiState.Success<List<Song>>)?.data }
-                ?.count { it.videoId.startsWith(SPOTIFY_MISSING_PREFIX) } ?: 0
+            val missing = spotifyMissingTracks(browseId).size
             if (missing > 0) {
                 val app = getApplication<Application>()
-                com.music.bitchord.ui.components.KoNotice.show(app.getString(R.string.spotify_missing_summary, missing))
+                com.music.bitchord.ui.components.KoNotice.show(
+                    app.getString(R.string.spotify_missing_summary, missing),
+                    app.getString(R.string.spotify_retry_all),
+                ) { retryMissingSpotify(browseId) }
             }
+        }
+    }
+
+    /** KO: the tracks behind a page's grey rows, in page order. */
+    private fun spotifyMissingTracks(browseId: String): List<SpotifyTrack> =
+        _detailStack.value.firstOrNull { it.browseId == browseId }
+            ?.let { (it.songs as? UiState.Success<List<Song>>)?.data }.orEmpty()
+            .filter { it.videoId.startsWith(SPOTIFY_MISSING_PREFIX) }
+            .mapNotNull { spotifyTracks[it.videoId.removePrefix(SPOTIFY_MISSING_PREFIX)] }
+
+    /**
+     * KO: every grey row on the page [browseId] looked for again — past remembered answers,
+     * slowly (two at a time) so YouTube does not turn the searches away — and how it went said.
+     */
+    fun retryMissingSpotify(browseId: String) {
+        val tracks = spotifyMissingTracks(browseId)
+        if (tracks.isEmpty()) return
+        tracks.forEach { track ->
+            val id = SPOTIFY_MISSING_PREFIX + track.id
+            _detailStack.value = _detailStack.value.map { page ->
+                val list = (page.songs as? UiState.Success<List<Song>>)?.data
+                if (page.browseId == browseId && list != null) {
+                    page.copy(songs = UiState.Success(list.map { if (it.videoId == id) track.asPendingSong() else it }))
+                } else page
+            }
+        }
+        viewModelScope.launch {
+            val gate = Semaphore(SPOTIFY_RETRY_PARALLELISM)
+            var found = 0
+            coroutineScope {
+                tracks.forEach { track ->
+                    launch {
+                        gate.withPermit {
+                            val answer = runCatching { matchSpotify(track, fresh = true) }
+                                .getOrElse { SpotifyAnswer(null, settled = false, miss = null) }
+                            if (answer.song != null) synchronized(this@MainViewModel) { found++ }
+                            setSpotifyRow(browseId, track, answer.song, answer.miss)
+                        }
+                    }
+                }
+            }
+            val app = getApplication<Application>()
+            val left = tracks.size - found
+            com.music.bitchord.ui.components.KoNotice.show(
+                if (left == 0) app.getString(R.string.spotify_retry_all_done, found)
+                else app.getString(R.string.spotify_retry_all_partial, found, left),
+            )
         }
     }
 

@@ -113,7 +113,7 @@ fun requestTranslateAhead(
     // A second tap while the first is still looking at what is stored: one request.
     if (requesting) return
     if (TranslateAhead.isDuplicate(songs.map { it.videoId }, model, reading)) {
-        Toast.makeText(context, context.getString(R.string.translate_ahead_duplicate), Toast.LENGTH_LONG).show()
+        KoNotice.show(context.getString(R.string.translate_ahead_duplicate))
         return
     }
     requesting = true
@@ -169,11 +169,7 @@ private suspend fun sendFromMenu(context: Context, title: String, songs: List<So
         return
     }
     val started = TranslateAhead.start(title, songs, model, reading)
-    Toast.makeText(
-        context,
-        context.getString(if (started) R.string.translate_ahead_started else R.string.translate_ahead_duplicate, title),
-        Toast.LENGTH_LONG,
-    ).show()
+    KoNotice.show(context.getString(if (started) R.string.translate_ahead_started else R.string.translate_ahead_duplicate, title))
 }
 
 /** Where a request from a menu runs: it looks at what is stored before sending. */
@@ -375,9 +371,9 @@ private fun TranslateAheadAskAlert(hazeState: HazeState, ask: AheadAsk, onDismis
                     }
                 }
                 if (duplicate) {
-                    Toast.makeText(context, context.getString(R.string.translate_ahead_duplicate, ask.title), Toast.LENGTH_LONG).show()
+                    KoNotice.show(context.getString(R.string.translate_ahead_duplicate, ask.title))
                 } else if (wanted) {
-                    Toast.makeText(context, context.getString(R.string.translate_ahead_started, ask.title), Toast.LENGTH_LONG).show()
+                    KoNotice.show(context.getString(R.string.translate_ahead_started, ask.title))
                 }
                 onDismiss()
             },

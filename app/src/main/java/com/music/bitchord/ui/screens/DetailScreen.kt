@@ -909,7 +909,14 @@ private fun ReleaseHeader(
     /** The Cached songs folder's: saves every track on it to Downloads. Null hides it. */
     onDownloadAll: (() -> Unit)? = null,
 ) {
-    val (credit, meta) = page.headerLines(songs.size, songs.playtime())
+    val (credit, baseMeta) = page.headerLines(songs.size, songs.playtime())
+    // KO: a Spotify page still finding its songs says how far it has got: "… · 찾는 중 30/74".
+    val searching = if (page.browseId.startsWith(com.music.bitchord.data.spotify.SPOTIFY_PAGE_PREFIX)) {
+        songs.count { it.videoId.startsWith(com.music.bitchord.data.model.SPOTIFY_PENDING_PREFIX) }
+    } else 0
+    val meta = if (searching > 0) {
+        baseMeta + " · " + stringResource(R.string.spotify_progress, songs.size - searching, songs.size)
+    } else baseMeta
     // Every row on a release carries the same credit — see [pageCredit] — so
     // the first one speaks for the whole page, the same source the rows'
     // own long-press "Open artist" already reads from.

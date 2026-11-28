@@ -76,10 +76,18 @@ internal fun SpotifyPortWindow() {
     val linkedText = link?.let { stringResource(R.string.spotify_port_linked, it.title) }
     val syncLabel = fresh?.let { stringResource(R.string.spotify_port_sync, it) }
     val upToDate = stringResource(R.string.spotify_port_up_to_date)
+    val retryAllLabel = stringResource(R.string.spotify_retry_all)
     val privateLabel = stringResource(R.string.spotify_port_private)
     val unlistedLabel = stringResource(R.string.spotify_port_unlisted)
     KoWindow(title = stringResource(R.string.spotify_port_title), onBack = { if (!saving) SpotifyPort.opening.value = null }) {
         windowText(listOfNotNull(page.title, counts, linkedText).joinToString("\n"))
+        // Grey rows first, if any: worth one more look before saving without them.
+        if (missing > 0 && pending == 0 && !saving) {
+            windowActions(listOf(WindowButton(label = retryAllLabel, onClick = {
+                SpotifyPort.opening.value = null
+                viewModel.retryMissingSpotify(browseId)
+            })))
+        }
         when {
             saving -> windowText(savingText)
             pendingText != null -> windowText(pendingText)

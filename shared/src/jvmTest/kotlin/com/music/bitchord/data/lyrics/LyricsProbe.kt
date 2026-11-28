@@ -41,6 +41,20 @@ class LyricsProbe {
 
     private suspend fun probeOne(query: String, out: StringBuilder) {
         out.append("## ").append(query).append("\n\n")
+        // KO: "=title|artist|seconds": no YouTube Music search, the sources asked with exactly
+        // these names — to compare spellings of one song ("아이유(IU)" / "IU" / "아이유").
+        if (query.startsWith("=")) {
+            val p = query.removePrefix("=").split('|').map { it.trim() }
+            val seconds = p.getOrNull(2)?.toIntOrNull()
+            val direct = com.music.bitchord.data.model.Song(
+                videoId = "direct",
+                title = p.getOrElse(0) { "" },
+                artist = p.getOrElse(1) { "" },
+                thumbnailUrl = null,
+                durationText = seconds?.let { "%d:%02d".format(it / 60, it % 60) },
+            )
+            return probeSong(direct, out)
+        }
         // "query#N": the Nth song YouTube Music lists, for a song uploaded more than once.
         // KO: "query!all": the song as the "All" tab lists it, the way a typed search plays it.
         val fromAll = query.endsWith("!all")
@@ -70,6 +84,10 @@ class LyricsProbe {
             out.append("YouTube Music search failed\n\n")
             return
         }
+        probeSong(song, out)
+    }
+
+    private suspend fun probeSong(song: com.music.bitchord.data.model.Song, out: StringBuilder) {
         val title = song.title.forLyricsSearch()
         val artist = song.artist.artistForLyricsSearch()
         val ms = song.durationMillis()

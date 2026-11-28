@@ -3576,7 +3576,10 @@ internal fun rememberLyricsTranslation(
                     PlayerSettings.autoClaudeTranslation.value &&
                     PlayerPlatform.host.claudeTranslationLive() &&
                     !com.music.bitchord.data.lyrics.LyricsScript.looksAlreadyIn(source.map { it.text }, translationLanguage) &&
-                    translationState == LyricsTranslationUiState.Idle
+                    translationState == LyricsTranslationUiState.Idle &&
+                    // Once per song and language while the app runs: a request that came back
+                    // with nothing would otherwise be made again on every change to the store.
+                    AutoTranslateOnce.firstTime("$trackId|$translationLanguage")
                 ) {
                     requestTranslation(fresh = false, quiet = true)
                 }
@@ -3798,3 +3801,16 @@ private fun LyricsTranslationResult.Translated.toUiState(): LyricsTranslationUiS
         kept = kept,
         aheadPending = aheadPending,
     )
+
+/** KO: the songs translated on their own already this run ("자동 번역"), so none is paid for twice. */
+internal object AutoTranslateOnce {
+    private const val REMEMBERED = 500
+    private val asked = LinkedHashSet<String>()
+
+    @Synchronized
+    fun firstTime(key: String): Boolean {
+        if (!asked.add(key)) return false
+        if (asked.size > REMEMBERED) asked.remove(asked.first())
+        return true
+    }
+}

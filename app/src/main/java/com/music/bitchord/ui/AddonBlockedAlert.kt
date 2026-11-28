@@ -30,11 +30,13 @@ fun AddonBlockedAlert(hazeState: HazeState, song: Song, onDismiss: () -> Unit) {
     val message = if (chosen == AudioQuality.LOSSLESS) {
         stringResource(R.string.addon_blocked_watch, addon)
     } else {
-        stringResource(
-            R.string.addon_blocked_quality,
-            stringResource(if (metered) R.string.mobile_data else R.string.wifi),
-            stringResource(chosen.labelRes),
-            addon,
+        com.music.bitchord.ui.Josa.fix(
+            stringResource(
+                R.string.addon_blocked_quality,
+                stringResource(if (metered) R.string.mobile_data else R.string.wifi),
+                stringResource(chosen.labelRes),
+                addon,
+            ),
         )
     }
     InfoAlert(

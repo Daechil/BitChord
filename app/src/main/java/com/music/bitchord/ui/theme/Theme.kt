@@ -1,5 +1,6 @@
 package com.music.bitchord.ui.theme
 
+import androidx.compose.ui.text.style.LineBreak
 import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
@@ -138,6 +139,30 @@ private fun Typography.withFamily(family: FontFamily) = Typography(
     labelSmall = labelSmall.copy(fontFamily = family),
 )
 
+/**
+ * KO: Korean (and Japanese) wrap between phrases, never inside a word — "저장할 수
+ * 있어요" rather than "저장할 수 있 / 어요". Android 13+ does it for text in those
+ * languages; other languages and older phones are untouched.
+ */
+private val PhraseBreak = LineBreak(
+    strategy = LineBreak.Strategy.Simple,
+    strictness = LineBreak.Strictness.Normal,
+    wordBreak = LineBreak.WordBreak.Phrase,
+)
+
+private fun TextStyle.phrased() = copy(lineBreak = PhraseBreak)
+
+private fun Typography.phrased() = copy(
+    displayLarge = displayLarge.phrased(), displayMedium = displayMedium.phrased(), displaySmall = displaySmall.phrased(),
+    headlineLarge = headlineLarge.phrased(), headlineMedium = headlineMedium.phrased(), headlineSmall = headlineSmall.phrased(),
+    titleLarge = titleLarge.phrased(), titleMedium = titleMedium.phrased(), titleSmall = titleSmall.phrased(),
+    bodyLarge = bodyLarge.phrased(), bodyMedium = bodyMedium.phrased(), bodySmall = bodySmall.phrased(),
+    labelLarge = labelLarge.phrased(), labelMedium = labelMedium.phrased(), labelSmall = labelSmall.phrased(),
+)
+
+private val PhrasedTypography = BitChordTypography.phrased()
+private val PhrasedLegacyTypography = LegacyTypography.phrased()
+
 @Composable
 fun BitChordTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -147,8 +172,8 @@ fun BitChordTheme(
     MaterialTheme(
         colorScheme = if (darkTheme) DarkColors else LightColors,
         typography = when (font) {
-            AppFont.DEFAULT -> BitChordTypography
-            AppFont.LEGACY -> LegacyTypography
+            AppFont.DEFAULT -> PhrasedTypography
+            AppFont.LEGACY -> PhrasedLegacyTypography
         },
         content = content,
     )

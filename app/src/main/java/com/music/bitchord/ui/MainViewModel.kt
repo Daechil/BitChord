@@ -3171,7 +3171,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 ?.count { it.videoId.startsWith(SPOTIFY_MISSING_PREFIX) } ?: 0
             if (missing > 0) {
                 val app = getApplication<Application>()
-                android.widget.Toast.makeText(app, app.getString(R.string.spotify_missing_summary, missing), android.widget.Toast.LENGTH_LONG).show()
+                com.music.bitchord.ui.components.KoNotice.show(app.getString(R.string.spotify_missing_summary, missing))
             }
         }
     }

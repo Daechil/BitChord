@@ -197,10 +197,12 @@ fun DriveBackupScreen(
                     stringResource(R.string.drive_backup_never)
                 },
                 subtitle = if (running) null else when (val r = result) {
-                    is DriveBackup.Result.Restored -> stringResource(
-                        R.string.drive_restore_as_done,
-                        r.device,
-                        context.countOfMonths(r.summary.months),
+                    is DriveBackup.Result.Restored -> com.music.bitchord.ui.Josa.fix(
+                        stringResource(
+                            R.string.drive_restore_as_done,
+                            r.device,
+                            context.countOfMonths(r.summary.months),
+                        ),
                     )
                     is DriveBackup.Result.Failed -> stringResource(
                         if (r.restoring) R.string.drive_restore_failed else R.string.drive_sync_failed,
@@ -266,7 +268,7 @@ fun DriveBackupScreen(
         if (connected) {
             SettingsGroup(
                 header = stringResource(R.string.drive_this_phone_header),
-                footer = settings.forkedTo?.let { stringResource(R.string.drive_forked_notice, it) },
+                footer = settings.forkedTo?.let { com.music.bitchord.ui.Josa.fix(stringResource(R.string.drive_forked_notice, it)) },
             ) {
                 if (settings.needsDevice) {
                     SettingsRow(

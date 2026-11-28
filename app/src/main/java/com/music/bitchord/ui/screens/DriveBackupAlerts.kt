@@ -81,8 +81,8 @@ fun DriveBackupAlertsHost(
     alerts.restore?.let { device ->
         ConfirmationAlert(
             hazeState = hazeState,
-            title = stringResource(R.string.drive_restore_confirm_title, device.name),
-            description = stringResource(R.string.drive_restore_confirm_body, device.name),
+            title = com.music.bitchord.ui.Josa.fix(stringResource(R.string.drive_restore_confirm_title, device.name)),
+            description = com.music.bitchord.ui.Josa.fix(stringResource(R.string.drive_restore_confirm_body, device.name)),
             confirmLabel = stringResource(R.string.drive_restore_action),
             onConfirm = {
                 DriveBackup.clearResult()

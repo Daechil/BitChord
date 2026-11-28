@@ -240,7 +240,7 @@ fun PlaylistPickerSheet(
                         val shown = remember(playlists, query) { filterPlaylists(playlists, query) { it.title } }
                         if (shown.isEmpty()) {
                             Text(
-                                text = stringResource(R.string.no_playlists_match, query.trim()),
+                                text = com.music.bitchord.ui.Josa.fix(stringResource(R.string.no_playlists_match, query.trim())),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = 22.dp, vertical = 18.dp),

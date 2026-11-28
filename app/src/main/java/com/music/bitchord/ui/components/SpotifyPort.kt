@@ -1,6 +1,5 @@
 package com.music.bitchord.ui.components
 
-import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -8,7 +7,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.music.bitchord.R
 import com.music.bitchord.data.model.PlaylistPrivacy
@@ -49,7 +47,6 @@ object SpotifyPort {
 internal fun SpotifyPortWindow() {
     val browseId = SpotifyPort.opening.collectAsState().value ?: return
     val viewModel = SpotifyPort.viewModel() ?: return
-    val context = LocalContext.current
     val stack by viewModel.detailStack.collectAsState()
     val page = stack.firstOrNull { it.browseId == browseId }
     if (page == null) {
@@ -69,7 +66,7 @@ internal fun SpotifyPortWindow() {
         viewModel.portSpotifyPage(browseId, privacy) { message ->
             saving = false
             SpotifyPort.opening.value = null
-            Toast.makeText(context.applicationContext, message, Toast.LENGTH_LONG).show()
+            KoNotice.show(message)
         }
     }
     val counts = stringResource(R.string.spotify_port_counts, found.size, missing)

@@ -8,7 +8,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import android.content.Context
-import android.widget.Toast
 import com.music.bitchord.R
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.model.isMatchPending
@@ -106,8 +105,8 @@ object SpotifyRowTap {
         return 0
     }
 
-    private fun toast(context: Context, text: Int) =
-        Toast.makeText(context.applicationContext, text, Toast.LENGTH_SHORT).show()
+    // KO: the notice bar rather than a toast, which Android 12+ cuts at two lines.
+    private fun toast(context: Context, text: Int) = KoNotice.show(context.getString(text))
 }
 
 /**

@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -166,7 +166,8 @@ private fun JumpChipRow(
             val selected = name == current
             Box(
                 modifier = Modifier
-                    .height(32.dp)
+                    // A floor, not a fixed height: at 200% text the label grows rather than clips.
+                    .heightIn(min = 32.dp)
                     .clip(RoundedCornerShape(16.dp))
                     .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
                     // TalkBack: a row of tabs, the group being read the selected one.
@@ -181,7 +182,7 @@ private fun JumpChipRow(
                             scrollState.animateScrollBy(header - landing)
                         }
                     }
-                    .padding(horizontal = 14.dp),
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(

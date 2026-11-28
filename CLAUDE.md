@@ -28,6 +28,8 @@ An unofficial Korean fork of BitChord (upstream 1.10). Work happens on `ko-1.10`
 ## Code
 - `BitChordApp` in `MainActivity.kt` is at the JVM method-size limit: even inline list helpers
   (`filter`, `indexOfFirst`) inside it break the build. Put logic in helper objects and call them.
+  A "Method too large" there after changing only `shared` can be the incremental cache: clear
+  `app/build/kotlin` and `app/build/tmp/kotlin-classes` and compile again before believing it.
 - Tests: `./gradlew :app:testDevDebugUnitTest :shared:jvmTest :sharedUi:jvmTest --offline`
   — all of them pass; a failure is a real problem.
 

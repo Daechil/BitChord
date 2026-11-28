@@ -1800,19 +1800,26 @@ object InnertubeParser {
     private val HEADER_CREDIT_LINES = listOf("straplineTextOne", "subtitle")
     /**
      * The row-type words a subtitle can start with, by the English word the code checks.
-     * KO: YouTube Music writes them in the request's language, so a Korean phone gets
-     * "노래 • 3:30" — read as the artist "노래", which then sent every lyrics provider
-     * looking for "HOPE" by "노래". Korean and Japanese are listed beside English.
+     * KO: YouTube Music writes them in the request's language (the app's), so a Korean
+     * phone gets "노래 • 3:30" — read as the artist "노래", which then sent every lyrics
+     * provider looking for "HOPE" by "노래". The words for the app's other languages are
+     * ytmusicapi's (ytmusicapi/locales/<lang>/LC_MESSAGES/base.po), which parses the same
+     * rows; Polish, Indonesian, Hebrew, Thai and Vietnamese are not there, and are not guessed.
      */
     private val TYPE_NAMES: Map<String, String> = buildMap {
-        listOf("song", "video", "album", "single", "ep", "artist", "playlist", "podcast", "episode")
-            .forEach { put(it, it) }
-        mapOf(
-            "노래" to "song", "동영상" to "video", "앨범" to "album", "싱글" to "single",
-            "아티스트" to "artist", "재생목록" to "playlist", "팟캐스트" to "podcast", "에피소드" to "episode",
-            "曲" to "song", "動画" to "video", "アルバム" to "album", "シングル" to "single",
-            "アーティスト" to "artist", "再生リスト" to "playlist", "ポッドキャスト" to "podcast", "エピソード" to "episode",
-        ).forEach { (word, type) -> put(word, type) }
+        fun add(type: String, vararg words: String) = words.forEach { put(it.lowercase(Locale.ROOT), type) }
+        add("song", "song", "노래", "曲", "canción", "titre", "titel", "música", "गीत", "песня", "歌曲", "brano", "şarkı")
+        add("video", "video", "동영상", "動画", "vídeo", "vidéo", "वीडियो", "видео", "视频", "影片")
+        add("album", "album", "앨범", "アルバム", "álbum", "एल्‍बम", "альбом", "专辑", "專輯", "albüm")
+        add("single", "single", "싱글", "シングル", "सिंगल", "сингл", "单曲", "單曲", "singolo")
+        add("ep", "ep", "ईपी", "迷你专辑")
+        add("artist", "artist", "아티스트", "アーティスト", "artista", "artiste", "künstler", "कलाकार", "художник", "音乐人", "藝人", "sanatçı")
+        add(
+            "playlist", "playlist", "재생목록", "プレイリスト", "lista de reproducción", "lista de reprodução", "प्लेलिस्ट",
+            "плейлист", "播放列表", "播放清單", "çalma listesi",
+        )
+        add("podcast", "podcast", "팟캐스트", "ポッドキャスト", "pódcast", "पॉडकास्ट", "подкаст", "播客")
+        add("episode", "episode", "에피소드", "エピソード", "episodio", "épisode", "folge", "episódio", "एपिसोड", "выпуск", "分集", "單集", "puntata", "bölüm")
     }
 
     /** The row type a subtitle segment names ("song", "video", …), in English, or null. */

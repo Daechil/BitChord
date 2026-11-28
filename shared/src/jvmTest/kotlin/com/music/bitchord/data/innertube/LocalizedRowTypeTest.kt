@@ -6,6 +6,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
 
 /** KO: a search row's type word in the phone's language is no artist. */
 class LocalizedRowTypeTest {
@@ -60,5 +61,19 @@ class LocalizedRowTypeTest {
     fun englishRowsReadAsBefore() {
         val song = parse(row("en1", "Creep", "Song", "Radiohead", "3:58")).single()
         assertEquals("Radiohead", song.artist)
+    }
+
+    @Test
+    fun theAppsOtherLanguagesAreReadToo() {
+        val songs = parse(
+            row("es1", "HOPE", "Canción", "NF", "3:51"),
+            row("de1", "HOPE", "Titel", "NF", "3:51"),
+            row("ru1", "HOPE", "Песня", "NF", "3:51"),
+            row("zh1", "HOPE", "歌曲", "NF", "3:51"),
+            row("tr1", "HOPE", "Şarkı", "NF", "3:51"),
+            row("es2", "HOPE", "Vídeo", "NF", "4:02"),
+        )
+        assertEquals(listOf("es1", "de1", "ru1", "zh1", "tr1"), songs.map { it.videoId })
+        assertTrue(songs.all { it.artist == "NF" })
     }
 }

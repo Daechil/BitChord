@@ -102,6 +102,14 @@ class LyricsProbe {
             "${r.source} · ${r.lines.size} lines · ${if (timed > 1) "timed" else "untimed"}${if (worded > 0) " · word-timed" else ""}"
         } ?: "none"
         out.append("- whole lookup, as the app: ${described(whole)}\n")
+        // KO: the same with "음절 단위 가사 우선" on: a line-synced answer under names in another
+        // language is looked for again, word-synced, under the same video's English names.
+        val wordFirst = withTimeoutOrNull(180_000) {
+            runCatching {
+                LyricsRepository.lyrics(song.videoId, song.title, song.artist, ms, song.albumName, prioritizeSyllableSync = true)
+            }.getOrNull()
+        }
+        out.append("- whole lookup, word-synced first: ${described(wordFirst)}\n")
         // KO: the same without the sources keyed on the video (YouTube's own lyrics and
         // transcripts), so the second tries under other names are what is seen.
         val byNameOnly = LyricsSource.entries.toSet() -

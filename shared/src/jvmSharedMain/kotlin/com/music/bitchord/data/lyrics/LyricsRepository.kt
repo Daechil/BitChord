@@ -111,7 +111,10 @@ object LyricsRepository {
             videoId, title, artist, durationMs, album, sources, order, prioritizeSyllableSync, isrc,
             onSourceStarted, onSourceResult, onSourceCancelled,
         )
-        if (first != null) return first
+        if (first != null) return wordSyncedInEnglish(
+            first, videoId, title, artist, durationMs, album, sources, order, prioritizeSyllableSync, isrc,
+            onSourceStarted, onSourceResult, onSourceCancelled,
+        ) ?: first
         // Nothing, and the name is written in Hangul: very often a Korean
         // spelling of a Japanese, Chinese or English song, which the catalogues
         // file under its own name. Ask for that name and search once more —
@@ -156,6 +159,45 @@ object LyricsRepository {
             retry(name)?.let { return it }
         }
         return null
+    }
+
+    /**
+     * KO: word-synced lyrics asked for ("음절 단위 가사 우선"), and only line-synced ones found
+     * under names in another language: the same video's English names may find word-synced
+     * ones — a Korean song is often filed under its English title ("밤편지" is "Through the
+     * Night"). Free (YouTube Music, by video id), and only with that setting on. Null keeps
+     * [found] as it is.
+     */
+    private suspend fun wordSyncedInEnglish(
+        found: Result,
+        videoId: String,
+        title: String,
+        artist: String,
+        durationMs: Long,
+        album: String?,
+        sources: Set<LyricsSource>,
+        order: List<LyricsSource>,
+        prioritizeSyllableSync: Boolean,
+        isrc: String?,
+        onSourceStarted: ((LyricsSource) -> Unit)?,
+        onSourceResult: ((LyricsSource, Result?) -> Unit)?,
+        onSourceCancelled: ((LyricsSource) -> Unit)?,
+    ): Result? {
+        if (!prioritizeSyllableSync || found.lines.any { it.isWordSynced }) return null
+        if (!OriginalNames.englishWorthTrying(videoId)) return null
+        val byName = sources - KEYED_ON_VIDEO
+        if (byName.isEmpty()) return null
+        return try {
+            val name = OriginalNames.fromYouTubeMusicInEnglish(videoId, title, artist) ?: return null
+            lyricsOnce(
+                videoId, name.title, name.artist, durationMs, album, byName, order, true, isrc,
+                onSourceStarted, onSourceResult, onSourceCancelled,
+            )?.takeIf { better -> better.lines.any { it.isWordSynced } }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
+        }
     }
 
     /** Sources that look a track up by its video id, whatever it is called. */

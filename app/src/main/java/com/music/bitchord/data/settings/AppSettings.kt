@@ -955,14 +955,15 @@ object AppSettings {
      */
     val canvasOverCellular = MutableStateFlow(false)
 
-    val disableSpotifyCanvas = MutableStateFlow(false)
+    // KO: off unless a sp_dc token was saved: Canvas needs one, and the other animated covers do not.
+    val disableSpotifyCanvas = MutableStateFlow(true)
 
-    /** Automatically collapses the lower controls after Spotify Canvas settles. */
-    val spotifyCanvasAutoHide = MutableStateFlow(true)
+    /** Automatically collapses the lower controls after Spotify Canvas settles. KO: off by default. */
+    val spotifyCanvasAutoHide = MutableStateFlow(false)
 
     /** Tries Spotify before Apple Music and the other animated-art providers. */
     val prioritizeSpotifyCanvas = MutableStateFlow(false)
-    val effectiveSpotifyCanvasAutoHide = MutableStateFlow(true)
+    val effectiveSpotifyCanvasAutoHide = MutableStateFlow(false)
     val effectivePrioritizeSpotifyCanvas = MutableStateFlow(false)
 
     private fun updateEffectiveSpotifyCanvasSettings() {
@@ -1641,8 +1642,9 @@ object AppSettings {
         }
         animatedCanvas.value = prefs.getBoolean(KEY_ANIMATED_CANVAS, true)
         canvasOverCellular.value = prefs.getBoolean(KEY_CANVAS_OVER_CELLULAR, false)
-        disableSpotifyCanvas.value = prefs.getBoolean(KEY_DISABLE_SPOTIFY_CANVAS, false)
-        spotifyCanvasAutoHide.value = prefs.getBoolean(KEY_SPOTIFY_CANVAS_AUTO_HIDE, true)
+        // KO: never chosen — Canvas stays on for whoever already saved a token, off otherwise.
+        disableSpotifyCanvas.value = prefs.getBoolean(KEY_DISABLE_SPOTIFY_CANVAS, secret(KEY_SPOTIFY_SPDC_TOKEN).isBlank())
+        spotifyCanvasAutoHide.value = prefs.getBoolean(KEY_SPOTIFY_CANVAS_AUTO_HIDE, false)
         prioritizeSpotifyCanvas.value = prefs.getBoolean(KEY_PRIORITIZE_SPOTIFY_CANVAS, false)
         updateEffectiveSpotifyCanvasSettings()
         signatureApiEnabled.value = prefs.getBoolean(KEY_SIGNATURE_API_ENABLED, false)
@@ -2927,6 +2929,11 @@ object AppSettings {
         spotifySpdcToken.value = value
         putSecret(KEY_SPOTIFY_SPDC_TOKEN, value)
         SpotifyToken.invalidate()
+        // KO: Canvas is off by default; a token saved by someone who never chose otherwise turns it on.
+        if (value.isNotBlank() && !prefs.contains(KEY_DISABLE_SPOTIFY_CANVAS)) {
+            disableSpotifyCanvas.value = false
+            updateEffectiveSpotifyCanvasSettings()
+        }
     }
 
     fun setLastfmScrobbleEnabled(value: Boolean) {

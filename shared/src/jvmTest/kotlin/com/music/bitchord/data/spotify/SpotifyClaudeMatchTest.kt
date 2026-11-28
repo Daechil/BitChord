@@ -153,4 +153,23 @@ class SpotifyClaudeMatchTest {
         )
         assertEquals(1, videoSearches)
     }
+
+    @Test
+    fun `the track's own album is opened when the searches miss it`() = kotlinx.coroutines.runBlocking {
+        val track = SpotifyTrack(id = "t", title = "ヒバナ -Reloaded-", artist = "DECO*27", album = "アンドロイドガール", durationMs = 206_000, imageUrl = null)
+        var albumAsked: Pair<String, String>? = null
+        val outcome = SpotifyClaudeMatch.match(
+            track,
+            useClaude = true,
+            search = { listOf(song("HIBANA", "SHUHEI ENDO", "3:51")) },
+            searchVideos = { emptyList() },
+            searchAlbumTracks = { album, performer ->
+                albumAsked = album to performer
+                listOf(song("アンドロイドガール", "DECO*27", "3:38"), song("ヒバナ -Reloaded-", "DECO*27", "3:25"))
+            },
+        )
+        assertEquals("アンドロイドガール" to "DECO*27", albumAsked)
+        // No key in tests: Claude is refused, and the album's one track of that length stands in.
+        assertEquals("ヒバナ -Reloaded-", outcome.song?.title)
+    }
 }
